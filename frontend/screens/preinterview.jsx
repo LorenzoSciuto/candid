@@ -2,8 +2,36 @@
 const { JD_DEFAULT, SAMPLE_CV, STREAMING_PRE } = window.CANDID_DATA;
 
 const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
+  const [openJds, setOpenJds] = useState([]);
+  const [selectedJdId, setSelectedJdId] = useState("");
   const [position, setPosition] = useState("Senior Frontend Engineer — Platform");
   const [jd, setJd] = useState(JD_DEFAULT);
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/job-descriptions`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (Array.isArray(d)) {
+          const active = d.filter(j => j.status === "Active");
+          setOpenJds(active);
+          if (active.length > 0 && !selectedJdId) {
+            setSelectedJdId(active[0].id);
+            setPosition(active[0].title);
+            if (active[0].description) setJd(active[0].description);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleJdSelect = (id) => {
+    setSelectedJdId(id);
+    const found = openJds.find(j => j.id === id);
+    if (found) {
+      setPosition(found.title);
+      if (found.description) setJd(found.description);
+    }
+  };
   const [cvName, setCvName] = useState("");
   const [cvText, setCvText] = useState("");
   const [stage, setStage] = useState("idle"); // idle | uploading | extracting | analyzing | done
@@ -120,8 +148,14 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
         <div className="col gap-16">
           <div className="card card-pad col gap-12">
             <div>
-              <label className="label">Position name</label>
-              <input className="input" value={position} onChange={e => setPosition(e.target.value)} />
+              <label className="label">Open position</label>
+              {openJds.length > 0 ? (
+                <select className="select" value={selectedJdId} onChange={e => handleJdSelect(e.target.value)}>
+                  {openJds.map(j => <option key={j.id} value={j.id}>{j.title}{j.location ? ` · ${j.location}` : ""}</option>)}
+                </select>
+              ) : (
+                <input className="input" value={position} onChange={e => setPosition(e.target.value)} placeholder="e.g. Senior Frontend Engineer" />
+              )}
             </div>
             <div>
               <label className="label">Job description</label>

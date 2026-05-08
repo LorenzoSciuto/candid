@@ -2,16 +2,6 @@
 const { HUMAN_SKILLS, TECH_SKILLS } = window.CANDID_DATA;
 
 // ── AI Prompts — keep all prompts in one place for easy editing ───────────────
-const PROMPTS = {
-  rewriteEmail: (candidateName, role, body) =>
-    `You are a professional, empathetic recruiter. Rewrite the following email to ${candidateName} for the ${role || "open"} position. ` +
-    `Make it warm, clear, and compelling. Keep it under 180 words. Do not add a subject line. ` +
-    `Preserve the core intent of the original message.\n\nOriginal:\n${body}`,
-
-  coldEmail: (candidateName, role) =>
-    `Write a short, friendly cold outreach email to ${candidateName} about the ${role || "open"} role. ` +
-    `It should feel personal, not templated. Under 120 words. No subject line.`,
-};
 
 const mapCandidate = (c) => ({
   id: c.id,
@@ -60,8 +50,10 @@ const EmailModal = ({ candidate, onClose }) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "rewrite_candidate_email",
           text: body,
-          instruction: PROMPTS.rewriteEmail(`${candidate.first} ${candidate.last}`, candidate.role, body),
+          candidate_name: `${candidate.first} ${candidate.last}`,
+          role: candidate.role || "",
         }),
       });
       if (!res.ok) throw new Error(await res.text());

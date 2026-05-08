@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -105,3 +104,41 @@ class TestDeleteCandidate:
     def test_404_for_unknown_id(self, client: TestClient) -> None:
         resp = client.delete("/candidates/nonexistent")
         assert resp.status_code == 404
+
+
+class TestCandidateStats:
+    def test_empty_db_returns_zero_total(self, client: TestClient) -> None:
+        resp = client.get("/candidates/stats")
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+    def test_counts_active_candidates(self, client: TestClient) -> None:
+        client.post("/candidates", json=CANDIDATE_PAYLOAD)
+        client.post("/candidates", json={**CANDIDATE_PAYLOAD, "email": "b@b.com"})
+        resp = client.get("/candidates/stats")
+        assert resp.json()["total"] == 2
+
+    def test_excludes_archived(self, client: TestClient) -> None:
+        created = client.post("/candidates", json=CANDIDATE_PAYLOAD).json()
+        client.patch(f"/candidates/{created['id']}", json={"status": "archived"})
+        assert client.get("/candidates/stats").json()["total"] == 0
+
+    def test_by_status_breakdown(self, client: TestClient) -> None:
+        client.post("/candidates", json=CANDIDATE_PAYLOAD)
+        c2 = client.post("/candidates", json={**CANDIDATE_PAYLOAD, "email": "x@x.com"}).json()
+        client.patch(f"/candidates/{c2['id']}", json={"status": "screening"})
+        stats = client.get("/candidates/stats").json()
+        assert stats["by_status"]["new"] == 1
+        assert stats["by_status"]["screening"] == 1
+
+    def test_avg_score_computed(self, client: TestClient) -> None:
+        c1 = client.post("/candidates", json=CANDIDATE_PAYLOAD).json()
+        c2 = client.post("/candidates", json={**CANDIDATE_PAYLOAD, "email": "x@x.com"}).json()
+        client.patch(f"/candidates/{c1['id']}", json={"score": 4.0})
+        client.patch(f"/candidates/{c2['id']}", json={"score": 2.0})
+        stats = client.get("/candidates/stats").json()
+        assert stats["avg_score"] == 3.0
+
+    def test_avg_score_none_when_no_scores(self, client: TestClient) -> None:
+        client.post("/candidates", json=CANDIDATE_PAYLOAD)
+        assert client.get("/candidates/stats").json()["avg_score"] is None

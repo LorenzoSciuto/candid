@@ -54,12 +54,16 @@ def extractor() -> CVExtractor:
 
 @pytest.fixture(scope="session")
 def client(db: Database, crypto: CryptoService, ai_factory: AIEngineFactory, extractor: CVExtractor) -> TestClient:
+    from candid.routers.ai import AIRouter
     from candid.routers.analysis import AnalysisRouter
     from candid.routers.candidates import CandidatesRouter
     from candid.routers.config import ConfigRouter
+    from candid.routers.employees import EmployeesRouter
     from candid.routers.evaluations import EvaluationsRouter
     from candid.routers.interviews import InterviewsRouter
+    from candid.routers.job_descriptions import JobDescriptionsRouter
     from candid.routers.quick_add import QuickAddRouter
+    from candid.routers.roles import RolesRouter
     from contextlib import asynccontextmanager
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
@@ -78,6 +82,10 @@ def client(db: Database, crypto: CryptoService, ai_factory: AIEngineFactory, ext
         EvaluationsRouter(db).router,
         ConfigRouter(db, crypto).router,
         QuickAddRouter(db, ai_factory).router,
+        RolesRouter(db).router,
+        EmployeesRouter(db).router,
+        JobDescriptionsRouter(db, ai_factory).router,
+        AIRouter(db, ai_factory).router,
     ]:
         app.include_router(router)
 
@@ -87,9 +95,11 @@ def client(db: Database, crypto: CryptoService, ai_factory: AIEngineFactory, ext
 @pytest.fixture(autouse=True)
 def clean_tables(db: Database) -> None:
     """Wipe all rows between tests."""
-    from candid.models import Candidate, Interview, Evaluation, Config
+    from candid.models import Candidate, Config, Employee, Evaluation, Interview, JobDescription, Role
+    from sqlmodel import select
     with Session(db._engine) as session:
-        for model in (Evaluation, Interview, Candidate, Config):
-            for row in session.exec(__import__("sqlmodel", fromlist=["select"]).select(model)).all():
+        # deletion order respects FK constraints
+        for model in (Evaluation, Interview, JobDescription, Employee, Candidate, Config, Role):
+            for row in session.exec(select(model)).all():
                 session.delete(row)
         session.commit()

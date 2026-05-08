@@ -7,13 +7,6 @@ const TWEAKS_DEFAULTS = /*EDITMODE-BEGIN*/{
 // Fallback: translations.jsx may not have run yet if Babel loads scripts async
 const LocaleContext = window.LocaleContext || React.createContext({ locale: 'en', setLocale: () => {} });
 
-// ── AI Prompts (global) ────────────────────────────────────────────────────────
-const APP_PROMPTS = {
-  rewriteEmail: (to, subject, body) =>
-    `You are a professional recruiter. Rewrite the following email${to ? " to " + to : ""}${subject ? ' with subject "' + subject + '"' : ""}. ` +
-    `Make it warm, clear, and compelling. Keep it under 200 words. Do not include a subject line in the body.\n\nOriginal:\n${body}`,
-};
-
 // ── Compose Modal ─────────────────────────────────────────────────────────────
 
 const ComposeModal = ({ onClose }) => {
@@ -33,8 +26,10 @@ const ComposeModal = ({ onClose }) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "rewrite_email",
           text: body,
-          instruction: APP_PROMPTS.rewriteEmail(to, subject, body),
+          to,
+          subject,
         }),
       });
       if (!res.ok) throw new Error();
@@ -298,6 +293,7 @@ const App = () => {
   const [quickOpen, setQuickOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [liveInterview, setLiveInterview] = useState(null);
   const [t_tweaks, setTweak] = window.useTweaks(TWEAKS_DEFAULTS);
   const [liveCounts, setLiveCounts] = useState({});
 
@@ -333,9 +329,10 @@ const App = () => {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const navigate = (r) => {
+  const navigate = (r, data) => {
     window.history.pushState(null, "", `#${r}`);
     setRoute(r);
+    if (r === "liveroom" && data) setLiveInterview(data);
   };
 
   // ⌘K
@@ -416,7 +413,7 @@ const App = () => {
             {route === "inbox"        && <window.InboxScreen onRoute={navigate} />}
             {route === "reports"      && <window.ReportsScreen />}
             {route === "preinterview" && <window.PreInterviewScreen tweaks={t_tweaks} onCreatedCandidate={openCandidate} />}
-            {route === "liveroom"     && <window.LiveRoomScreen tweaks={t_tweaks} />}
+            {route === "liveroom"     && <window.LiveRoomScreen tweaks={t_tweaks} interview={liveInterview} />}
             {route === "candidate"    && <window.CandidateScreen id={candidateId} onRoute={navigate} />}
             {route === "settings"     && <window.SettingsScreen user={user} onLocaleChange={setLocale} onLogout={handleLogout} />}
           </div>

@@ -221,7 +221,7 @@ const JobsScreen = ({ onRoute }) => {
                   <JdTd align="right">
                     <button className="icon-btn" onClick={(e) => openMenu(e, j.id)}
                       style={{ color: menuOpen === j.id ? "var(--ink)" : "var(--ink-muted)" }}>
-                      <Icons.MoreHoriz size={16} />
+                      <Icons.MoreH size={16} />
                     </button>
                   </JdTd>
                 </tr>
@@ -259,7 +259,7 @@ const JobsScreen = ({ onRoute }) => {
             {s === "Active" && (
               <button className="btn btn-ghost btn-sm row gap-6" style={{ width: "100%", justifyContent: "flex-start" }}
                 onClick={() => changeStatus(j.id, "On hold")}>
-                <Icons.Clock size={13} /> {t('jobs.action.suspend')}
+                <Icons.Pause size={13} /> {t('jobs.action.suspend')}
               </button>
             )}
             {s !== "Closed" && (
@@ -271,7 +271,7 @@ const JobsScreen = ({ onRoute }) => {
             <div style={{ height: 1, background: "var(--border-soft)", margin: "4px 0" }} />
             <button className="btn btn-ghost btn-sm row gap-6" style={{ width: "100%", justifyContent: "flex-start", color: "var(--danger)" }}
               onClick={() => deleteJd(j.id)}>
-              <Icons.Trash size={13} /> {t('common.delete')}
+              <Icons.X size={13} /> {t('common.delete')}
             </button>
           </div>
         );

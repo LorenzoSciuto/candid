@@ -80,6 +80,9 @@ class JobDescriptionsRouter:
         session.commit()
 
     def _improve(self, body: ImproveJDRequest, session: Session) -> dict:
-        engine = self._ai_factory.from_session(session)
-        improved = engine.improve_jd(body.text, body.role_name)
-        return {"improved_text": improved}
+        try:
+            engine = self._ai_factory.from_session(session)
+            improved = engine.improve_jd(body.text, body.role_name)
+            return {"improved_text": improved}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc

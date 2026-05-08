@@ -36,7 +36,7 @@ const ScheduleModal = ({ onClose, onSaved }) => {
   const [saving, setSaving] = useState(false);
 
   const candidates = window.useApiData ? window.useApiData("/candidates", []) : [];
-  const employees = window.useApiData ? window.useApiData("/employees", []) : [];
+  const team = window.getTeamMembers ? window.getTeamMembers() : [];
 
   const save = async () => {
     if (!date) return;
@@ -113,10 +113,9 @@ const ScheduleModal = ({ onClose, onSaved }) => {
           <label className="label">{t('interviews.modal.interviewer')}</label>
           <select className="select" value={interviewer} onChange={e => setInterviewer(e.target.value)}>
             <option value="">— {t('interviews.modal.interviewer')} —</option>
-            {employees.map(e => {
-              const name = `${e.first_name} ${e.last_name}`;
-              return <option key={e.id} value={name}>{name}{e.role_name ? ` · ${e.role_name}` : ""}</option>;
-            })}
+            {team.map(m => (
+              <option key={m.name} value={m.name}>{m.name}{m.role ? ` · ${m.role}` : ""}</option>
+            ))}
           </select>
         </div>
 
@@ -300,7 +299,7 @@ const InterviewsScreen = ({ onRoute }) => {
                     <div className="row gap-8">
                       <Btn>{t('interviews.reschedule')}</Btn>
                       {iv.live ? (
-                        <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom")}>{t('interviews.openLive')}</Btn>
+                        <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>{t('interviews.openLive')}</Btn>
                       ) : (
                         <Btn icon={<Icons.Calendar size={14} />}>{t('common.details')}</Btn>
                       )}

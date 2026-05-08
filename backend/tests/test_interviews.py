@@ -1,5 +1,8 @@
-import pytest
+import unittest.mock as mock
+
 from fastapi.testclient import TestClient
+
+from candid.services.ai_engine import AIEngine
 
 
 def _make_candidate(client: TestClient) -> str:
@@ -51,3 +54,35 @@ class TestUpdateInterview:
     def test_404_for_unknown(self, client: TestClient) -> None:
         resp = client.patch("/interviews/nonexistent", json={"duration": "10m"})
         assert resp.status_code == 404
+
+
+class TestProcessInterview:
+    _AI_RESPONSE = """{
+        "cleaned_transcript": "[Interviewer]: Tell me about yourself.\\n[Candidate]: Sure.",
+        "summary": "Candidate showed good communication skills.",
+        "extra_info": "Mentioned distributed systems experience."
+    }"""
+
+    def test_stores_cleaned_transcript_and_summary(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        iid = client.post("/interviews", json={"candidate_id": cid, "type": "Manual Paste"}).json()["id"]
+        with mock.patch.object(AIEngine, "_call", return_value=self._AI_RESPONSE):
+            resp = client.post(f"/interviews/{iid}/process", json={
+                "raw_content": "Interviewer: Tell me about yourself. Candidate: Sure."
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "Interviewer" in data["cleaned_transcript"]
+        assert data["ai_summary"] == "Candidate showed good communication skills."
+
+    def test_404_for_unknown_interview(self, client: TestClient) -> None:
+        with mock.patch.object(AIEngine, "_call", return_value=self._AI_RESPONSE):
+            resp = client.post("/interviews/nonexistent/process", json={"raw_content": "x"})
+        assert resp.status_code == 404
+
+    def test_ai_error_returns_502(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        iid = client.post("/interviews", json={"candidate_id": cid, "type": "Manual Paste"}).json()["id"]
+        with mock.patch.object(AIEngine, "_call", side_effect=RuntimeError("AI down")):
+            resp = client.post(f"/interviews/{iid}/process", json={"raw_content": "some text"})
+        assert resp.status_code == 502

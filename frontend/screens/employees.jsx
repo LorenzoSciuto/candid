@@ -1,4 +1,15 @@
 // Employees / People screen
+
+const CURRENCY_SYMBOLS = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF", JPY: "¥", CAD: "CA$", AUD: "A$", SEK: "kr", DKK: "kr", NOK: "kr" };
+
+const getEmpLocations = () => {
+  try {
+    const s = localStorage.getItem("candid_locations");
+    if (s) return JSON.parse(s);
+  } catch {}
+  return ["Remote", "SF / Remote", "SF", "NYC", "London", "Berlin", "Austin", "Toronto"];
+};
+
 const EmployeesScreen = () => {
   const t = window.useT();
   const [employees, setEmployees] = useState(window.CANDID_DATA.EMPLOYEES);
@@ -28,8 +39,10 @@ const EmployeesScreen = () => {
   }), [employees, roleFilter, deptFilter, q]);
 
   const totalPayroll = rows.reduce((s, e) => s + (e.salary || 0), 0);
-  const fmtSalary = (n) => n ? `$${(n / 1000).toFixed(0)}k` : "—";
-  const fmtBig = (n) => `$${(n / 1000000).toFixed(2)}M`;
+  const currencyCode = window.getCurrency ? window.getCurrency() : "EUR";
+  const sym = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
+  const fmtSalary = (n) => n ? `${sym}${(n / 1000).toFixed(0)}k` : "—";
+  const fmtBig = (n) => `${sym}${(n / 1000000).toFixed(2)}M`;
 
   return (
     <div className="page page-wide">
@@ -147,6 +160,9 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
   const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const locations = useMemo(() => getEmpLocations(), []);
+  const currencyCode = window.getCurrency ? window.getCurrency() : "EUR";
+
   const save = async () => {
     setSaving(true);
     const roles = window.CANDID_DATA.ROLES;
@@ -156,6 +172,7 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
       role_id: roleId || null, role_name: role?.name || null,
       department: dept || (role?.department || null),
       salary: salary ? parseFloat(salary) : null,
+      currency: currencyCode,
       location: location || null,
     };
     try {
@@ -175,8 +192,17 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
         <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.email')}</label><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
         <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.role')}</label><RoleSelect value={roleId} onChange={setRoleId} placeholder="Select role…" /></div>
         <div><label className="label">{t('employees.form.dept')}</label><input className="input" value={dept} onChange={e => setDept(e.target.value)} placeholder="Auto-filled from role" /></div>
-        <div><label className="label">{t('employees.form.location')}</label><input className="input" value={location} onChange={e => setLocation(e.target.value)} /></div>
-        <div><label className="label">{t('employees.form.salary')}</label><input className="input" type="number" value={salary} onChange={e => setSalary(e.target.value)} placeholder="e.g. 195000" /></div>
+        <div>
+          <label className="label">{t('employees.form.location')}</label>
+          <select className="select" value={location} onChange={e => setLocation(e.target.value)}>
+            <option value="">— Select —</option>
+            {locations.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">{t('employees.form.salary')} <span className="text-11 text-muted">({currencyCode})</span></label>
+          <input className="input" type="number" value={salary} onChange={e => setSalary(e.target.value)} placeholder="e.g. 75000" />
+        </div>
       </div>
     </Modal>
   );

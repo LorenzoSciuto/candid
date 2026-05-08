@@ -2,24 +2,23 @@
 const { JD_DEFAULT, SAMPLE_CV, STREAMING_PRE } = window.CANDID_DATA;
 
 const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
-  const [openJds, setOpenJds] = useState([]);
-  const [selectedJdId, setSelectedJdId] = useState("");
-  const [position, setPosition] = useState("Senior Frontend Engineer — Platform");
-  const [jd, setJd] = useState(JD_DEFAULT);
+  const mockActive = (window.CANDID_DATA.JDS_DATA || []).filter(j => j.status === "Active");
+  const [openJds, setOpenJds] = useState(mockActive);
+  const [selectedJdId, setSelectedJdId] = useState(mockActive[0]?.id || "");
+  const [position, setPosition] = useState(mockActive[0]?.title || "");
+  const [jd, setJd] = useState(mockActive[0]?.description || JD_DEFAULT);
 
   useEffect(() => {
     fetch(`${window.API_BASE}/job-descriptions`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (Array.isArray(d)) {
-          const active = d.filter(j => j.status === "Active");
-          setOpenJds(active);
-          if (active.length > 0 && !selectedJdId) {
-            setSelectedJdId(active[0].id);
-            setPosition(active[0].title);
-            if (active[0].description) setJd(active[0].description);
-          }
-        }
+        if (!Array.isArray(d)) return;
+        const active = d.filter(j => j.status === "Active");
+        if (active.length === 0) return;
+        setOpenJds(active);
+        setSelectedJdId(active[0].id);
+        setPosition(active[0].title);
+        if (active[0].description) setJd(active[0].description);
       })
       .catch(() => {});
   }, []);

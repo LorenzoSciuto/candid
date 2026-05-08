@@ -5,89 +5,8 @@ from typing import Any, Optional
 from sqlmodel import Session
 
 from candid.models import Config
+from candid.prompts import Prompts
 from candid.services.crypto import CryptoService
-
-
-class _Prompts:
-    CV_ANALYSIS = """\
-Compare the Candidate CV against the Job Description for the position: {position_name}.
-
-Return a JSON object with exactly these keys:
-- "strengths": array of 3-5 strings — top technical/soft skill matches vs the JD
-- "weaknesses": array of 2-4 strings — gaps, missing requirements, or risks to probe
-- "deep_dive_questions": array of exactly 3 strings — strategic questions tailored to \
-uncover actual expertise in critical areas
-- "extracted_info": object with string fields first_name, last_name, email, role \
-(null if not found in CV)
-
-CV:
-{cv_text}
-
-Job Description:
-{jd_text}
-
-Return only valid JSON. No markdown fences. No explanation."""
-
-    QUICK_PARSE = """\
-Extract structured candidate information from the following raw text \
-(notes, email, DM, etc.).
-
-Return a JSON object with exactly these keys (null if not found):
-- "first_name", "last_name" — strings
-- "email" — string
-- "phone" — string
-- "current_role" — current job title and company as one string
-- "years_of_experience" — integer estimate, or null
-- "summary" — 1-2 sentence summary of key points
-
-Text:
-{raw_text}
-
-Return only valid JSON. No markdown fences."""
-
-    TRANSCRIPT = """\
-Identify speakers 'Interviewer' and 'Candidate' in the following interview transcript.
-
-Return a JSON object with exactly these keys:
-- "cleaned_transcript" — full transcript with speaker labels, one turn per line as \
-"[Speaker]: text"
-- "summary" — 2-3 sentence summary of the key signals and candidate impressions
-- "extra_info" — notable quotes or observations worth highlighting
-
-Transcript:
-{raw_transcript}
-
-Return only valid JSON. No markdown fences."""
-
-    REWRITE_TEXT = """\
-You are a helpful assistant. Rewrite or improve the following text according to the instruction.
-
-Instruction: {instruction}
-
-Text:
-{text}
-
-Return a JSON object with exactly one key:
-- "result" — the rewritten text as a plain string
-
-Return only valid JSON. No markdown fences."""
-
-    IMPROVE_JD = """\
-You are an expert technical recruiter and copywriter. Improve the following job description \
-to be more compelling, clear, and structured. Keep the role name and core requirements intact \
-but make the language engaging, remove jargon, add clear sections (About the Role, What You'll \
-Do, What We're Looking For, Nice to Have), and ensure it would attract top candidates.
-
-Role: {role_name}
-
-Current JD:
-{jd_text}
-
-Return a JSON object with exactly one key:
-- "improved_text" — the full improved job description as a plain string (no markdown headers, \
-use plain section titles followed by newline)
-
-Return only valid JSON. No markdown fences."""
 
 
 class AIEngine:
@@ -99,7 +18,7 @@ class AIEngine:
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def analyze_cv(self, cv_text: str, jd_text: str, position_name: str) -> dict:
-        prompt = _Prompts.CV_ANALYSIS.format(
+        prompt = Prompts.CV_ANALYSIS.format(
             position_name=position_name,
             cv_text=cv_text,
             jd_text=jd_text,
@@ -113,20 +32,27 @@ class AIEngine:
         }
 
     def parse_quick_add(self, raw_text: str) -> dict:
-        prompt = _Prompts.QUICK_PARSE.format(raw_text=raw_text)
+        prompt = Prompts.QUICK_PARSE.format(raw_text=raw_text)
         return self._parse_json(self._call(prompt))
 
     def process_transcript(self, raw_transcript: str) -> dict:
-        prompt = _Prompts.TRANSCRIPT.format(raw_transcript=raw_transcript)
+        prompt = Prompts.TRANSCRIPT.format(raw_transcript=raw_transcript)
         return self._parse_json(self._call(prompt))
 
     def rewrite_text(self, text: str, instruction: str) -> str:
-        prompt = _Prompts.REWRITE_TEXT.format(text=text, instruction=instruction)
+        """Generic rewrite — wraps text+instruction in REWRITE_TEXT envelope."""
+        prompt = Prompts.REWRITE_TEXT.format(text=text, instruction=instruction)
         result = self._parse_json(self._call(prompt))
         return result.get("result", text)
 
+    def run_prompt(self, prompt: str, result_key: str = "result") -> str:
+        """Call LLM with a fully-rendered prompt; return parsed JSON[result_key]."""
+        raw = self._call(prompt)
+        parsed = self._parse_json(raw)
+        return parsed.get(result_key, "")
+
     def improve_jd(self, jd_text: str, role_name: str = "") -> str:
-        prompt = _Prompts.IMPROVE_JD.format(jd_text=jd_text, role_name=role_name or "this role")
+        prompt = Prompts.IMPROVE_JD.format(jd_text=jd_text, role_name=role_name or "this role")
         result = self._parse_json(self._call(prompt))
         return result.get("improved_text", jd_text)
 
@@ -166,11 +92,10 @@ class AIEngine:
         return response.choices[0].message.content or ""
 
     def _call_gemini(self, prompt: str) -> str:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=self._api_key)
-        model = genai.GenerativeModel(self._model)
-        response = model.generate_content(prompt)
+        client = genai.Client(api_key=self._api_key)
+        response = client.models.generate_content(model=self._model, contents=prompt)
         return response.text
 
     def _call_anthropic(self, prompt: str) -> str:

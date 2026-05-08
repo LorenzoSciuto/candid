@@ -1,49 +1,153 @@
-// Live Interview Room — real-time STT
-const { SAMPLE_TRANSCRIPT } = window.CANDID_DATA;
+// Live Interview Room — real Chrome/Edge Web Speech API
 
-const LiveRoomScreen = ({ tweaks }) => {
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+const LiveRoomScreen = ({ tweaks, interview }) => {
   const [recording, setRecording] = useState(false);
   const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [bubbles, setBubbles] = useState([]);
   const [liveText, setLiveText] = useState("");
-  const idxRef = useRef(0);
-  const charRef = useRef(0);
+  const [activeSpeaker, setActiveSpeaker] = useState("Candidate");
+  const [sttError, setSttError] = useState(null);
 
+  const recognitionRef = useRef(null);
+  const shouldRunRef = useRef(false);
+  const activeSpeakerRef = useRef("Candidate");
+  const transcriptEndRef = useRef(null);
+
+  // Keep ref in sync with state for use inside STT callbacks
+  useEffect(() => { activeSpeakerRef.current = activeSpeaker; }, [activeSpeaker]);
+
+  // Timer
   useEffect(() => {
     if (!recording || paused) return;
-    const t = setInterval(() => setElapsed(e => e + 1), 1000);
-    return () => clearInterval(t);
+    const id = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(id);
   }, [recording, paused]);
 
+  // Auto-scroll transcript
   useEffect(() => {
-    if (!recording || paused) return;
-    const speed = tweaks.streaming ? 22 : 6;
-    const tick = setInterval(() => {
-      const i = idxRef.current;
-      if (i >= SAMPLE_TRANSCRIPT.length) { clearInterval(tick); return; }
-      const cur = SAMPLE_TRANSCRIPT[i];
-      const nextChar = charRef.current + speed;
-      if (nextChar >= cur.text.length) {
-        setBubbles(b => [...b, cur]);
-        setLiveText("");
-        idxRef.current = i + 1;
-        charRef.current = 0;
-      } else {
-        charRef.current = nextChar;
-        setLiveText(cur.text.slice(0, nextChar));
-      }
-    }, 80);
-    return () => clearInterval(tick);
-  }, [recording, paused, tweaks.streaming]);
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [bubbles, liveText]);
 
-  const start = () => { setRecording(true); setPaused(false); };
-  const pause = () => setPaused(p => !p);
-  const stop = () => { setRecording(false); setPaused(false); };
-  const reset = () => { setRecording(false); setPaused(false); setElapsed(0); setBubbles([]); setLiveText(""); idxRef.current = 0; charRef.current = 0; };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      shouldRunRef.current = false;
+      try { recognitionRef.current?.abort(); } catch {}
+    };
+  }, []);
+
+  const buildRecognition = () => {
+    const r = new SpeechRecognition();
+    r.continuous = true;
+    r.interimResults = true;
+    r.lang = navigator.language || "en-US";
+
+    r.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          const text = event.results[i][0].transcript.trim();
+          if (!text) continue;
+          const speaker = activeSpeakerRef.current;
+          const who = speaker === "Interviewer"
+            ? (window.getTeamMembers?.()[0]?.name || "Interviewer")
+            : "Candidate";
+          setBubbles(prev => [...prev, {
+            speaker, who,
+            t: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            text,
+          }]);
+          setLiveText("");
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+      if (interim) setLiveText(interim);
+    };
+
+    // Auto-restart to support recordings longer than Chrome's internal timeout
+    r.onend = () => {
+      setLiveText("");
+      if (shouldRunRef.current) {
+        setTimeout(() => {
+          if (shouldRunRef.current) {
+            try { r.start(); } catch {}
+          }
+        }, 150);
+      }
+    };
+
+    r.onerror = (event) => {
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      if (event.error === "network") return; // onend will retry
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setSttError("Microphone access denied. Enable it in browser settings and reload.");
+        shouldRunRef.current = false;
+        setRecording(false);
+        setPaused(false);
+      }
+    };
+
+    return r;
+  };
+
+  const start = () => {
+    if (!SpeechRecognition) {
+      setSttError("Web Speech API not available. Use Chrome or Edge.");
+      return;
+    }
+    setSttError(null);
+    const r = buildRecognition();
+    recognitionRef.current = r;
+    shouldRunRef.current = true;
+    try { r.start(); } catch {}
+    setRecording(true);
+    setPaused(false);
+  };
+
+  const pause = () => {
+    if (paused) {
+      shouldRunRef.current = true;
+      setPaused(false);
+      try { recognitionRef.current?.start(); } catch {}
+    } else {
+      // Set shouldRunRef false BEFORE stop() so onend doesn't restart
+      shouldRunRef.current = false;
+      setPaused(true);
+      setLiveText("");
+      try { recognitionRef.current?.stop(); } catch {}
+    }
+  };
+
+  const stop = () => {
+    shouldRunRef.current = false;
+    setRecording(false);
+    setPaused(false);
+    setLiveText("");
+    try { recognitionRef.current?.stop(); } catch {}
+  };
+
+  const reset = () => {
+    shouldRunRef.current = false;
+    try { recognitionRef.current?.abort(); } catch {}
+    setRecording(false);
+    setPaused(false);
+    setElapsed(0);
+    setBubbles([]);
+    setLiveText("");
+    setSttError(null);
+  };
+
+  const toggleSpeaker = () => setActiveSpeaker(s => s === "Candidate" ? "Interviewer" : "Candidate");
 
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  const liveSpeaker = SAMPLE_TRANSCRIPT[idxRef.current];
+  const team = window.getTeamMembers?.() || [];
+  const interviewerName = interview?.interviewer || team[0]?.name || "Interviewer";
+  const candidateName = interview?.candidateName || "Unknown Candidate";
+  const interviewTitle = interview?.title || interview?.type || "Interview";
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -53,61 +157,101 @@ const LiveRoomScreen = ({ tweaks }) => {
           {recording && <Badge kind="danger"><span className="rec-dot" />REC {fmt(elapsed)}</Badge>}
         </div>
         <div className="row gap-8">
-          <Avatar name="Maya Chen" />
+          <Avatar name={candidateName} />
           <div className="col">
-            <span className="text-13 weight-500">Maya Chen · Hiring Manager round</span>
-            <span className="text-12 text-muted">Senior Frontend Engineer · with Sasha Rivera</span>
+            <span className="text-13 weight-500">{candidateName} · {interviewTitle}</span>
+            <span className="text-12 text-muted">
+              {interview?.type || "Interview"}{interview?.duration ? ` · ${interview.duration}` : ""} · with {interviewerName}
+            </span>
           </div>
         </div>
       </div>
-      <h1 className="page-h1" style={{ marginTop: 12 }}>Interview in progress</h1>
-      <div className="page-sub">Speech-to-text via Web Speech API. Speakers are separated post-call by AI.</div>
+      <h1 className="page-h1" style={{ marginTop: 12 }}>{interviewTitle}</h1>
+      <div className="page-sub">Live speech-to-text via Web Speech API · Chrome &amp; Edge only · AI diarisation post-call.</div>
+
+      {!SpeechRecognition && (
+        <div style={{ padding: "10px 14px", borderRadius: 6, background: "oklch(0.97 0.04 85)", border: "1px solid oklch(0.82 0.12 85)", marginBottom: 16, fontSize: 13 }}>
+          Web Speech API requires Chrome or Edge. Other browsers are not supported.
+        </div>
+      )}
+
+      {sttError && (
+        <div style={{ padding: "10px 14px", borderRadius: 6, background: "var(--danger-soft, oklch(0.97 0.02 15))", border: "1px solid var(--danger, oklch(0.65 0.15 15))", marginBottom: 16, fontSize: 13, color: "var(--danger, oklch(0.55 0.18 15))" }}>
+          {sttError}
+        </div>
+      )}
 
       <div className="card" style={{ overflow: "hidden", marginBottom: 16 }}>
-        <div className="row" style={{ padding: 16, borderBottom: "1px solid var(--border)", justifyContent: "space-between" }}>
-          <div className="row gap-12">
+        {/* Controls bar */}
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <div className="row gap-8">
             {!recording ? (
-              <Btn kind="primary" onClick={start} icon={<span className="rec-dot" style={{ animation: "none" }} />}>Start recording</Btn>
+              <Btn kind="primary" onClick={start} icon={<span className="rec-dot" style={{ animation: "none" }} />} disabled={!SpeechRecognition}>
+                Start recording
+              </Btn>
             ) : (
               <>
-                <Btn kind="secondary" onClick={pause} icon={paused ? <Icons.Play size={12} /> : <Icons.Pause size={12} />}>{paused ? "Resume" : "Pause"}</Btn>
+                <Btn kind="secondary" onClick={pause} icon={paused ? <Icons.Play size={12} /> : <Icons.Pause size={12} />}>
+                  {paused ? "Resume" : "Pause"}
+                </Btn>
                 <Btn kind="danger" onClick={stop} icon={<Icons.Square size={12} />}>Stop & save</Btn>
               </>
             )}
             <button className="icon-btn" onClick={reset} title="Reset"><Icons.X size={14} /></button>
           </div>
-          <div className="row gap-16">
-            <div className="col" style={{ alignItems: "flex-end" }}>
-              <span className="text-12 text-muted">Active speaker</span>
-              <span className="text-13 weight-500">{recording && !paused ? (liveSpeaker?.who || "—") : "—"}</span>
+
+          {/* Speaker toggle — visible while actively recording */}
+          {recording && !paused && (
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <span className="text-12 text-muted">Now speaking:</span>
+              <button
+                onClick={toggleSpeaker}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 14px", borderRadius: 20,
+                  border: "2px solid var(--accent)", background: "var(--accent-subtle)",
+                  cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
+                  transition: "background 0.15s",
+                }}
+              >
+                <span className="rec-dot" style={{ width: 6, height: 6 }} />
+                {activeSpeaker === "Candidate" ? "Candidate" : interviewerName}
+              </button>
+              <span className="text-11 text-muted">click to switch</span>
             </div>
-            <div style={{ width: 1, background: "var(--border)" }} />
-            <div className="wave" style={{ opacity: recording && !paused ? 1 : 0.25 }}>
-              {Array.from({ length: 24 }).map((_, i) => (
-                <span key={i} style={{ animationDelay: `${i * 0.06}s`, animationPlayState: recording && !paused ? "running" : "paused" }} />
-              ))}
-            </div>
+          )}
+
+          <div className="wave" style={{ opacity: recording && !paused ? 1 : 0.2 }}>
+            {Array.from({ length: 24 }).map((_, i) => (
+              <span key={i} style={{ animationDelay: `${i * 0.06}s`, animationPlayState: recording && !paused ? "running" : "paused" }} />
+            ))}
           </div>
         </div>
 
+        {/* Transcript */}
         <div className="scroll" style={{ padding: "20px 24px", maxHeight: 460 }}>
           {bubbles.length === 0 && !liveText && (
             <div style={{ textAlign: "center", padding: 40, color: "var(--ink-muted)" }}>
               <Icons.Mic size={24} style={{ marginBottom: 8 }} />
-              <div className="weight-500" style={{ color: "var(--ink-secondary)" }}>Press start when you're ready.</div>
-              <div className="text-12 mt-4">Words will appear here in real time.</div>
+              <div className="weight-500" style={{ color: "var(--ink-secondary)" }}>Press start when ready.</div>
+              <div className="text-12 mt-4">Words appear here in real time. Tap the speaker button to switch between candidate and interviewer.</div>
             </div>
           )}
-          {bubbles.map((b, i) => (
-            <Bubble key={i} {...b} />
-          ))}
-          {liveText && liveSpeaker && (
-            <Bubble {...liveSpeaker} text={liveText} live />
+          {bubbles.map((b, i) => <Bubble key={i} {...b} />)}
+          {liveText && (
+            <Bubble
+              speaker={activeSpeaker}
+              who={activeSpeaker === "Candidate" ? "Candidate" : interviewerName}
+              t={new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              text={liveText}
+              live
+            />
           )}
+          <div ref={transcriptEndRef} />
         </div>
       </div>
 
-      {/* AI side panel */}
+      {/* AI co-pilot panel */}
       <div className="ai-panel card-pad" style={{ padding: 18 }}>
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
           <span className="ai-tag"><Icons.Sparkles size={11} /> Co-pilot suggestions · live</span>

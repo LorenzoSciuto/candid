@@ -283,8 +283,15 @@ const ProfileSettings = ({ t, user, onLogout }) => {
 // ── Locations ─────────────────────────────────────────────────────────────────
 
 const LocationsSettings = ({ t }) => {
+  const [currency, setCurrency] = useState(loadCurrency);
   const [locations, setLocations] = useState(loadLocations);
   const [newLoc, setNewLoc] = useState("");
+
+  const saveCurrency = (c) => {
+    setCurrency(c);
+    localStorage.setItem("candid_currency", c);
+    window.getCurrency = () => c;
+  };
 
   const saveLocations = (locs) => {
     setLocations(locs);
@@ -302,6 +309,19 @@ const LocationsSettings = ({ t }) => {
 
   return (
     <div className="col gap-16">
+      <div className="card card-pad col gap-12">
+        <div className="col">
+          <span className="weight-600">{t('settings.currency.title')}</span>
+          <span className="text-12 text-secondary">{t('settings.currency.subtitle')}</span>
+        </div>
+        <div className="row gap-8" style={{ flexWrap: "wrap" }}>
+          {CURRENCIES.map(c => (
+            <button key={c} onClick={() => saveCurrency(c)}
+              className={`btn btn-sm ${currency === c ? "btn-primary" : "btn-secondary"}`}>{c}</button>
+          ))}
+        </div>
+      </div>
+
       <div className="card card-pad col gap-12">
         <div className="col">
           <span className="weight-600">{t('settings.tab.locations')}</span>
@@ -351,6 +371,14 @@ const saveTeamStore = (members) => localStorage.setItem("candid_team", JSON.stri
 
 // Exported for use in jobs modal
 window.getTeamMembers = loadTeam;
+
+// ── Currency helpers ──────────────────────────────────────────────────────────
+
+const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "DKK", "NOK"];
+
+const loadCurrency = () => localStorage.getItem("candid_currency") || "EUR";
+
+window.getCurrency = loadCurrency;
 
 const TeamSettings = ({ t }) => {
   const [team, setTeam] = useState(loadTeam);

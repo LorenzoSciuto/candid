@@ -4,6 +4,158 @@ const TWEAKS_DEFAULTS = /*EDITMODE-BEGIN*/{
   "showCounts": true
 }/*EDITMODE-END*/;
 
+// Fallback: translations.jsx may not have run yet if Babel loads scripts async
+const LocaleContext = window.LocaleContext || React.createContext({ locale: 'en', setLocale: () => {} });
+
+// ── AI Prompts (global) ────────────────────────────────────────────────────────
+const APP_PROMPTS = {
+  rewriteEmail: (to, subject, body) =>
+    `You are a professional recruiter. Rewrite the following email${to ? " to " + to : ""}${subject ? ' with subject "' + subject + '"' : ""}. ` +
+    `Make it warm, clear, and compelling. Keep it under 200 words. Do not include a subject line in the body.\n\nOriginal:\n${body}`,
+};
+
+// ── Compose Modal ─────────────────────────────────────────────────────────────
+
+const ComposeModal = ({ onClose }) => {
+  const t = window.useT ? window.useT() : k => k;
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [rewriting, setRewriting] = useState(false);
+  const [rewriteError, setRewriteError] = useState("");
+
+  const rewriteWithAI = async () => {
+    if (!body.trim()) return;
+    setRewriting(true);
+    setRewriteError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/ai/rewrite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: body,
+          instruction: APP_PROMPTS.rewriteEmail(to, subject, body),
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      setBody(d.result);
+    } catch { setRewriteError("AI unavailable — check provider settings."); }
+    setRewriting(false);
+  };
+
+  const send = () => {
+    const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto);
+    onClose();
+  };
+
+  return (
+    <Modal open title={t('compose.title')} onClose={onClose} width={520}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={send} disabled={!to.trim()}>
+            {t('compose.send')}
+          </Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        <div>
+          <label className="label">{t('compose.to')}</label>
+          <input className="input" type="email" value={to} onChange={e => setTo(e.target.value)} placeholder="candidate@example.com" autoFocus />
+        </div>
+        <div>
+          <label className="label">{t('compose.subject')}</label>
+          <input className="input" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Re: Senior Engineer role" />
+        </div>
+        <div>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <label className="label" style={{ margin: 0 }}>{t('compose.body')}</label>
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              {rewriteError && <span className="text-12" style={{ color: "var(--danger)" }}>{rewriteError}</span>}
+              <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 12 }}
+                onClick={rewriteWithAI} disabled={rewriting || !body.trim()}>
+                {rewriting
+                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> {t('compose.rewriting')}</span>
+                  : t('compose.rewrite')}
+              </button>
+            </div>
+          </div>
+          <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} placeholder="Hi there,&#10;&#10;" />
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ── Hiring Plan Modal ─────────────────────────────────────────────────────────
+
+const HiringPlanModal = ({ onClose, onNavigate }) => {
+  const t = window.useT ? window.useT() : k => k;
+  const [jds, setJds] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/job-descriptions`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setJds(Array.isArray(d) ? d.filter(j => j.status === "Active" || j.status === "Draft") : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const statusColor = (s) => s === "Active" ? "positive" : s === "Draft" ? undefined : "warn";
+
+  return (
+    <Modal open title={t('plan.title')} onClose={onClose} width={680}
+      footer={<Btn onClick={onClose}>{t('common.close')}</Btn>}>
+      <div className="col gap-0">
+        <div className="text-12 text-muted" style={{ marginBottom: 14 }}>{t('plan.sub')}</div>
+        {loading && <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('common.loading')}</div>}
+        {!loading && jds.length === 0 && (
+          <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>
+            {t('plan.empty')}
+            <button className="link text-13" style={{ marginLeft: 8 }} onClick={() => { onClose(); onNavigate("jobs"); }}>Go to Positions →</button>
+          </div>
+        )}
+        {jds.length > 0 && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ background: "var(--bg-sunken)", borderBottom: "1px solid var(--border)" }}>
+                {[t('plan.col.position'), t('plan.col.openings'), t('plan.col.status'), t('plan.col.owner')].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "9px 14px", fontSize: 11.5, fontWeight: 500, color: "var(--ink-secondary)", letterSpacing: "0.02em", textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {jds.map(j => (
+                <tr key={j.id} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                  <td style={{ padding: "11px 14px" }}>
+                    <div className="col">
+                      <span className="weight-500">{j.title}</span>
+                      <span className="text-12 text-muted">{j.location || "—"}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: "11px 14px" }}>
+                    <span className="text-mono weight-600">{j.openings || 1}</span>
+                  </td>
+                  <td style={{ padding: "11px 14px" }}>
+                    <Badge kind={statusColor(j.status)}>{j.status}</Badge>
+                  </td>
+                  <td style={{ padding: "11px 14px" }}>
+                    {j.owner
+                      ? <div className="row gap-6"><Avatar name={j.owner} /><span className="text-13">{j.owner}</span></div>
+                      : <span className="text-muted">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 
 const SESSION_KEY = "candid_user";
@@ -144,6 +296,8 @@ const App = () => {
   const [route, setRoute] = useState(routeFromHash);
   const [candidateId, setCandidateId] = useState("c-001");
   const [quickOpen, setQuickOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [t_tweaks, setTweak] = window.useTweaks(TWEAKS_DEFAULTS);
   const [liveCounts, setLiveCounts] = useState({});
 
@@ -198,9 +352,9 @@ const App = () => {
 
   if (!user) {
     return (
-      <window.LocaleContext.Provider value={{ locale, setLocale }}>
+      <LocaleContext.Provider value={{ locale, setLocale }}>
         <LoginScreen onLogin={handleLogin} />
-      </window.LocaleContext.Provider>
+      </LocaleContext.Provider>
     );
   }
 
@@ -229,16 +383,18 @@ const App = () => {
     }
   })();
 
+  const t_app = window.useT ? window.useT() : k => k;
   const topActions = (
     <>
-      <Btn onClick={() => setQuickOpen(true)} icon={<Icons.ClipPaste size={14} />}>Quick add</Btn>
-      <Btn icon={<Icons.Mail size={14} />} title="Inbox" />
-      <Btn icon={<Icons.Calendar size={14} />} title="Calendar" />
+      <Btn onClick={() => setQuickOpen(true)} icon={<Icons.ClipPaste size={14} />}>{t_app('topbar.quickAdd')}</Btn>
+      <Btn icon={<Icons.Mail size={14} />} onClick={() => setComposeOpen(true)} title={t_app('compose.title')} />
+      <Btn icon={<Icons.Calendar size={14} />} onClick={() => setPlanOpen(true)} title={t_app('topbar.plan')}>{t_app('topbar.plan')}</Btn>
+      <Btn icon={<Icons.Settings size={14} />} onClick={() => navigate("settings")} title={t_app('nav.settings')} />
     </>
   );
 
   return (
-    <window.LocaleContext.Provider value={{ locale, setLocale }}>
+    <LocaleContext.Provider value={{ locale, setLocale }}>
       <div className="app">
         <Sidebar
           route={route === "candidate" ? "candidates" : route}
@@ -246,6 +402,7 @@ const App = () => {
           counts={counts}
           onQuickAdd={() => setQuickOpen(true)}
           user={user}
+          onLogout={handleLogout}
         />
         <div className="main">
           <Topbar crumbs={crumbs} actions={topActions} />
@@ -266,6 +423,8 @@ const App = () => {
         </div>
 
         <window.QuickAdd open={quickOpen} onClose={() => setQuickOpen(false)} onCreate={() => openCandidate("c-004")} tweaks={t_tweaks} />
+        {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
+        {planOpen && <HiringPlanModal onClose={() => setPlanOpen(false)} onNavigate={navigate} />}
 
         <window.TweaksPanel>
           <window.TweakSection label="AI behavior">
@@ -278,7 +437,7 @@ const App = () => {
           </window.TweakSection>
         </window.TweaksPanel>
       </div>
-    </window.LocaleContext.Provider>
+    </LocaleContext.Provider>
   );
 };
 

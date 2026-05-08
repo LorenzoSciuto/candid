@@ -59,6 +59,19 @@ Transcript:
 
 Return only valid JSON. No markdown fences."""
 
+    REWRITE_TEXT = """\
+You are a helpful assistant. Rewrite or improve the following text according to the instruction.
+
+Instruction: {instruction}
+
+Text:
+{text}
+
+Return a JSON object with exactly one key:
+- "result" — the rewritten text as a plain string
+
+Return only valid JSON. No markdown fences."""
+
     IMPROVE_JD = """\
 You are an expert technical recruiter and copywriter. Improve the following job description \
 to be more compelling, clear, and structured. Keep the role name and core requirements intact \
@@ -106,6 +119,11 @@ class AIEngine:
     def process_transcript(self, raw_transcript: str) -> dict:
         prompt = _Prompts.TRANSCRIPT.format(raw_transcript=raw_transcript)
         return self._parse_json(self._call(prompt))
+
+    def rewrite_text(self, text: str, instruction: str) -> str:
+        prompt = _Prompts.REWRITE_TEXT.format(text=text, instruction=instruction)
+        result = self._parse_json(self._call(prompt))
+        return result.get("result", text)
 
     def improve_jd(self, jd_text: str, role_name: str = "") -> str:
         prompt = _Prompts.IMPROVE_JD.format(jd_text=jd_text, role_name=role_name or "this role")

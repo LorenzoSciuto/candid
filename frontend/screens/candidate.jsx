@@ -1,6 +1,18 @@
 // Candidate Detail Hub — full profile with tabs
 const { HUMAN_SKILLS, TECH_SKILLS } = window.CANDID_DATA;
 
+// ── AI Prompts — keep all prompts in one place for easy editing ───────────────
+const PROMPTS = {
+  rewriteEmail: (candidateName, role, body) =>
+    `You are a professional, empathetic recruiter. Rewrite the following email to ${candidateName} for the ${role || "open"} position. ` +
+    `Make it warm, clear, and compelling. Keep it under 180 words. Do not add a subject line. ` +
+    `Preserve the core intent of the original message.\n\nOriginal:\n${body}`,
+
+  coldEmail: (candidateName, role) =>
+    `Write a short, friendly cold outreach email to ${candidateName} about the ${role || "open"} role. ` +
+    `It should feel personal, not templated. Under 120 words. No subject line.`,
+};
+
 const mapCandidate = (c) => ({
   id: c.id,
   first: c.first_name,
@@ -30,6 +42,154 @@ const mapCandidate = (c) => ({
   evaluation: c.evaluation || null,
 });
 
+// ── Email Modal ───────────────────────────────────────────────────────────────
+
+const EmailModal = ({ candidate, onClose }) => {
+  const t = window.useT();
+  const [subject, setSubject] = useState(`Re: ${candidate.role || "Opportunity"} at Candid`);
+  const [body, setBody] = useState(`Hi ${candidate.first},\n\n`);
+  const [rewriting, setRewriting] = useState(false);
+  const [rewriteError, setRewriteError] = useState("");
+
+  const rewriteWithAI = async () => {
+    if (!body.trim()) return;
+    setRewriting(true);
+    setRewriteError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/ai/rewrite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: body,
+          instruction: PROMPTS.rewriteEmail(`${candidate.first} ${candidate.last}`, candidate.role, body),
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const d = await res.json();
+      setBody(d.result);
+    } catch {
+      setRewriteError("AI unavailable — check provider settings.");
+    }
+    setRewriting(false);
+  };
+
+  const sendEmail = () => {
+    const mailto = `mailto:${candidate.email || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto);
+    onClose();
+  };
+
+  return (
+    <Modal open title={`Email ${candidate.first} ${candidate.last}`} onClose={onClose}
+      width={560}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={sendEmail} disabled={!candidate.email}>Send</Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        {!candidate.email && <div className="text-12" style={{ color: "var(--warn)" }}>No email address on file for this candidate.</div>}
+        <div>
+          <label className="label">To</label>
+          <input className="input" value={candidate.email || "(no email)"} disabled style={{ opacity: 0.6 }} />
+        </div>
+        <div>
+          <label className="label">Subject</label>
+          <input className="input" value={subject} onChange={e => setSubject(e.target.value)} />
+        </div>
+        <div>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <label className="label" style={{ margin: 0 }}>Body</label>
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              {rewriteError && <span className="text-12" style={{ color: "var(--danger)" }}>{rewriteError}</span>}
+              <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 12 }}
+                onClick={rewriteWithAI} disabled={rewriting || !body.trim()}>
+                {rewriting
+                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> rewriting…</span>
+                  : <>✨ Rewrite with AI</>}
+              </button>
+            </div>
+          </div>
+          <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} />
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ── Edit Candidate Modal ──────────────────────────────────────────────────────
+
+const EditCandidateModal = ({ candidate, onClose, onSaved }) => {
+  const t = window.useT();
+  const [first, setFirst] = useState(candidate.first || "");
+  const [last, setLast] = useState(candidate.last || "");
+  const [email, setEmail] = useState(candidate.email || "");
+  const [phone, setPhone] = useState(candidate.phone || "");
+  const [role, setRole] = useState(candidate.role || "");
+  const [location, setLocation] = useState(candidate.location || "");
+  const [experience, setExperience] = useState(candidate.experience ?? "");
+  const [source, setSource] = useState(candidate.source || "");
+  const [status, setStatus] = useState(candidate.status || "new");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await fetch(`${window.API_BASE}/candidates/${candidate.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: first, last_name: last,
+          email: email || null, phone: phone || null,
+          current_role: role || null, location: location || null,
+          years_of_experience: experience !== "" ? parseInt(experience) : null,
+          source: source || null, status,
+        }),
+      });
+      onSaved();
+    } catch { /* offline */ }
+    setSaving(false);
+  };
+
+  const statuses = window.CANDID_DATA.STATUS || [];
+
+  return (
+    <Modal open title="Edit candidate" onClose={onClose}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn kind="primary" onClick={save} disabled={saving || !first || !last}>{saving ? t('common.saving') : t('common.save')}</Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div><label className="label">First name</label><input className="input" value={first} onChange={e => setFirst(e.target.value)} /></div>
+          <div><label className="label">Last name</label><input className="input" value={last} onChange={e => setLast(e.target.value)} /></div>
+          <div><label className="label">Email</label><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
+          <div><label className="label">Phone</label><input className="input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+          <div><label className="label">Current role / title</label><input className="input" value={role} onChange={e => setRole(e.target.value)} /></div>
+          <div><label className="label">Location</label><input className="input" value={location} onChange={e => setLocation(e.target.value)} /></div>
+          <div><label className="label">Years of experience</label><input className="input" type="number" min={0} value={experience} onChange={e => setExperience(e.target.value)} /></div>
+          <div>
+            <label className="label">Source</label>
+            <select className="select" value={source} onChange={e => setSource(e.target.value)}>
+              <option value="">—</option>
+              {["Referral", "LinkedIn", "Inbound", "Job board", "Agency", "Other"].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="label">Stage</label>
+          <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
+            {statuses.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 const CandidateScreen = ({ id, onRoute }) => {
   const t = window.useT();
   const mockC = window.CANDID_DATA.CANDIDATES.find(x => x.id === id) || window.CANDID_DATA.CANDIDATES[0];
@@ -38,6 +198,8 @@ const CandidateScreen = ({ id, onRoute }) => {
   const [loading, setLoading] = useState(true);
   const [hiring, setHiring] = useState(false);
   const [hired, setHired] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -108,9 +270,18 @@ const CandidateScreen = ({ id, onRoute }) => {
           </div>
         </div>
         <div className="row gap-8">
-          <Btn icon={<Icons.Mail size={14} />}>{t('candidate.email')}</Btn>
+          <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
+          <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
           <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
-          <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom")}>{t('candidate.startInterview')}</Btn>
+          {(c.status === "offer" || c.status === "hired") && !hired && (
+            <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={convertToEmployee} disabled={hiring || c.status === "hired"}>
+              {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → People"}
+            </Btn>
+          )}
+          {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to People</Badge>}
+          {c.status !== "offer" && c.status !== "hired" && (
+            <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom")}>{t('candidate.startInterview')}</Btn>
+          )}
         </div>
       </div>
 
@@ -136,6 +307,15 @@ const CandidateScreen = ({ id, onRoute }) => {
       {tab === "interviews"  && <InterviewsTab c={c} onRoute={onRoute} onRefresh={refreshCandidate} t={t} />}
       {tab === "evaluation"  && <EvaluationTab c={c} onSaved={refreshCandidate} t={t} />}
       {tab === "activity"    && <ActivityTab c={c} />}
+
+      {emailOpen && <EmailModal candidate={c} onClose={() => setEmailOpen(false)} />}
+      {editOpen && (
+        <EditCandidateModal
+          candidate={c}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => { setEditOpen(false); refreshCandidate(); }}
+        />
+      )}
     </div>
   );
 };

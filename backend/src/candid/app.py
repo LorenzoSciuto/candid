@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from candid.config import Settings
 from candid.database import Database
+from candid.routers.ai import AIRouter
 from candid.routers.analysis import AnalysisRouter
 from candid.routers.auth import AuthRouter
 from candid.routers.candidates import CandidatesRouter
@@ -71,6 +72,7 @@ class Application:
 
     def _mount_routers(self, fastapi_app: FastAPI) -> None:
         routers = [
+            AIRouter(self._db, self._ai_factory).router,
             CandidatesRouter(self._db).router,
             AnalysisRouter(self._db, self._ai_factory, self._extractor).router,
             InterviewsRouter(self._db, self._ai_factory).router,

@@ -1,7 +1,7 @@
 // Settings — AI providers, locale, team
 const SettingsScreen = ({ user, onLocaleChange, onLogout }) => {
   const t = window.useT();
-  const { locale, setLocale } = window.useContext(window.LocaleContext);
+  const { locale, setLocale } = window.useContext(window.LocaleContext || React.createContext({ locale: 'en', setLocale: () => {} }));
   const [tab, setTab] = useState("ai");
 
   const handleLocale = (l) => {
@@ -16,20 +16,22 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout }) => {
 
       <div className="tabs">
         {[
-          { id: "ai", label: t('settings.tab.ai') },
-          { id: "locale", label: t('settings.tab.locale') },
-          { id: "workspace", label: t('settings.tab.workspace') },
-          { id: "team", label: t('settings.tab.team') },
+          { id: "ai",           label: t('settings.tab.ai') },
+          { id: "locale",       label: t('settings.tab.locale') },
+          { id: "profile",      label: t('settings.tab.profile') },
+          { id: "locations",    label: t('settings.tab.locations') },
+          { id: "team",         label: t('settings.tab.team') },
           { id: "integrations", label: t('settings.tab.integrations') },
         ].map(tb => (
           <button key={tb.id} className={`tab ${tab === tb.id ? "active" : ""}`} onClick={() => setTab(tb.id)}>{tb.label}</button>
         ))}
       </div>
 
-      {tab === "ai" && <AISettings t={t} />}
-      {tab === "locale" && <LocaleSettings t={t} locale={locale} onChange={handleLocale} />}
-      {tab === "workspace" && <ProfileSettings t={t} user={user} onLogout={onLogout} />}
-      {tab === "team" && <TeamSettings t={t} />}
+      {tab === "ai"           && <AISettings t={t} />}
+      {tab === "locale"       && <LocaleSettings t={t} locale={locale} onChange={handleLocale} />}
+      {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} />}
+      {tab === "locations"    && <LocationsSettings t={t} />}
+      {tab === "team"         && <TeamSettings t={t} />}
       {tab === "integrations" && <IntegrationsSettings t={t} />}
     </div>
   );
@@ -234,6 +236,16 @@ const LocaleSettings = ({ t, locale, onChange }) => (
 
 // ── Profile / Workspace ───────────────────────────────────────────────────────
 
+const DEFAULT_LOCATIONS = ["Remote", "SF / Remote", "SF", "NYC", "London", "Berlin", "Austin", "Toronto"];
+
+const loadLocations = () => {
+  try {
+    const s = localStorage.getItem("candid_locations");
+    if (s) return JSON.parse(s);
+  } catch {}
+  return DEFAULT_LOCATIONS;
+};
+
 const ProfileSettings = ({ t, user, onLogout }) => {
   const [role, setRole] = useState(() => localStorage.getItem("candid_role") || user?.role || "");
   const [saved, setSaved] = useState(false);
@@ -247,7 +259,7 @@ const ProfileSettings = ({ t, user, onLogout }) => {
   return (
     <div className="col gap-16">
       <div className="card card-pad col gap-12">
-        <span className="weight-600">Profile</span>
+        <span className="weight-600">{t('settings.tab.profile')}</span>
         <div className="row gap-14" style={{ alignItems: "center" }}>
           <Avatar name={user?.name || "User"} src={user?.picture} size="xl" />
           <div className="col gap-4">
@@ -261,7 +273,60 @@ const ProfileSettings = ({ t, user, onLogout }) => {
         </div>
         <div className="row gap-8">
           <Btn kind="primary" onClick={save}>{saved ? "Saved ✓" : t('common.save')}</Btn>
-          <Btn onClick={onLogout}>Sign out</Btn>
+          <Btn onClick={onLogout}>{t('user.signOut')}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Locations ─────────────────────────────────────────────────────────────────
+
+const LocationsSettings = ({ t }) => {
+  const [locations, setLocations] = useState(loadLocations);
+  const [newLoc, setNewLoc] = useState("");
+
+  const saveLocations = (locs) => {
+    setLocations(locs);
+    localStorage.setItem("candid_locations", JSON.stringify(locs));
+  };
+
+  const addLocation = () => {
+    const v = newLoc.trim();
+    if (!v || locations.includes(v)) return;
+    saveLocations([...locations, v]);
+    setNewLoc("");
+  };
+
+  const removeLocation = (loc) => saveLocations(locations.filter(l => l !== loc));
+
+  return (
+    <div className="col gap-16">
+      <div className="card card-pad col gap-12">
+        <div className="col">
+          <span className="weight-600">{t('settings.tab.locations')}</span>
+          <span className="text-12 text-secondary">Available locations in job position forms.</span>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {locations.map(loc => (
+            <span key={loc} className="row gap-6" style={{ background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px", fontSize: 13 }}>
+              {loc}
+              <button className="icon-btn" style={{ width: 16, height: 16 }} onClick={() => removeLocation(loc)}>
+                <Icons.X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="row gap-8">
+          <input
+            className="input"
+            style={{ flex: 1 }}
+            value={newLoc}
+            onChange={e => setNewLoc(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLocation(); } }}
+            placeholder="Add location… (e.g. Paris, Singapore)"
+          />
+          <Btn onClick={addLocation} disabled={!newLoc.trim()}>{t('common.add')}</Btn>
         </div>
       </div>
     </div>
@@ -270,31 +335,78 @@ const ProfileSettings = ({ t, user, onLogout }) => {
 
 // ── Team ──────────────────────────────────────────────────────────────────────
 
+const DEFAULT_TEAM = [
+  { name: "Sasha Rivera", email: "sasha@candid.app", role: "Hiring Manager" },
+  { name: "Devon Park",   email: "devon@candid.app", role: "Recruiter" },
+  { name: "Avi Chen",     email: "avi@candid.app",   role: "Engineering Manager" },
+  { name: "Mira Khan",    email: "mira@candid.app",  role: "Recruiter" },
+];
+
+const loadTeam = () => {
+  try { const s = localStorage.getItem("candid_team"); if (s) return JSON.parse(s); } catch {}
+  return DEFAULT_TEAM;
+};
+
+const saveTeamStore = (members) => localStorage.setItem("candid_team", JSON.stringify(members));
+
+// Exported for use in jobs modal
+window.getTeamMembers = loadTeam;
+
 const TeamSettings = ({ t }) => {
-  const team = [
-    { name: "Sasha Rivera", email: "sasha@candid.app", role: "Hiring Manager", admin: true },
-    { name: "Devon Park", email: "devon@candid.app", role: "Recruiter" },
-    { name: "Avi Chen", email: "avi@candid.app", role: "Engineering Manager" },
-    { name: "Mira Khan", email: "mira@candid.app", role: "Recruiter" },
-  ];
+  const [team, setTeam] = useState(loadTeam);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const update = (members) => { setTeam(members); saveTeamStore(members); };
+
+  const add = () => {
+    if (!newName.trim()) return;
+    update([...team, { name: newName.trim(), email: newEmail.trim(), role: newRole.trim() }]);
+    setNewName(""); setNewEmail(""); setNewRole(""); setAdding(false);
+  };
+
+  const remove = (i) => update(team.filter((_, idx) => idx !== i));
+
   return (
-    <div className="card">
-      <div className="card-header">
-        <span className="card-title">{t('settings.team.members')}</span>
-        <Btn icon={<Icons.Plus size={14} />}>{t('settings.team.invite')}</Btn>
-      </div>
-      {team.map((m, i) => (
-        <div key={i} className="row" style={{ padding: "12px 18px", borderBottom: i === team.length - 1 ? 0 : "1px solid var(--border-soft)", justifyContent: "space-between" }}>
-          <div className="row gap-12">
-            <Avatar name={m.name} />
-            <div className="col"><span className="weight-500">{m.name}</span><span className="text-12 text-muted">{m.email}</span></div>
-          </div>
-          <div className="row gap-8">
-            {m.admin && <Badge kind="info">Admin</Badge>}
-            <Badge>{m.role}</Badge>
-          </div>
+    <div className="col gap-16">
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">{t('settings.team.members')}</span>
+          <Btn icon={<Icons.Plus size={14} />} onClick={() => setAdding(v => !v)}>{t('settings.team.invite')}</Btn>
         </div>
-      ))}
+        {team.map((m, i) => (
+          <div key={i} className="row" style={{ padding: "12px 18px", borderBottom: i === team.length - 1 && !adding ? 0 : "1px solid var(--border-soft)", justifyContent: "space-between" }}>
+            <div className="row gap-12">
+              <Avatar name={m.name} />
+              <div className="col">
+                <span className="weight-500">{m.name}</span>
+                <span className="text-12 text-muted">{m.email || "—"}</span>
+              </div>
+            </div>
+            <div className="row gap-8">
+              {m.role && <Badge>{m.role}</Badge>}
+              <button className="icon-btn" onClick={() => remove(i)} title="Remove">
+                <Icons.X size={13} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {adding && (
+          <div className="col gap-10" style={{ padding: "14px 18px", borderTop: "1px solid var(--border-soft)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <div><label className="label">{t('employees.form.first').replace(' name','') + ' name'}</label><input className="input" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jane Smith" autoFocus /></div>
+              <div><label className="label">{t('employees.form.email')}</label><input className="input" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="jane@company.com" /></div>
+              <div><label className="label">{t('employees.form.role')}</label><input className="input" value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="Recruiter" /></div>
+            </div>
+            <div className="row gap-8">
+              <Btn kind="primary" onClick={add} disabled={!newName.trim()}>{t('common.add')}</Btn>
+              <Btn onClick={() => setAdding(false)}>{t('common.cancel')}</Btn>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

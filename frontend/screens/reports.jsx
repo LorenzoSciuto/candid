@@ -2,6 +2,7 @@
 const PIPELINE_STAGES = window.CANDID_DATA.STATUS;
 
 const ReportsScreen = () => {
+  const t = window.useT();
   const [stats, setStats] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +18,6 @@ const ReportsScreen = () => {
     });
   }, []);
 
-  // Build funnel from real status counts
   const funnel = useMemo(() => {
     if (!stats) {
       return [
@@ -37,16 +37,15 @@ const ReportsScreen = () => {
     ].filter(f => f.n > 0 || !stats);
   }, [stats]);
 
-  // Build source mix from real data
   const sources = useMemo(() => {
     if (!stats?.by_source) {
       return [
-        { source: "Referral", n: 38, hire: 4 }, { source: "Inbound", n: 42, hire: 2 },
-        { source: "LinkedIn", n: 35, hire: 1 }, { source: "Job board", n: 27, hire: 0 },
+        { source: "Referral", n: 38 }, { source: "Inbound", n: 42 },
+        { source: "LinkedIn", n: 35 }, { source: "Job board", n: 27 },
       ];
     }
     return Object.entries(stats.by_source)
-      .map(([source, n]) => ({ source, n, hire: 0 }))
+      .map(([source, n]) => ({ source, n }))
       .sort((a, b) => b.n - a.n);
   }, [stats]);
 
@@ -60,30 +59,29 @@ const ReportsScreen = () => {
     <div className="page page-wide">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
-          <h1 className="page-h1">Reports</h1>
-          <div className="page-sub">All time · all positions</div>
+          <h1 className="page-h1">{t('reports.title')}</h1>
+          <div className="page-sub">{t('reports.sub')}</div>
         </div>
         <div className="row gap-8">
-          <Btn icon={<Icons.Upload size={14} />}>Export</Btn>
+          <Btn icon={<Icons.Upload size={14} />}>{t('reports.export')}</Btn>
         </div>
       </div>
 
-      {/* KPI grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <Kpi label="Total candidates" value={String(total)} />
-        <Kpi label="Active positions" value={String(activeJDs)} />
-        <Kpi label="Avg AI score" value={avgScore != null ? String(avgScore) : "—"} sub="of 5" />
-        <Kpi label="In offer stage" value={String(last)} />
+        <Kpi label={t('reports.kpi.total')} value={String(total)} />
+        <Kpi label={t('reports.kpi.active')} value={String(activeJDs)} />
+        <Kpi label={t('reports.kpi.avgScore')} value={avgScore != null ? String(avgScore) : "—"} sub={t('reports.kpi.avgScoreSub')} />
+        <Kpi label={t('reports.kpi.offer')} value={String(last)} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)", gap: 16 }}>
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Funnel</span>
+            <span className="card-title">{t('reports.funnel.title')}</span>
             <span className="card-sub">{total} → {last}</span>
           </div>
           <div style={{ padding: "14px 18px" }}>
-            {loading && <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>Loading…</div>}
+            {loading && <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('reports.loading')}</div>}
             {funnel.map((f, i) => {
               const next = funnel[i + 1];
               const conv = next && f.n > 0 ? Math.round((next.n / f.n) * 100) : null;
@@ -97,20 +95,23 @@ const ReportsScreen = () => {
                     <div style={{ width: max > 0 ? `${(f.n / max) * 100}%` : "0%", height: "100%", background: `oklch(${0.5 + i * 0.04} 0.08 285)`, borderRadius: 4 }} />
                   </div>
                   {conv != null && (
-                    <div className="text-12 text-muted" style={{ marginTop: 2, marginLeft: 12 }}>↓ {conv}% pass</div>
+                    <div className="text-12 text-muted" style={{ marginTop: 2, marginLeft: 12 }}>↓ {conv}{t('reports.pass')}</div>
                   )}
                 </div>
               );
             })}
             {!loading && funnel.length === 0 && (
-              <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>No candidate data yet.</div>
+              <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('reports.noData')}</div>
             )}
           </div>
         </div>
 
         <div className="col gap-16">
           <div className="card">
-            <div className="card-header"><span className="card-title">Source mix</span><span className="card-sub">applies</span></div>
+            <div className="card-header">
+              <span className="card-title">{t('reports.source.title')}</span>
+              <span className="card-sub">{t('reports.source.sub')}</span>
+            </div>
             <div style={{ padding: "14px 18px" }}>
               {sources.map(s => (
                 <div key={s.source} style={{ marginBottom: 12 }}>
@@ -127,11 +128,11 @@ const ReportsScreen = () => {
           </div>
 
           <div className="ai-panel card-pad">
-            <span className="ai-tag" style={{ display: "inline-flex", marginBottom: 8 }}><Icons.Sparkles size={11} /> Insight</span>
+            <span className="ai-tag" style={{ display: "inline-flex", marginBottom: 8 }}><Icons.Sparkles size={11} /> {t('reports.insight')}</span>
             <div className="text-13" style={{ lineHeight: 1.55 }}>
               {sources.length > 0 && sources[0].n > 0
                 ? <><strong>{sources[0].source}</strong> is the top source with {sources[0].n} candidates. Consider investing there to accelerate hiring.</>
-                : "Add candidates to see sourcing insights."}
+                : t('reports.addCandidates')}
             </div>
           </div>
         </div>

@@ -141,8 +141,18 @@ const SIDE_AI = [
   { id: "liveroom", key: "nav.liveroom", icon: Icons.Mic },
 ];
 
-const Sidebar = ({ route, onRoute, counts, onQuickAdd, user }) => {
+const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout }) => {
   const t = window.useT ? window.useT() : (k) => k;
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setUserMenuOpen(false); };
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [userMenuOpen]);
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -180,15 +190,40 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user }) => {
 
       <div className="side-spacer" />
 
-      <div className={`side-item ${route === "settings" ? "active" : ""}`} onClick={() => onRoute("settings")}>
-        <Icons.Settings size={15} />
-        <span>{t('nav.settings')}</span>
-      </div>
-      <div className="user-card" onClick={() => onRoute("settings")}>
-        <Avatar name={user?.name || "User"} src={user?.picture} />
-        <div className="col" style={{ minWidth: 0 }}>
-          <span className="text-13 weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || "Guest"}</span>
-          <span className="text-12 text-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.role || user?.email || "—"}</span>
+      {/* User card with popover */}
+      <div ref={menuRef} style={{ position: "relative" }}>
+        {userMenuOpen && (
+          <div style={{
+            position: "absolute", bottom: "calc(100% + 8px)", left: 8, right: 8,
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200, overflow: "hidden",
+          }}>
+            <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border-soft)" }}>
+              <div className="row gap-10" style={{ alignItems: "center", marginBottom: 10 }}>
+                <Avatar name={user?.name || "User"} src={user?.picture} size="lg" />
+                <div className="col" style={{ minWidth: 0 }}>
+                  <span className="text-13 weight-600" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || "Guest"}</span>
+                  <span className="text-12 text-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email || "—"}</span>
+                  {user?.role && <span className="text-11 text-muted" style={{ marginTop: 2 }}>{user.role}</span>}
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: "6px 0" }}>
+              <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "flex-start", padding: "8px 16px", borderRadius: 0, fontSize: 13, color: "var(--danger)" }}
+                onClick={() => { setUserMenuOpen(false); onLogout && onLogout(); }}>
+                <Icons.ArrowRight size={14} style={{ marginRight: 8, transform: "rotate(180deg)" }} />
+                {t('user.signOut')}
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="user-card" onClick={() => setUserMenuOpen(v => !v)} style={{ cursor: "pointer" }}>
+          <Avatar name={user?.name || "User"} src={user?.picture} />
+          <div className="col" style={{ minWidth: 0 }}>
+            <span className="text-13 weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || "Guest"}</span>
+            <span className="text-12 text-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.role || user?.email || "—"}</span>
+          </div>
+          <Icons.ChevronDown size={12} style={{ color: "var(--ink-muted)", flexShrink: 0, transform: userMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
         </div>
       </div>
     </aside>
@@ -254,4 +289,4 @@ const JDSelect = ({ value, onChange, roleId, placeholder = "Select position…",
   );
 };
 
-Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, useContext });
+Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, useContext, useApiData });

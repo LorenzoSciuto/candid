@@ -21,13 +21,21 @@ const RolesScreen = ({ onRoute }) => {
     return m;
   }, []);
 
+  const [liveJds, setLiveJds] = useState(window.CANDID_DATA.JDS_DATA);
+  useEffect(() => {
+    fetch(`${window.API_BASE}/job-descriptions`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (Array.isArray(d)) setLiveJds(d); })
+      .catch(() => {});
+  }, []);
+
   const jdByRole = useMemo(() => {
     const m = {};
-    window.CANDID_DATA.JDS_DATA.forEach(j => {
+    liveJds.forEach(j => {
       if (j.status === "Active") m[j.role_id] = (m[j.role_id] || 0) + 1;
     });
     return m;
-  }, []);
+  }, [liveJds]);
 
   return (
     <div className="page page-wide">

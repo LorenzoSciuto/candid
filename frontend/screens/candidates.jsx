@@ -10,6 +10,109 @@ const mapCandidate = (c) => ({
   appliedAt: c.applied_at, score: c.score,
 });
 
+const NewCandidateModal = ({ onClose, onCreated }) => {
+  const t = window.useT();
+  const [first, setFirst] = useState("");
+  const [last, setLast] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("");
+  const [location, setLocation] = useState("");
+  const [experience, setExperience] = useState("");
+  const [source, setSource] = useState("");
+  const [status, setStatus] = useState("new");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (!first.trim() || !last.trim()) { setError("First and last name are required."); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/candidates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: first.trim(), last_name: last.trim(),
+          email: email || null, phone: phone || null,
+          current_role: role || null, location: location || null,
+          years_of_experience: experience !== "" ? parseInt(experience) : null,
+          source: source || null, status,
+        }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        onCreated(created);
+      } else {
+        setError("Failed to create candidate.");
+      }
+    } catch {
+      // Offline: create a local-only record
+      onCreated({ id: `local-${Date.now()}`, first_name: first, last_name: last, email, phone, current_role: role, location, years_of_experience: experience ? parseInt(experience) : null, source, status, applied_at: new Date().toISOString().slice(0, 10), score: null });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <Modal open title={t('candidates.new')} onClose={onClose}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn kind="primary" onClick={save} disabled={saving || !first.trim() || !last.trim()}>
+            {saving ? t('common.saving') : t('common.save')}
+          </Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        {error && <div className="text-12" style={{ color: "var(--danger)" }}>{error}</div>}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label className="label">{t('employees.form.first')} *</label>
+            <input className="input" value={first} onChange={e => setFirst(e.target.value)} autoFocus placeholder="Jane" />
+          </div>
+          <div>
+            <label className="label">{t('employees.form.last')} *</label>
+            <input className="input" value={last} onChange={e => setLast(e.target.value)} placeholder="Smith" />
+          </div>
+          <div>
+            <label className="label">{t('employees.form.email')}</label>
+            <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com" />
+          </div>
+          <div>
+            <label className="label">{t('candidates.form.phone')}</label>
+            <input className="input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 000 0000" />
+          </div>
+          <div>
+            <label className="label">{t('candidates.form.role')}</label>
+            <input className="input" value={role} onChange={e => setRole(e.target.value)} placeholder="Senior Engineer" />
+          </div>
+          <div>
+            <label className="label">{t('employees.form.location')}</label>
+            <input className="input" value={location} onChange={e => setLocation(e.target.value)} placeholder="San Francisco, CA" />
+          </div>
+          <div>
+            <label className="label">{t('candidates.form.experience')}</label>
+            <input className="input" type="number" min={0} value={experience} onChange={e => setExperience(e.target.value)} placeholder="5" />
+          </div>
+          <div>
+            <label className="label">{t('candidates.form.source')}</label>
+            <select className="select" value={source} onChange={e => setSource(e.target.value)}>
+              <option value="">—</option>
+              {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="label">{t('candidates.form.stage')}</label>
+          <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
+            {(window.CANDID_DATA.STATUS || []).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 const CandidatesScreen = ({ onOpenCandidate }) => {
   const t = window.useT();
   const [candidates, setCandidates] = useState(window.CANDID_DATA.CANDIDATES);
@@ -19,7 +122,9 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
   const [exp, setExp] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [view, setView] = useState("table");
-  const [menuOpen, setMenuOpen] = useState(null); // candidate id with open menu
+  const [menuOpen, setMenuOpen] = useState(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -27,6 +132,20 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [menuOpen]);
+
+  const handleCreated = (raw) => {
+    const mapped = mapCandidate(raw);
+    setCandidates(prev => [mapped, ...prev]);
+    setCreateOpen(false);
+    if (raw.id && !raw.id.startsWith("local-")) onOpenCandidate(raw.id);
+  };
+
+  const openMenu = (e, id) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setMenuOpen(menuOpen === id ? null : id);
+  };
 
   useEffect(() => {
     fetch(`${window.API_BASE}/candidates`)
@@ -82,7 +201,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
         </div>
         <div className="row gap-8">
           <SegControl value={view} onChange={setView} options={[{ value: "table", label: "Table" }, { value: "grid", label: "Grid" }]} />
-          <Btn kind="primary" icon={<Icons.Plus size={14} />}>{t('candidates.new')}</Btn>
+          <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>{t('candidates.new')}</Btn>
         </div>
       </div>
 
@@ -117,9 +236,29 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
 
       {view === "table"
         ? <CandidateTable rows={rows} onOpen={onOpenCandidate} t={t}
-            menuOpen={menuOpen} setMenuOpen={setMenuOpen}
+            menuOpen={menuOpen} openMenu={openMenu}
             onArchive={archiveCandidate} onDelete={deleteCandidate} />
         : <CandidateGrid rows={rows} onOpen={onOpenCandidate} />}
+
+      {createOpen && <NewCandidateModal onClose={() => setCreateOpen(false)} onCreated={handleCreated} />}
+
+      {/* Dropdown rendered at page root — escapes table overflow:hidden */}
+      {menuOpen && (() => {
+        const c = rows.find(r => r.id === menuOpen);
+        if (!c) return null;
+        return (
+          <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", top: menuPos.top, right: menuPos.right, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", padding: 4, minWidth: 160, zIndex: 200 }}>
+            <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
+              onClick={() => archiveCandidate(c.id)}>
+              <Icons.EyeOff size={13} /> Archive
+            </button>
+            <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start", color: "var(--danger)" }}
+              onClick={() => deleteCandidate(c.id)}>
+              <Icons.X size={13} /> {t('common.delete')}
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -154,7 +293,7 @@ const FilterPill = ({ label, value, onChange, options }) => {
   );
 };
 
-const CandidateTable = ({ rows, onOpen, t, menuOpen, setMenuOpen, onArchive, onDelete }) => (
+const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, onArchive, onDelete }) => (
   <div className="card" style={{ overflow: "hidden" }}>
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
       <thead>
@@ -176,23 +315,9 @@ const CandidateTable = ({ rows, onOpen, t, menuOpen, setMenuOpen, onArchive, onD
             <Td align="right">{c.score != null ? <span className="text-mono text-13 weight-500">{c.score.toFixed(1)}</span> : <span className="badge ai"><span className="dot" /> pending</span>}</Td>
             <Td><span className="text-mono text-12 text-muted">{c.appliedAt || "—"}</span></Td>
             <Td>
-              <div style={{ position: "relative" }}>
-                <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === c.id ? null : c.id); }}>
-                  <Icons.MoreH size={14} />
-                </button>
-                {menuOpen === c.id && (
-                  <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", padding: 4, minWidth: 160, zIndex: 20 }}>
-                    <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
-                      onClick={() => onArchive(c.id)}>
-                      <Icons.EyeOff size={13} /> Archive
-                    </button>
-                    <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start", color: "var(--danger)" }}
-                      onClick={() => onDelete(c.id)}>
-                      <Icons.X size={13} /> {t('common.delete')}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <button className="icon-btn" onClick={(e) => openMenu(e, c.id)}>
+                <Icons.MoreH size={14} />
+              </button>
             </Td>
           </tr>
         ))}

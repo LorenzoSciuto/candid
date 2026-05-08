@@ -20,7 +20,7 @@ The AI pipeline handles speaker separation, data extraction, and strategic analy
 
 ## 2. Technology Stack
 
-**Frontend:** React 18 (via CDN + Babel Standalone), custom CSS design system — no build step, open `Candid.html` directly in Chrome.
+**Frontend:** React 18 (via CDN + Babel Standalone), custom CSS design system — no build step, open `index.html` directly in Chrome.
 
 **Live Recording:** Web Speech API (Chrome-based STT) for real-time transcription.
 
@@ -72,17 +72,39 @@ uvicorn main:app --reload
 
 ```bash
 # Option A: just open the file (works for most features)
-open Candid.html          # macOS
-xdg-open Candid.html      # Linux
+open index.html          # macOS
+xdg-open index.html      # Linux
 
 # Option B: local server (avoids CORS on file upload)
 python3 -m http.server 8080
-# then visit http://localhost:8080/Candid.html
+# then visit http://localhost:8080/index.html
 ```
 
 ### 4 — Configure AI
 
 Open the app → Settings → AI providers. Enter your OpenAI or Anthropic API key and click **Save**, then **Test**.
+
+### 5 — Google OAuth (optional)
+
+Candid supports Google Sign-In. Without it, a demo-mode login is available.
+
+**To enable Google OAuth:**
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials.
+2. Click **Create Credentials** → **OAuth 2.0 Client ID**.
+3. Application type: **Web application**.
+4. Under **Authorized JavaScript origins**, add:
+   - `http://localhost:8080` (dev)
+   - Your production domain (if any)
+5. Under **Authorized redirect URIs**, add the same origins (no path needed for popup flow).
+6. Click **Create** and copy the **Client ID** (format: `xxxxx.apps.googleusercontent.com`).
+7. In `frontend/index.html`, uncomment and fill in:
+   ```html
+   <script>window.GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID.apps.googleusercontent.com";</script>
+   ```
+8. The backend validates the token at `POST /auth/google`. Make sure the backend is running.
+
+> If no Client ID is set, the app shows a "Continue in demo mode" button and skips Google auth entirely.
 
 ---
 
@@ -102,7 +124,7 @@ Open the app → Settings → AI providers. Enter your OpenAI or Anthropic API k
 
 ### Frontend
 
-No bundler. React 18 + Babel Standalone from CDN. Script load order in `Candid.html` is strict:
+No bundler. React 18 + Babel Standalone from CDN. Script load order in `index.html` is strict:
 
 1. `data.jsx` → `window.CANDID_DATA` (mock data)
 2. `ui.jsx` → primitives, icons, Sidebar, Topbar
@@ -110,7 +132,7 @@ No bundler. React 18 + Babel Standalone from CDN. Script load order in `Candid.h
 4. `screens/*.jsx` → one component per screen
 5. `app.jsx` → root `<App>` + routing
 
-`window.API_BASE = "http://localhost:8000"` is set in `Candid.html`. When the backend is unreachable, screens fall back to mock data so the UI stays functional as a standalone prototype.
+`window.API_BASE = "http://localhost:8000"` is set in `index.html`. When the backend is unreachable, screens fall back to mock data so the UI stays functional as a standalone prototype.
 
 ---
 

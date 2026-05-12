@@ -17,21 +17,41 @@ class AIEngine:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def analyze_cv(self, cv_text: str, position_name: str, jd_text: Optional[str] = None, notes: Optional[str] = None) -> dict:
+    def analyze_cv(
+        self,
+        cv_text: str,
+        position_name: str = "",
+        jd_text: Optional[str] = None,
+        notes: Optional[str] = None,
+        open_roles: Optional[list] = None,
+    ) -> dict:
+        position_section = f" Target position: {position_name}." if position_name else ""
         jd_section = f"\nJob Description:\n{jd_text}\n" if jd_text else ""
-        notes_section = f"\nAdditional notes from recruiter:\n{notes}\n" if notes else ""
+        notes_section = f"\nRecruiter notes:\n{notes}\n" if notes else ""
+        if open_roles:
+            lines = "\n".join(
+                f"[{r['id']}] {r['title']}: {(r.get('description') or '')[:200]}"
+                for r in open_roles
+            )
+            roles_section = f"\nOpen positions to score against:\n{lines}\n"
+        else:
+            roles_section = ""
         prompt = Prompts.CV_ANALYSIS.format(
-            position_name=position_name,
+            position_section=position_section,
             cv_text=cv_text,
             jd_section=jd_section,
             notes_section=notes_section,
+            roles_section=roles_section,
         )
         result = self._parse_json(self._call(prompt))
         return {
+            "overview": result.get("overview", ""),
             "strengths": result.get("strengths", []),
             "weaknesses": result.get("weaknesses", []),
             "questions": result.get("deep_dive_questions", result.get("questions", [])),
             "extracted": result.get("extracted_info", result.get("extracted", {})),
+            "career_history": result.get("career_history", []),
+            "role_fits": result.get("role_fits", []),
         }
 
     def parse_quick_add(self, raw_text: str) -> dict:

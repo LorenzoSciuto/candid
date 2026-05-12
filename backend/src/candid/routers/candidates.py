@@ -112,6 +112,9 @@ class CandidatesRouter:
         if candidate.ai_pre_analysis:
             result["ai_pre_analysis"] = json.loads(candidate.ai_pre_analysis)
 
+        if candidate.career_history:
+            result["career_history"] = json.loads(candidate.career_history)
+
         return result
 
     def _update(
@@ -131,6 +134,11 @@ class CandidatesRouter:
         candidate = session.get(Candidate, candidate_id)
         if not candidate:
             raise HTTPException(404, "Candidate not found")
+        for iv in session.exec(select(Interview).where(Interview.candidate_id == candidate_id)).all():
+            session.delete(iv)
+        for ev in session.exec(select(Evaluation).where(Evaluation.candidate_id == candidate_id)).all():
+            session.delete(ev)
+        session.flush()  # send child deletes to DB before removing parent
         session.delete(candidate)
         session.commit()
 

@@ -1,10 +1,10 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.models import Candidate
+from candid.models import Candidate, JobDescription
 from candid.schemas import AnalyzeRequest
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.cv_extractor import CVExtractor
@@ -52,13 +52,23 @@ class AnalysisRouter:
         }
 
     def _analyze(self, session: Session, body: AnalyzeRequest) -> dict:
+        # Fetch active JDs for role-fit scoring
+        active_jds = session.exec(
+            select(JobDescription).where(JobDescription.status == "Active")
+        ).all()
+        open_roles = [
+            {"id": jd.id, "title": jd.title, "description": jd.description or ""}
+            for jd in active_jds
+        ]
+
         try:
             engine = self._ai_factory.from_session(session)
             result = engine.analyze_cv(
                 cv_text=body.cv_text,
-                position_name=body.job_title,
+                position_name=body.job_title or "",
                 jd_text=body.job_description,
                 notes=body.notes,
+                open_roles=open_roles or None,
             )
         except Exception as exc:
             raise HTTPException(502, f"AI error: {exc}") from exc
@@ -67,9 +77,17 @@ class AnalysisRouter:
             candidate = session.get(Candidate, body.candidate_id)
             if candidate:
                 candidate.ai_pre_analysis = json.dumps(result)
-                candidate.job_title = body.job_title
+                candidate.cv_text = body.cv_text
+                if body.job_title:
+                    candidate.job_title = body.job_title
                 if body.job_description:
                     candidate.job_description = body.job_description
+                if result.get("career_history"):
+                    candidate.career_history = json.dumps(result["career_history"])
+                # Backfill current_role from extracted info if missing
+                extracted = result.get("extracted") or {}
+                if extracted.get("role") and not candidate.current_role:
+                    candidate.current_role = extracted["role"]
                 session.add(candidate)
                 session.commit()
 

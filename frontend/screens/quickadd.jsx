@@ -106,6 +106,8 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
       location: parsed?.location || null,
       source: parsed?.source || (cvName ? "CV Upload" : "Quick Add"),
       extra_information: parsed?.summary || null,
+      cv_text: text || null,
+      cv_filename: cvName || null,
       status: "new",
     };
     try {

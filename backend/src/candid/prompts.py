@@ -4,19 +4,23 @@ from __future__ import annotations
 
 class Prompts:
     CV_ANALYSIS = """\
-You are a senior technical recruiter. Analyse the candidate CV for the position: {position_name}.
+You are a senior technical recruiter. Analyse the candidate CV.{position_section}
 
 Return a JSON object with exactly these keys:
-- "strengths": array of 3-5 strings — top technical/soft skill matches for the role
-- "weaknesses": array of 2-4 strings — gaps, missing requirements, or risks to probe
-- "deep_dive_questions": array of exactly 3 strings — strategic questions tailored to \
-uncover actual expertise in critical areas
-- "extracted_info": object with string fields first_name, last_name, email, role \
-(null if not found in CV)
+- "overview": string — 2-3 sentence narrative summary of the candidate profile
+- "strengths": array of 3-5 strings — top technical and soft skill matches
+- "weaknesses": array of 2-4 strings — gaps, missing skills, or risks to probe
+- "deep_dive_questions": array of exactly 3 strings — tailored interview questions
+- "career_history": array of objects in reverse chronological order, each: \
+{{"title": string, "company": string, "period": string, "description": string (1 sentence)}}
+- "extracted_info": object {{"first_name", "last_name", "email", "role"}} — null if not found
+- "role_fits": array — one entry per open position listed below, each: \
+{{"role_id": string, "title": string, "score": float 0-5 (fractions allowed), \
+"reason": string (1 sentence)}}. Empty array if no open positions provided.
 
 CV:
 {cv_text}
-{jd_section}{notes_section}
+{jd_section}{notes_section}{roles_section}
 Return only valid JSON. No markdown fences. No explanation."""
 
     QUICK_PARSE = """\

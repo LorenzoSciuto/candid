@@ -36,6 +36,7 @@ class Application:
         async def lifespan(_: FastAPI):
             self._wait_for_db()
             self._db.create_tables()
+            self._db.run_migrations()
             yield
 
         fastapi_app = FastAPI(

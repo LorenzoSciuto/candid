@@ -133,6 +133,123 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
   );
 };
 
+// ── Hire modal ────────────────────────────────────────────────────────────────
+
+const HireModal = ({ candidate, onClose, onHired }) => {
+  const [jds, setJds] = useState([]);
+  const [selectedJd, setSelectedJd] = useState("");
+  const [salary, setSalary] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const currencyCode = window.getCurrency ? window.getCurrency() : "EUR";
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/job-descriptions`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!Array.isArray(d)) return;
+        const active = d.filter(j => j.status === "Active");
+        setJds(active);
+        if (active.length > 0) setSelectedJd(active[0].id);
+      })
+      .catch(() => {});
+  }, []);
+
+  const confirm = async () => {
+    setSaving(true);
+    setError("");
+    const jd = jds.find(j => j.id === selectedJd);
+    try {
+      const empRes = await fetch(`${window.API_BASE}/employees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: candidate.first,
+          last_name: candidate.last,
+          email: candidate.email || null,
+          role_id: jd?.role_id || null,
+          role_name: jd?.title || candidate.role || null,
+          department: null,
+          location: candidate.location || null,
+          hire_date: new Date().toISOString().slice(0, 10),
+          salary: salary ? parseFloat(salary) : null,
+          currency: currencyCode,
+          candidate_id: candidate.id,
+        }),
+      });
+      if (!empRes.ok) throw new Error("Failed to create employee");
+
+      await fetch(`${window.API_BASE}/candidates/${candidate.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "hired" }),
+      });
+
+      if (jd) {
+        await fetch(`${window.API_BASE}/job-descriptions/${jd.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "Closed" }),
+        });
+      }
+
+      window.refreshCounts?.();
+      onHired(candidate.id);
+      onClose();
+    } catch (e) {
+      setError(e.message);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
+      onClick={onClose}>
+      <div className="card col" style={{ width: 440, padding: 28, gap: 20 }} onClick={e => e.stopPropagation()}>
+        <div className="col gap-4">
+          <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>Hire {candidate.first} {candidate.last}</span>
+          <span className="text-13 text-secondary">Creates an employee record and closes the position.</span>
+        </div>
+
+        <div className="col gap-12">
+          <div className="card card-pad row gap-12" style={{ alignItems: "center" }}>
+            <Avatar name={`${candidate.first} ${candidate.last}`} size="lg" />
+            <div className="col">
+              <span className="weight-500">{candidate.first} {candidate.last}</span>
+              <span className="text-12 text-muted">{candidate.role || candidate.email || "—"}</span>
+              {candidate.location && <span className="text-12 text-muted">{candidate.location}</span>}
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Position (open JD)</label>
+            {jds.length > 0 ? (
+              <select className="select" value={selectedJd} onChange={e => setSelectedJd(e.target.value)}>
+                {jds.map(j => <option key={j.id} value={j.id}>{j.title}{j.location ? ` · ${j.location}` : ""}</option>)}
+              </select>
+            ) : (
+              <div className="text-13 text-muted" style={{ padding: "8px 0" }}>No active open positions. The employee will be added without a specific role.</div>
+            )}
+          </div>
+          <div>
+            <label className="label">Salary <span className="text-11 text-muted">({currencyCode}, annual)</span></label>
+            <input className="input" type="number" min={0} value={salary} onChange={e => setSalary(e.target.value)} placeholder="e.g. 85000" />
+          </div>
+        </div>
+
+        {error && <div className="text-12" style={{ color: "var(--danger)" }}>{error}</div>}
+
+        <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+          <Btn onClick={onClose}>Cancel</Btn>
+          <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={confirm} disabled={saving}>
+            {saving ? "Hiring…" : "Confirm hire"}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 const CandidatesScreen = ({ onOpenCandidate }) => {
@@ -148,7 +265,8 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const [createOpen, setCreateOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null); // { id, name }
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [hireTarget, setHireTarget] = useState(null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -161,6 +279,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
     const mapped = mapCandidate(raw);
     setCandidates(prev => [mapped, ...prev]);
     setCreateOpen(false);
+    window.refreshCounts?.();
     if (raw.id && !raw.id.startsWith("local-")) onOpenCandidate(raw.id);
   };
 
@@ -206,7 +325,18 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
     if (!deleteTarget) return;
     setCandidates(prev => prev.filter(c => c.id !== deleteTarget.id));
     fetch(`${window.API_BASE}/candidates/${deleteTarget.id}`, { method: "DELETE" }).catch(() => {});
+    window.refreshCounts?.();
     setDeleteTarget(null);
+  };
+
+  const promptHire = (id) => {
+    const c = candidates.find(x => x.id === id);
+    if (c) setHireTarget(c);
+    setMenuOpen(null);
+  };
+
+  const onHired = (id) => {
+    setCandidates(prev => prev.filter(c => c.id !== id));
   };
 
   const rows = useMemo(() => {
@@ -311,7 +441,13 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
         if (!c) return null;
         const isArchived = c.status === "archived";
         return (
-          <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", top: menuPos.top, right: menuPos.right, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", padding: 4, minWidth: 160, zIndex: 200 }}>
+          <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", top: menuPos.top, right: menuPos.right, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", padding: 4, minWidth: 170, zIndex: 200 }}>
+            {!isArchived && (
+              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
+                onClick={() => promptHire(c.id)}>
+                <Icons.UserCheck size={13} /> Hire → People
+              </button>
+            )}
             {isArchived ? (
               <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
                 onClick={() => restoreCandidate(c.id)}>
@@ -338,6 +474,14 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
           confirmLabel="Delete permanently"
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {hireTarget && (
+        <HireModal
+          candidate={hireTarget}
+          onClose={() => setHireTarget(null)}
+          onHired={onHired}
         />
       )}
     </div>
@@ -397,7 +541,7 @@ const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, showArchived, onA
             <Td align="right">{c.score != null ? <span className="text-mono text-13 weight-500">{c.score.toFixed(1)}</span> : <span className="badge ai"><span className="dot" /> pending</span>}</Td>
             <Td><span className="text-mono text-12 text-muted">{c.appliedAt || "—"}</span></Td>
             <Td>
-              <button className="icon-btn" onClick={(e) => openMenu(e, c.id)}>
+              <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openMenu(e, c.id); }}>
                 <Icons.MoreH size={14} />
               </button>
             </Td>

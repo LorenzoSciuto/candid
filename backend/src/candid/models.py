@@ -30,6 +30,8 @@ class Candidate(SQLModel, table=True):
     ai_pre_analysis: Optional[str] = None
     # JSON: [{title, company, period, description}]
     career_history: Optional[str] = None
+    # JSON: [{status, at}]
+    status_history: Optional[str] = None
     extra_information: Optional[str] = None
 
 
@@ -107,3 +109,4 @@ class Employee(SQLModel, table=True):
     hire_date: Optional[str] = None
     location: Optional[str] = None
     manager: Optional[str] = None
+    candidate_id: Optional[str] = None

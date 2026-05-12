@@ -14,7 +14,11 @@ const OwnerSelect = ({ value, onChange }) => {
   // value: string[] of names
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const team = (window.getTeamMembers ? window.getTeamMembers() : []);
+  const rawTeam = window.getTeamMembers ? window.getTeamMembers() : [];
+  const me = (() => { try { return JSON.parse(localStorage.getItem("candid_user") || "null"); } catch { return null; } })();
+  const team = me?.name && !rawTeam.some(m => m.name === me.name)
+    ? [{ name: me.name, email: me.email || "", role: me.role || "Me" }, ...rawTeam]
+    : rawTeam;
 
   useEffect(() => {
     if (!open) return;
@@ -219,10 +223,12 @@ const JobsScreen = ({ onRoute }) => {
                       : <span className="text-muted">—</span>}
                   </JdTd>
                   <JdTd align="right">
-                    <button className="icon-btn" onClick={(e) => openMenu(e, j.id)}
-                      style={{ color: menuOpen === j.id ? "var(--ink)" : "var(--ink-muted)" }}>
-                      <Icons.MoreH size={16} />
-                    </button>
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button className="icon-btn" onClick={(e) => openMenu(e, j.id)}
+                        style={{ color: menuOpen === j.id ? "var(--ink)" : "var(--ink-muted)" }}>
+                        <Icons.MoreH size={16} />
+                      </button>
+                    </div>
                   </JdTd>
                 </tr>
               );

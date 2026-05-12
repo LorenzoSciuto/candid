@@ -28,6 +28,42 @@ class TestUpsertEvaluation:
         })
         assert resp.json()["final_recommendation"] == "Lean Hire"
 
+    def test_only_one_evaluation_per_candidate(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Pending"})
+        client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Strong Hire"})
+        # Should still be exactly one row — not two
+        resp = client.get(f"/evaluations/{cid}")
+        assert resp.status_code == 200
+        assert resp.json()["final_recommendation"] == "Strong Hire"
+
+    def test_null_skills_serialize_as_empty_dict(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        resp = client.post("/evaluations", json={
+            "candidate_id": cid,
+            "final_recommendation": "Pending",
+        })
+        data = resp.json()
+        assert data["human_skills"] == {}
+        assert data["technical_skills"] == {}
+
+    def test_notes_stored_and_returned(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        client.post("/evaluations", json={
+            "candidate_id": cid,
+            "final_recommendation": "Lean Hire",
+            "notes": "Strong system design, weak in algorithms.",
+        })
+        resp = client.get(f"/evaluations/{cid}")
+        assert resp.json()["notes"] == "Strong system design, weak in algorithms."
+
+    def test_response_includes_id_and_candidate_id(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        resp = client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Pending"})
+        data = resp.json()
+        assert data["id"].startswith("e-")
+        assert data["candidate_id"] == cid
+
 
 class TestGetEvaluation:
     def test_retrieves_after_create(self, client: TestClient) -> None:
@@ -41,3 +77,14 @@ class TestGetEvaluation:
         cid = _make_candidate(client)
         resp = client.get(f"/evaluations/{cid}")
         assert resp.status_code == 404
+
+    def test_skill_scores_round_trip(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        skills = {"Communication": 3, "Adaptability": 5}
+        client.post("/evaluations", json={
+            "candidate_id": cid,
+            "human_skills": skills,
+            "final_recommendation": "Pending",
+        })
+        data = client.get(f"/evaluations/{cid}").json()
+        assert data["human_skills"] == skills

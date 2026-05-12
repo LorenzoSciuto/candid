@@ -3,12 +3,14 @@ from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.models import Role
-from candid.schemas import RoleCreate, RoleUpdate
+from candid.schemas import ImproveJDRequest, RoleCreate, RoleUpdate
+from candid.services.ai_engine import AIEngineFactory
 
 
 class RolesRouter:
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, ai_factory: AIEngineFactory) -> None:
         self._db = db
+        self._ai_factory = ai_factory
         self.router = APIRouter(prefix="/roles", tags=["roles"])
         self._register()
 
@@ -18,6 +20,10 @@ class RolesRouter:
         @self.router.get("/")
         def list_roles(session: Session = Depends(db.get_session)):
             return self._list(session)
+
+        @self.router.post("/improve-description")
+        def improve_description(body: ImproveJDRequest, session: Session = Depends(db.get_session)):
+            return self._improve_description(body, session)
 
         @self.router.post("/", status_code=201)
         def create_role(body: RoleCreate, session: Session = Depends(db.get_session)):
@@ -51,6 +57,14 @@ class RolesRouter:
         session.commit()
         session.refresh(role)
         return role
+
+    def _improve_description(self, body: ImproveJDRequest, session: Session) -> dict:
+        try:
+            engine = self._ai_factory.from_session(session)
+            improved = engine.improve_role_description(body.text, body.role_name)
+            return {"improved_text": improved}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     def _delete(self, role_id: str, session: Session) -> None:
         role = session.get(Role, role_id)

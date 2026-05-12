@@ -10,6 +10,14 @@ const getEmpLocations = () => {
   return ["Remote", "SF / Remote", "SF", "NYC", "London", "Berlin", "Austin", "Toronto"];
 };
 
+const downloadText = (text, filename) => {
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 const EmployeesScreen = () => {
   const t = window.useT();
   const [employees, setEmployees] = useState([]);
@@ -18,6 +26,7 @@ const EmployeesScreen = () => {
   const [deptFilter, setDeptFilter] = useState("");
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [profileEmp, setProfileEmp] = useState(null);
 
   useEffect(() => {
     fetch(`${window.API_BASE}/employees`)
@@ -108,7 +117,10 @@ const EmployeesScreen = () => {
           </thead>
           <tbody>
             {rows.map(e => (
-              <tr key={e.id} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+              <tr key={e.id} style={{ borderBottom: "1px solid var(--border-soft)", cursor: "pointer" }}
+                onClick={() => setProfileEmp(e)}
+                onMouseEnter={ev => ev.currentTarget.style.background = "var(--surface-hover)"}
+                onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}>
                 <EmpTd>
                   <div className="row gap-8">
                     <Avatar name={`${e.first_name} ${e.last_name}`} />
@@ -139,6 +151,16 @@ const EmployeesScreen = () => {
       </div>
 
       {createOpen && <EmployeeModal t={t} onClose={() => setCreateOpen(false)} onSaved={() => setCreateOpen(false)} />}
+      {profileEmp && (
+        <EmployeeProfile
+          emp={profileEmp}
+          showSalary={showSalary}
+          fmtSalary={fmtSalary}
+          currencyCode={currencyCode}
+          sym={sym}
+          onClose={() => setProfileEmp(null)}
+        />
+      )}
     </div>
   );
 };
@@ -205,6 +227,94 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
         </div>
       </div>
     </Modal>
+  );
+};
+
+const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClose }) => {
+  const [cvText, setCvText] = useState(null);
+  const [cvFilename, setCvFilename] = useState(null);
+  const [loadingCv, setLoadingCv] = useState(false);
+  const [cvModal, setCvModal] = useState(false);
+
+  useEffect(() => {
+    if (!emp.candidate_id) return;
+    setLoadingCv(true);
+    fetch(`${window.API_BASE}/candidates/${emp.candidate_id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) { setCvText(d.cv_text || null); setCvFilename(d.cv_filename || null); }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingCv(false));
+  }, [emp.candidate_id]);
+
+  const download = () => {
+    if (!cvText) return;
+    downloadText(cvText, cvFilename?.replace(/\.\w+$/, ".txt") || `${emp.first_name}_${emp.last_name}_cv.txt`);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
+      onClick={onClose}>
+      <div className="card col" style={{ width: 520, maxHeight: "85vh", overflow: "auto", padding: 0 }}
+        onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div className="row gap-12" style={{ alignItems: "center", marginBottom: 12 }}>
+            <Avatar name={`${emp.first_name} ${emp.last_name}`} size="lg" />
+            <div className="col" style={{ flex: 1 }}>
+              <span style={{ fontWeight: 600, fontSize: 16 }}>{emp.first_name} {emp.last_name}</span>
+              {emp.role_name && <span className="text-13 text-secondary">{emp.role_name}</span>}
+              {emp.department && <span className="text-12 text-muted">{emp.department}</span>}
+            </div>
+            <button className="icon-btn" onClick={onClose}><Icons.X size={14} /></button>
+          </div>
+          {(cvText || loadingCv) && (
+            <div className="row gap-8">
+              <Btn icon={<Icons.Eye size={13} />} onClick={() => setCvModal(true)} disabled={!cvText}>
+                View CV
+              </Btn>
+              <Btn icon={<Icons.Download size={13} />} onClick={download} disabled={!cvText}>
+                Download CV
+              </Btn>
+            </div>
+          )}
+        </div>
+
+        {/* Details grid */}
+        <div style={{ padding: "16px 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px" }}>
+          {[
+            ["Email", emp.email || "—"],
+            ["Location", emp.location || "—"],
+            ["Hire date", emp.hire_date || "—"],
+            ["Salary", emp.salary ? (showSalary ? fmtSalary(emp.salary) + ` ${currencyCode}` : "••••") : "—"],
+            ["Manager", emp.manager || "—"],
+          ].map(([label, value]) => (
+            <div key={label} className="col gap-2">
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+              <span className="text-13">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CV full-view modal */}
+      {cvModal && cvText && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 700 }}
+          onClick={() => setCvModal(false)}>
+          <div className="card col" style={{ width: "min(860px, 90vw)", maxHeight: "85vh", overflow: "hidden", padding: 0 }}
+            onClick={e => e.stopPropagation()}>
+            <div className="card-header" style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+              <span className="card-title">{cvFilename || "CV"} — {emp.first_name} {emp.last_name}</span>
+              <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => setCvModal(false)}><Icons.X size={14} /></button>
+            </div>
+            <div style={{ padding: "20px 28px", fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.75, whiteSpace: "pre-wrap", overflowY: "auto", color: "var(--ink-secondary)" }}>
+              {cvText}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

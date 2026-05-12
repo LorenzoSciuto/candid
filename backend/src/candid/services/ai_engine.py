@@ -74,6 +74,14 @@ class AIEngine:
         parsed = self._parse_json(raw)
         return parsed.get(result_key, "")
 
+    def improve_role_description(self, desc_text: str, role_name: str = "") -> str:
+        prompt = Prompts.IMPROVE_ROLE_DESC.format(
+            desc_text=desc_text,
+            role_name=role_name or "this role",
+        )
+        result = self._parse_json(self._call(prompt))
+        return result.get("improved_text", desc_text)
+
     def improve_jd(self, jd_text: str, role_name: str = "") -> str:
         prompt = Prompts.IMPROVE_JD.format(jd_text=jd_text, role_name=role_name or "this role")
         result = self._parse_json(self._call(prompt))

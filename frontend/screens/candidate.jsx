@@ -32,6 +32,7 @@ const mapCandidate = (c) => ({
     cleaned_transcript: iv.cleaned_transcript,
   })),
   evaluation: c.evaluation || null,
+  statusHistory: c.status_history || [],
 });
 
 // ── Email Modal ───────────────────────────────────────────────────────────────
@@ -266,6 +267,15 @@ const CandidateScreen = ({ id, onRoute }) => {
           <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
           <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
           <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
+          {c.cvText && (
+            <Btn icon={<Icons.Download size={14} />} onClick={() => {
+              const blob = new Blob([c.cvText], { type: "text/plain" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url;
+              a.download = c.cvFilename?.replace(/\.\w+$/, ".txt") || `${c.first}_${c.last}_cv.txt`;
+              a.click(); URL.revokeObjectURL(url);
+            }}>CV</Btn>
+          )}
           {(c.status === "offer" || c.status === "hired") && !hired && (
             <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={convertToEmployee} disabled={hiring || c.status === "hired"}>
               {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → People"}
@@ -273,7 +283,7 @@ const CandidateScreen = ({ id, onRoute }) => {
           )}
           {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to People</Badge>}
           {c.status !== "offer" && c.status !== "hired" && (
-            <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom")}>{t('candidate.startInterview')}</Btn>
+            <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { candidateName: `${c.first} ${c.last}`, candidateId: c.id, title: "Interview", type: "Live" })}>{t('candidate.startInterview')}</Btn>
           )}
         </div>
       </div>
@@ -436,6 +446,7 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
   const [stage, setStage] = useState("idle"); // idle | uploading | analyzing
   const [error, setError] = useState("");
   const [localCvText, setLocalCvText] = useState("");
+  const [cvModalOpen, setCvModalOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   const runAnalysis = async (cvText) => {
@@ -542,6 +553,10 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
                 <div className="card-header">
                   <span className="card-title">Role fit</span>
                   <span className="card-sub">Scored against open positions</span>
+                  <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 11, marginLeft: "auto" }}
+                    disabled={busy} onClick={() => runAnalysis()}>
+                    <Icons.RotateCcw size={11} /> {stage === "analyzing" ? "Reanalysing…" : "Retest"}
+                  </button>
                 </div>
                 <div style={{ padding: "10px 16px" }}>
                   {c.pre.role_fits.map((rf, i) => (
@@ -566,8 +581,12 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
                 <div className="card-header">
                   <span className="card-title">CV text</span>
                   <span className="card-sub">{displayCvText.split(/\s+/).filter(Boolean).length} words</span>
+                  <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 11, marginLeft: "auto" }}
+                    onClick={() => setCvModalOpen(true)}>
+                    <Icons.Eye size={11} /> View
+                  </button>
                 </div>
-                <div style={{ padding: 14, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--ink-secondary)", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 320, overflow: "auto" }}>{displayCvText}</div>
+                <div style={{ padding: 14, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--ink-secondary)", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>{displayCvText}</div>
               </div>
             )}
           </div>
@@ -581,6 +600,26 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
             <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => fileInputRef.current?.click()}>Upload CV</Btn>
           </div>
         )
+      )}
+
+      {/* CV full-view modal */}
+      {cvModalOpen && displayCvText && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 700 }}
+          onClick={() => setCvModalOpen(false)}>
+          <div className="card col" style={{ width: "min(860px, 90vw)", maxHeight: "85vh", overflow: "hidden", padding: 0 }}
+            onClick={e => e.stopPropagation()}>
+            <div className="card-header" style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+              <span className="card-title">CV — {c.first} {c.last}</span>
+              <span className="card-sub">{displayCvText.split(/\s+/).filter(Boolean).length} words</span>
+              <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => setCvModalOpen(false)}>
+                <Icons.X size={14} />
+              </button>
+            </div>
+            <div style={{ padding: "20px 28px", fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.75, whiteSpace: "pre-wrap", overflowY: "auto", color: "var(--ink-secondary)" }}>
+              {displayCvText}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -649,7 +688,7 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
           </div>
           <div className="row gap-8">
             <Btn onClick={() => setCreating(true)}>{t('candidate.iv.paste')}</Btn>
-            <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute && onRoute("liveroom")}>{t('candidate.iv.join')}</Btn>
+            <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute && onRoute("liveroom", { candidateName: `${c.first} ${c.last}`, candidateId: c.id, title: "Interview", type: "Live" })}>{t('candidate.iv.join')}</Btn>
           </div>
         </div>
       )}
@@ -740,32 +779,57 @@ const SkillRow = ({ label, value, onChange }) => (
 
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
+const STATUS_LABELS = Object.fromEntries(
+  (window.CANDID_DATA.STATUS || []).map(s => [s.id, s.label])
+);
+
+const fmtDate = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch { return iso.slice(0, 10); }
+};
+
 const ActivityTab = ({ c }) => {
-  const activities = [
-    ...(c.interviews || []).map(iv => ({
-      who: iv.interviewer || "Interviewer",
-      when: iv.date || "—",
-      what: `${iv.title || iv.type} interview recorded`,
+  const raw = [
+    { type: "system", when: c.appliedAt, what: "Candidate added to pipeline", sort: c.appliedAt || "0000" },
+    ...(c.statusHistory || []).map(h => ({
+      type: "status",
+      when: h.at,
+      what: `Stage moved to ${STATUS_LABELS[h.status] || h.status}`,
+      sort: h.at,
     })),
-    ...(c.pre ? [{ who: "AI", when: c.appliedAt || "—", what: "Generated pre-interview analysis" }] : []),
-    { who: "System", when: c.appliedAt || "—", what: "Candidate added to pipeline" },
-  ];
+    ...(c.pre ? [{ type: "ai", when: c.appliedAt, what: "CV analysis generated", sort: c.appliedAt || "0001" }] : []),
+    ...(c.evaluation ? [{ type: "eval", when: c.appliedAt, what: "Evaluation saved", sort: c.appliedAt || "0002" }] : []),
+    ...(c.interviews || []).map(iv => ({
+      type: "interview",
+      who: iv.interviewer,
+      when: iv.date,
+      what: `${iv.title || iv.type || "Interview"} recorded`,
+      sort: iv.date || "0003",
+    })),
+  ].sort((a, b) => (b.sort || "").localeCompare(a.sort || ""));
 
   return (
     <div className="card">
       <div style={{ padding: 4 }}>
-        {activities.map((a, i) => (
-          <div key={i} className="row gap-12" style={{ padding: "12px 18px", borderBottom: i === activities.length - 1 ? 0 : "1px solid var(--border-soft)" }}>
-            {a.who === "AI" || a.who === "System"
-              ? <span className="ai-tag" style={{ padding: "2px 6px" }}><Icons.Sparkles size={10} /></span>
-              : <Avatar name={a.who} />}
+        {raw.map((a, i) => (
+          <div key={i} className="row gap-12" style={{ padding: "12px 18px", borderBottom: i === raw.length - 1 ? 0 : "1px solid var(--border-soft)" }}>
+            {a.type === "ai" || a.type === "system" || a.type === "status" || a.type === "eval"
+              ? <span className="ai-tag" style={{ padding: "2px 6px", flexShrink: 0 }}>
+                  {a.type === "status" ? <Icons.ArrowRight size={10} /> : <Icons.Sparkles size={10} />}
+                </span>
+              : <Avatar name={a.who || "Interviewer"} />}
             <div className="col" style={{ flex: 1 }}>
               <span className="text-13">{a.what}</span>
-              <span className="text-12 text-muted">{a.who} · {a.when}</span>
+              <span className="text-12 text-muted">
+                {a.who ? `${a.who} · ` : ""}{fmtDate(a.when)}
+              </span>
             </div>
           </div>
         ))}
-        {activities.length === 0 && (
+        {raw.length === 0 && (
           <div style={{ padding: "24px 18px", color: "var(--ink-muted)", fontSize: 13 }}>No activity yet.</div>
         )}
       </div>

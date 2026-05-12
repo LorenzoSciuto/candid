@@ -125,7 +125,7 @@ class Application:
             EvaluationsRouter(self._db).router,
             ConfigRouter(self._db, self._crypto).router,
             QuickAddRouter(self._db, self._ai_factory).router,
-            RolesRouter(self._db).router,
+            RolesRouter(self._db, self._ai_factory).router,
             JobDescriptionsRouter(self._db, self._ai_factory).router,
             EmployeesRouter(self._db).router,
         ]:

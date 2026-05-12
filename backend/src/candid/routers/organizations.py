@@ -4,8 +4,10 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from candid.config import Settings
 from candid.database import Database
 from candid.dependencies import UserCtx, require_user
 from candid.models import Invitation, Membership, Organization, User
@@ -14,10 +16,15 @@ from candid.schemas import InviteRequest
 logger = logging.getLogger(__name__)
 
 
+class MemberRoleUpdate(BaseModel):
+    role: str
+
+
 class OrganizationsRouter:
-    def __init__(self, db: Database, email_service) -> None:
+    def __init__(self, db: Database, email_service, settings: Settings | None = None) -> None:
         self._db = db
         self._email = email_service
+        self._settings = settings or Settings()
         self.router = APIRouter(prefix="/organizations", tags=["organizations"])
         self._register()
 
@@ -49,11 +56,11 @@ class OrganizationsRouter:
         @self.router.patch("/current/members/{user_id}")
         def update_member_role(
             user_id: str,
-            body: dict,
+            body: MemberRoleUpdate,
             session: Session = Depends(db.get_session),
             ctx: UserCtx = Depends(require_user),
         ):
-            return self._update_member_role(session, ctx, user_id, body.get("role", "member"))
+            return self._update_member_role(session, ctx, user_id, body.role)
 
         @self.router.delete("/current/members/{user_id}", status_code=204)
         def remove_member(
@@ -235,9 +242,7 @@ class OrganizationsRouter:
         session.add(inv)
         session.commit()
 
-        from candid.config import Settings
-        settings = Settings()
-        redirect_url = f"{settings.app_url}/index.html#?invite_accepted=1&org_id={inv.org_id}"
+        redirect_url = f"{self._settings.app_url}/index.html#?invite_accepted=1&org_id={inv.org_id}"
         return RedirectResponse(url=redirect_url, status_code=302)
 
     def _require_admin(self, session: Session, ctx: UserCtx) -> None:

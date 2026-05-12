@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 _PROVIDERS = ("openai", "anthropic", "gemini", "groq")
 
 DEFAULT_STAGES = [
-    {"id": "new",       "label": "New",           "dot": "var(--status-new)"},
-    {"id": "screening", "label": "Screening",      "dot": "var(--status-screening)"},
-    {"id": "eval",      "label": "In Evaluation",  "dot": "var(--status-eval)"},
-    {"id": "final",     "label": "Final Round",    "dot": "var(--status-final)"},
-    {"id": "offer",     "label": "Offer",          "dot": "var(--status-offer)"},
+    {"id": "new",       "label": "New",           "dot": "#6366f1"},
+    {"id": "screening", "label": "Screening",      "dot": "#3b82f6"},
+    {"id": "eval",      "label": "In Evaluation",  "dot": "#f59e0b"},
+    {"id": "final",     "label": "Final Round",    "dot": "#8b5cf6"},
+    {"id": "offer",     "label": "Offer",          "dot": "#10b981"},
 ]
 
 

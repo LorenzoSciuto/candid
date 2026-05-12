@@ -366,14 +366,17 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         </div>
 
         {/* Step indicator */}
-        <div className="row gap-8" style={{ justifyContent: "center" }}>
-          {["org", "profile", "setup", "invite", "recap"].map((s, i) => {
-            const steps = ["org", "profile", "setup", "invite", "recap"];
-            const current = steps.indexOf(step);
-            const filled = i <= current;
-            return <div key={s} style={{ width: 20, height: 4, borderRadius: 2, background: filled ? "var(--ink)" : "var(--border)" }} />;
-          })}
-        </div>
+        {(() => {
+          const steps = ["org", "profile", "setup", "invite", "recap"];
+          const current = steps.indexOf(step);
+          return (
+            <div className="row gap-8" style={{ justifyContent: "center" }}>
+              {steps.map((s, i) => (
+                <div key={s} style={{ width: 20, height: 4, borderRadius: 2, background: i <= current ? "var(--ink)" : "var(--border)" }} />
+              ))}
+            </div>
+          );
+        })()}
 
         <div style={{ height: 1, background: "var(--border)" }} />
 
@@ -753,7 +756,7 @@ const App = () => {
     };
   }, [user?.token]);
 
-  // Load org pipeline stages from API and store in CANDID_DATA.STATUS
+  // Load org pipeline stages from API; broadcast to all screens via custom event
   useEffect(() => {
     if (!user || !user.org_id) return;
     fetch(`${window.API_BASE}/config/stages`)
@@ -761,6 +764,7 @@ const App = () => {
       .then(stages => {
         if (Array.isArray(stages) && stages.length > 0) {
           window.CANDID_DATA.STATUS = stages;
+          window.dispatchEvent(new CustomEvent("candid:stages", { detail: stages }));
         }
       })
       .catch(() => {});
@@ -840,6 +844,30 @@ const App = () => {
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgLoading, setNewOrgLoading] = useState(false);
 
+  const doCreateOrg = async () => {
+    if (!newOrgName.trim() || newOrgLoading) return;
+    setNewOrgLoading(true);
+    const res = await fetch(`${window.API_BASE}/auth/organizations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newOrgName.trim() }),
+    }).catch(() => null);
+    if (res?.ok) {
+      const data = await res.json();
+      const updated = {
+        ...user,
+        token: data.token,
+        org_id: data.org.id,
+        orgs: [...(user.orgs || []), { id: data.org.id, name: data.org.name, role: "owner" }],
+      };
+      saveUser(updated);
+      setUser(updated);
+      setCreateOrgOpen(false);
+      navigate("pipeline");
+    }
+    setNewOrgLoading(false);
+  };
+
   if (!user) {
     return (
       <LocaleContext.Provider value={{ locale, setLocale }}>
@@ -856,7 +884,7 @@ const App = () => {
     );
   }
 
-  const counts = t_tweaks.showCounts ? { inbox: 6, ...liveCounts } : {};
+  const counts = t_tweaks.showCounts ? liveCounts : {};
 
   const openCandidate = (id) => { setCandidateId(id); navigate("candidate"); };
 
@@ -926,29 +954,7 @@ const App = () => {
             footer={
               <>
                 <Btn onClick={() => setCreateOrgOpen(false)}>Cancel</Btn>
-                <Btn kind="primary" disabled={!newOrgName.trim() || newOrgLoading}
-                  onClick={async () => {
-                    setNewOrgLoading(true);
-                    const res = await fetch(`${window.API_BASE}/auth/organizations`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: newOrgName.trim() }),
-                    }).catch(() => null);
-                    if (res?.ok) {
-                      const data = await res.json();
-                      const updated = {
-                        ...user,
-                        token: data.token,
-                        org_id: data.org.id,
-                        orgs: [...(user.orgs || []), { id: data.org.id, name: data.org.name, role: "owner" }],
-                      };
-                      saveUser(updated);
-                      setUser(updated);
-                      setCreateOrgOpen(false);
-                      navigate("pipeline");
-                    }
-                    setNewOrgLoading(false);
-                  }}>
+                <Btn kind="primary" disabled={!newOrgName.trim() || newOrgLoading} onClick={doCreateOrg}>
                   {newOrgLoading ? "Creating…" : "Create"}
                 </Btn>
               </>
@@ -956,7 +962,7 @@ const App = () => {
             <div>
               <label className="label">Organization name</label>
               <input className="input" value={newOrgName} onChange={e => setNewOrgName(e.target.value)}
-                placeholder="Acme Corp" autoFocus onKeyDown={e => e.key === "Enter" && !newOrgLoading && newOrgName.trim() && document.querySelector(".modal .btn-primary")?.click()} />
+                placeholder="Acme Corp" autoFocus onKeyDown={e => e.key === "Enter" && doCreateOrg()} />
             </div>
           </Modal>
         )}

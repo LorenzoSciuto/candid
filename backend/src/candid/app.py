@@ -130,7 +130,7 @@ class Application:
         fastapi_app.include_router(AuthRouter(self._settings, self._db).router)
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
-        fastapi_app.include_router(OrganizationsRouter(self._db, self._email).router)
+        fastapi_app.include_router(OrganizationsRouter(self._db, self._email, self._settings).router)
 
         auth_dep = [Depends(require_user)]
         for router in [

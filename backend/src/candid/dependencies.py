@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -8,6 +10,7 @@ from candid.services.auth_service import verify_token
 _bearer = HTTPBearer(auto_error=True)
 
 
+@lru_cache(maxsize=1)
 def _get_settings() -> Settings:
     return Settings()
 

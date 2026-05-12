@@ -17,6 +17,7 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
             id: c.id, first: c.first_name, last: c.last_name, email: c.email,
             experience: c.years_of_experience, status: c.status,
             source: c.source, appliedAt: c.applied_at, score: c.score,
+            hasAI: !!(c.ai_pre_analysis),
           })));
         }
       })
@@ -103,9 +104,9 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
                       <span className="score row gap-4">
                         <Icons.Star size={11} style={{ color: "var(--warn)" }} fill="currentColor" stroke="none" /> {c.score.toFixed(1)}
                       </span>
-                    ) : (
+                    ) : c.hasAI ? (
                       <span className="badge ai" style={{ fontSize: 10 }}><span className="dot" /> AI screening</span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))}

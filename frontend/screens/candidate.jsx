@@ -18,6 +18,7 @@ const mapCandidate = (c) => ({
   score: c.score,
   cvText: c.cv_text,
   cvFilename: c.cv_filename,
+  hasCvFile: c.has_cv_file || false,
   jobDescription: c.job_description,
   pre: c.ai_pre_analysis || null,
   careerHistory: c.career_history || null,
@@ -267,13 +268,26 @@ const CandidateScreen = ({ id, onRoute }) => {
           <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
           <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
           <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
-          {c.cvText && (
-            <Btn icon={<Icons.Download size={14} />} onClick={() => {
-              const blob = new Blob([c.cvText], { type: "text/plain" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a"); a.href = url;
-              a.download = c.cvFilename?.replace(/\.\w+$/, ".txt") || `${c.first}_${c.last}_cv.txt`;
-              a.click(); URL.revokeObjectURL(url);
+          {(c.hasCvFile || c.cvText) && (
+            <Btn icon={<Icons.Download size={14} />} onClick={async () => {
+              if (c.hasCvFile) {
+                const res = await fetch(`${window.API_BASE}/candidates/${c.id}/cv`);
+                if (res.ok) {
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a"); a.href = url;
+                  a.download = c.cvFilename || `${c.first}_${c.last}_cv`;
+                  a.click(); URL.revokeObjectURL(url);
+                  return;
+                }
+              }
+              if (c.cvText) {
+                const blob = new Blob([c.cvText], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url;
+                a.download = c.cvFilename?.replace(/\.\w+$/, ".txt") || `${c.first}_${c.last}_cv.txt`;
+                a.click(); URL.revokeObjectURL(url);
+              }
             }}>CV</Btn>
           )}
           {(c.status === "offer" || c.status === "hired") && !hired && (
@@ -476,6 +490,7 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
     try {
       const fd = new FormData();
       fd.append("file", file);
+      if (c.id) fd.append("candidate_id", c.id);
       const res = await fetch(`${window.API_BASE}/upload-cv`, { method: "POST", body: fd });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();

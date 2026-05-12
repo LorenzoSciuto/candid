@@ -233,6 +233,7 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
 const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClose }) => {
   const [cvText, setCvText] = useState(null);
   const [cvFilename, setCvFilename] = useState(null);
+  const [hasCvFile, setHasCvFile] = useState(false);
   const [loadingCv, setLoadingCv] = useState(false);
   const [cvModal, setCvModal] = useState(false);
 
@@ -242,15 +243,31 @@ const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClos
     fetch(`${window.API_BASE}/candidates/${emp.candidate_id}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (d) { setCvText(d.cv_text || null); setCvFilename(d.cv_filename || null); }
+        if (d) {
+          setCvText(d.cv_text || null);
+          setCvFilename(d.cv_filename || null);
+          setHasCvFile(d.has_cv_file || false);
+        }
       })
       .catch(() => {})
       .finally(() => setLoadingCv(false));
   }, [emp.candidate_id]);
 
-  const download = () => {
-    if (!cvText) return;
-    downloadText(cvText, cvFilename?.replace(/\.\w+$/, ".txt") || `${emp.first_name}_${emp.last_name}_cv.txt`);
+  const download = async () => {
+    if (hasCvFile) {
+      const res = await fetch(`${window.API_BASE}/candidates/${emp.candidate_id}/cv`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url;
+        a.download = cvFilename || `${emp.first_name}_${emp.last_name}_cv`;
+        a.click(); URL.revokeObjectURL(url);
+        return;
+      }
+    }
+    if (cvText) {
+      downloadText(cvText, cvFilename?.replace(/\.\w+$/, ".txt") || `${emp.first_name}_${emp.last_name}_cv.txt`);
+    }
   };
 
   return (

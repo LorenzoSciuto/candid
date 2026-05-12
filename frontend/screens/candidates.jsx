@@ -8,6 +8,8 @@ const mapCandidate = (c) => ({
   role: c.current_role || c.job_title, experience: c.years_of_experience,
   location: c.location, status: c.status, source: c.source,
   appliedAt: c.applied_at, score: c.score,
+  hasAI: c.has_ai || false, aiScore: c.ai_score ?? null,
+  evalAvg: c.eval_avg ?? null,
 });
 
 // ── Styled delete / destructive confirm ────────────────────────────────────────
@@ -525,7 +527,7 @@ const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, showArchived, onA
         <tr style={{ background: "var(--bg-sunken)", borderBottom: "1px solid var(--border)" }}>
           <Th>{t('candidates.col.candidate')}</Th><Th>{t('candidates.col.stage')}</Th>
           <Th>{t('candidates.col.source')}</Th><Th align="right">{t('candidates.col.exp')}</Th>
-          <Th align="right">{t('candidates.col.score')}</Th><Th>{t('candidates.col.applied')}</Th><Th width={40}></Th>
+          <Th align="right">AI Score</Th><Th align="right">Eval Avg</Th><Th>{t('candidates.col.applied')}</Th><Th width={40}></Th>
         </tr>
       </thead>
       <tbody>
@@ -538,7 +540,17 @@ const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, showArchived, onA
             <Td><StatusBadge status={c.status} /></Td>
             <Td><span className="text-13 text-secondary">{c.source || "—"}</span></Td>
             <Td align="right"><span className="text-mono text-12">{c.experience != null ? `${c.experience}y` : "—"}</span></Td>
-            <Td align="right">{c.score != null ? <span className="text-mono text-13 weight-500">{c.score.toFixed(1)}</span> : <span className="badge ai"><span className="dot" /> pending</span>}</Td>
+            <Td align="right">
+              {c.hasAI && c.aiScore != null
+                ? <span className="row gap-4" style={{ justifyContent: "flex-end", alignItems: "center" }}><span className="badge ai" style={{ fontSize: 9, padding: "1px 4px" }}>AI</span><span className="text-mono text-13 weight-500">{Number(c.aiScore).toFixed(1)}</span></span>
+                : c.hasAI ? <span className="badge ai" style={{ fontSize: 9 }}><span className="dot" /> done</span>
+                : <span className="text-muted text-12">—</span>}
+            </Td>
+            <Td align="right">
+              {c.evalAvg != null
+                ? <span className="row gap-4" style={{ justifyContent: "flex-end", alignItems: "center" }}><Icons.Star size={10} style={{ color: "var(--warn)" }} fill="currentColor" stroke="none" /><span className="text-mono text-13 weight-500">{c.evalAvg.toFixed(1)}</span></span>
+                : <span className="text-muted text-12">—</span>}
+            </Td>
             <Td><span className="text-mono text-12 text-muted">{c.appliedAt || "—"}</span></Td>
             <Td>
               <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openMenu(e, c.id); }}>

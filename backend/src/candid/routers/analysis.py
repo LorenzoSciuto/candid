@@ -1,6 +1,7 @@
 import json
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 
 from candid.database import Database
@@ -27,8 +28,12 @@ class AnalysisRouter:
         db = self._db
 
         @self.router.post("/upload-cv")
-        async def upload_cv(file: UploadFile = File(...)):
-            return await self._upload_cv(file)
+        async def upload_cv(
+            file: UploadFile = File(...),
+            candidate_id: Optional[str] = Form(None),
+            session: Session = Depends(db.get_session),
+        ):
+            return await self._upload_cv(file, candidate_id, session)
 
         @self.router.post("/analyze")
         def analyze(
@@ -39,12 +44,21 @@ class AnalysisRouter:
 
     # ── Implementations ────────────────────────────────────────────────────────
 
-    async def _upload_cv(self, file: UploadFile) -> dict:
+    async def _upload_cv(
+        self, file: UploadFile, candidate_id: Optional[str], session: Session
+    ) -> dict:
         content = await file.read()
         try:
             text = self._extractor.extract(file.filename or "file.pdf", content)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+        if candidate_id:
+            candidate = session.get(Candidate, candidate_id)
+            if candidate:
+                candidate.cv_file = content
+                candidate.cv_filename = file.filename
+                session.add(candidate)
+                session.commit()
         return {
             "filename": file.filename,
             "text": text,

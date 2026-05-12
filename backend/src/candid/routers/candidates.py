@@ -3,11 +3,22 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.models import Candidate, Evaluation, Interview
 from candid.schemas import CandidateCreate, CandidateUpdate
+
+_CV_MIME = {
+    "pdf":  "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "doc":  "application/msword",
+}
+
+def _safe_dump(candidate: Candidate) -> dict:
+    """model_dump excluding the large binary cv_file field."""
+    return candidate.model_dump(exclude={"cv_file"})
 
 
 class CandidatesRouter:
@@ -37,6 +48,13 @@ class CandidatesRouter:
             session: Session = Depends(db.get_session),
         ):
             return self._create(session, body)
+
+        @self.router.get("/{candidate_id}/cv")
+        def download_cv(
+            candidate_id: str,
+            session: Session = Depends(db.get_session),
+        ):
+            return self._download_cv(session, candidate_id)
 
         @self.router.get("/{candidate_id}")
         def get_candidate(
@@ -78,21 +96,68 @@ class CandidatesRouter:
                 if ql in f"{c.first_name} {c.last_name}".lower()
                 or (c.email and ql in c.email.lower())
             ]
-        return candidates
 
-    def _create(self, session: Session, body: CandidateCreate) -> Candidate:
+        # Batch-load evaluations to avoid N+1
+        from candid.models import Evaluation
+        evals = {e.candidate_id: e for e in session.exec(select(Evaluation)).all()}
+
+        result = []
+        for c in candidates:
+            d = _safe_dump(c)
+            # Computed: best AI role-fit score
+            d["has_ai"] = False
+            d["ai_score"] = None
+            if c.ai_pre_analysis:
+                try:
+                    pre = json.loads(c.ai_pre_analysis)
+                    role_fits = pre.get("role_fits") or []
+                    d["has_ai"] = True
+                    d["ai_score"] = max((rf["score"] for rf in role_fits), default=None)
+                except Exception:
+                    pass
+            # Computed: average manual evaluation score
+            d["eval_avg"] = None
+            ev = evals.get(c.id)
+            if ev:
+                scores: list = []
+                for sk_json in (ev.human_skills, ev.technical_skills):
+                    if sk_json:
+                        try:
+                            scores.extend(v for v in json.loads(sk_json).values() if isinstance(v, (int, float)) and v > 0)
+                        except Exception:
+                            pass
+                if scores:
+                    d["eval_avg"] = round(sum(scores) / len(scores), 1)
+            result.append(d)
+        return result
+
+    def _create(self, session: Session, body: CandidateCreate) -> dict:
         candidate = Candidate(**body.model_dump())
         session.add(candidate)
         session.commit()
         session.refresh(candidate)
-        return candidate
+        return _safe_dump(candidate)
+
+    def _download_cv(self, session: Session, candidate_id: str) -> Response:
+        candidate = session.get(Candidate, candidate_id)
+        if not candidate or not candidate.cv_file:
+            raise HTTPException(404, "No CV file stored for this candidate")
+        filename = candidate.cv_filename or "cv"
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+        media_type = _CV_MIME.get(ext, "application/octet-stream")
+        return Response(
+            content=candidate.cv_file,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     def _get(self, session: Session, candidate_id: str) -> dict:
         candidate = session.get(Candidate, candidate_id)
         if not candidate:
             raise HTTPException(404, "Candidate not found")
 
-        result = candidate.model_dump()
+        result = _safe_dump(candidate)
+        result["has_cv_file"] = bool(candidate.cv_file)
 
         interviews = session.exec(
             select(Interview).where(Interview.candidate_id == candidate_id)
@@ -123,7 +188,7 @@ class CandidatesRouter:
 
     def _update(
         self, session: Session, candidate_id: str, body: CandidateUpdate
-    ) -> Candidate:
+    ) -> dict:
         candidate = session.get(Candidate, candidate_id)
         if not candidate:
             raise HTTPException(404, "Candidate not found")
@@ -140,7 +205,7 @@ class CandidatesRouter:
         session.add(candidate)
         session.commit()
         session.refresh(candidate)
-        return candidate
+        return _safe_dump(candidate)
 
     def _delete(self, session: Session, candidate_id: str) -> None:
         candidate = session.get(Candidate, candidate_id)

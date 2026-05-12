@@ -33,6 +33,8 @@ class Candidate(SQLModel, table=True):
     # JSON: [{status, at}]
     status_history: Optional[str] = None
     extra_information: Optional[str] = None
+    # Original uploaded file stored as raw bytes (BYTEA / BLOB)
+    cv_file: Optional[bytes] = None
 
 
 class Interview(SQLModel, table=True):

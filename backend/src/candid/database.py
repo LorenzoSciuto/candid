@@ -8,6 +8,7 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("candidate", "career_history",  "TEXT"),
     ("candidate", "cv_filename",     "TEXT"),
     ("candidate", "status_history",  "TEXT"),
+    ("candidate", "cv_file",         "BYTEA"),
     ("employee",  "candidate_id",    "TEXT"),
 ]
 

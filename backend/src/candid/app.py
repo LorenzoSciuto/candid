@@ -1,5 +1,8 @@
+import logging
 import time
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -72,13 +75,11 @@ class Application:
                 if attempt == retries - 1:
                     url = self._settings.database_url
                     host = url.split("@")[-1].split("/")[0] if "@" in url else url
-                    print(
-                        f"\n❌  Cannot connect to Postgres at {host}\n"
-                        f"    Run:  ./scripts/postgres.sh\n",
-                        file=sys.stderr,
+                    logger.critical(
+                        "Cannot connect to Postgres at %s — run ./scripts/postgres.sh", host
                     )
                     sys.exit(1)
-                print(f"DB not ready, retrying in {delay}s… ({attempt + 1}/{retries})")
+                logger.warning("DB not ready, retrying in %ss… (%d/%d)", delay, attempt + 1, retries)
                 time.sleep(delay)
 
     def _mount_root(self, fastapi_app: FastAPI) -> None:

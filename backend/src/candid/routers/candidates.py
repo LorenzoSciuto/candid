@@ -98,7 +98,6 @@ class CandidatesRouter:
             ]
 
         # Batch-load evaluations to avoid N+1
-        from candid.models import Evaluation
         evals = {e.candidate_id: e for e in session.exec(select(Evaluation)).all()}
 
         result = []

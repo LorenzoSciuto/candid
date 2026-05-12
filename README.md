@@ -1,238 +1,265 @@
-Project Requirements Document (PRD)
+# Candid — AI-Powered Recruiting Assistant
 
-Project Name: Candid (AI-Powered Recruiting Assistant)
-
----
-
-## 1. Project Overview
-
-Candid is an internal recruiting web application designed to drastically reduce the time spent on candidate evaluation and data entry. It supports three main data ingestion flows:
-
-**CV Analysis (Pre-Interview):** Parse a CV against a Job Description to identify strengths, weaknesses, and key questions.
-
-**Live Capture:** Real-time speech-to-text during interviews.
-
-**Manual Ingestion:** Quick pasting of raw notes or existing transcripts.
-
-The AI pipeline handles speaker separation, data extraction, and strategic analysis, storing everything in a structured database.
+Internal recruiting app with AI-assisted CV analysis, live interview transcription, and a full candidate pipeline.
 
 ---
 
-## 2. Technology Stack
-
-**Frontend:** React 18 (via CDN + Babel Standalone), custom CSS design system — no build step, open `index.html` directly in Chrome.
-
-**Live Recording:** Web Speech API (Chrome-based STT) for real-time transcription.
-
-**File Processing:** PyMuPDF (PDF) and python-docx (DOCX) to extract text from CV uploads on the backend.
-
-**Backend:** Python 3.11+ with FastAPI. Cryptography (Fernet) for secure API key encryption at rest.
-
-**Database:** PostgreSQL with SQLModel (SQLAlchemy + Pydantic).
-
-**AI Integration:** Multi-model support — OpenAI GPT-4o and Anthropic Claude 3.5.
-
----
-
-## 3. Quick Start
-
-### Prerequisites
-
-- Python 3.11+
-- PostgreSQL running locally (or a managed instance)
-- Chrome (for Live Room — Web Speech API)
-
-### 1 — Database
+## Quick Start
 
 ```bash
-createdb candid
-createuser candid
-psql -c "ALTER USER candid PASSWORD 'password';"
-psql -c "GRANT ALL PRIVILEGES ON DATABASE candid TO candid;"
+# 1 — Postgres (Docker)
+./scripts/postgres.sh
+
+# 2 — Backend  (requires uv)
+./scripts/server.sh           # http://localhost:8000 · /docs
+
+# 3 — Frontend
+./scripts/client.sh           # http://localhost:8080/index.html
 ```
 
-### 2 — Backend
+First run: copy `backend/.env.example` → `backend/.env` and fill in:
+- `FERNET_KEY` — generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+- `SESSION_SECRET` — any long random string
+- Optionally `OPENAI_API_KEY` (or set via Settings UI after login)
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Frontend | React 18 (CDN + Babel Standalone) · no build step |
+| Backend | FastAPI · SQLModel · PostgreSQL |
+| File parsing | PyMuPDF (PDF) · python-docx (DOCX) |
+| AI | OpenAI · Anthropic · Gemini · Groq (switchable via Settings) |
+| Auth | JWT (HS256, 48h TTL) · Google OAuth or demo mode |
+| Encryption | Fernet — API keys encrypted at rest |
+
+---
+
+## Backend Architecture
+
+```
+backend/
+├── src/candid/
+│   ├── app.py              Application class — DI root, mounts all routers
+│   ├── config.py           Settings (pydantic-settings, reads .env)
+│   ├── database.py         Database class — engine, session, migrations
+│   ├── dependencies.py     require_user — JWT auth FastAPI dependency
+│   ├── models.py           SQLModel tables
+│   ├── prompts.py          All LLM prompt templates
+│   ├── schemas.py          Pydantic request/response models
+│   ├── routers/            One class per resource (CandidatesRouter, etc.)
+│   └── services/
+│       ├── ai_engine.py    AIEngine + AIEngineFactory
+│       ├── auth_service.py JWT create/verify
+│       ├── crypto.py       Fernet encrypt/decrypt
+│       └── cv_extractor.py PDF + DOCX text extraction
+└── tests/                  pytest · in-memory SQLite · 128 tests
+```
+
+### DI pattern
+
+`Application` in `app.py` is the single composition root. Every router is a class whose `__init__` receives only the services it needs. Routes are defined as closures in `_register()` and delegate to `_method()` implementations.
+
+```
+Application
+  ├── Settings         pydantic-settings
+  ├── Database         SQLModel engine + session factory
+  ├── CryptoService    Fernet
+  ├── CVExtractor      PDF / DOCX
+  ├── AIEngineFactory  builds AIEngine per-request from DB config
+  └── *Router(s)
+```
+
+### Migrations
+
+`database.py` keeps a `_MIGRATIONS` list of `(table, column, ddl_type)` tuples. On startup, missing columns are added with `ALTER TABLE`. New columns go here — never manually.
+
+### Running tests
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-cp .env.example .env
-# Edit .env: set DATABASE_URL and generate FERNET_KEY:
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
-uvicorn main:app --reload
-# API running at http://localhost:8000
-# Docs at http://localhost:8000/docs
+uv run pytest                          # all tests
+uv run pytest tests/test_candidates.py # single file
+uv run pytest -k "TestCreate"          # filter by name
 ```
-
-### 3 — Frontend
-
-```bash
-# Option A: just open the file (works for most features)
-open index.html          # macOS
-xdg-open index.html      # Linux
-
-# Option B: local server (avoids CORS on file upload)
-python3 -m http.server 8080
-# then visit http://localhost:8080/index.html
-```
-
-### 4 — Configure AI
-
-Open the app → Settings → AI providers. Enter your OpenAI or Anthropic API key and click **Save**, then **Test**.
-
-### 5 — Google OAuth (optional)
-
-Candid supports Google Sign-In. Without it, a demo-mode login is available.
-
-**To enable Google OAuth:**
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials.
-2. Click **Create Credentials** → **OAuth 2.0 Client ID**.
-3. Application type: **Web application**.
-4. Under **Authorized JavaScript origins**, add:
-   - `http://localhost:8080` (dev)
-   - Your production domain (if any)
-5. Under **Authorized redirect URIs**, add the same origins (no path needed for popup flow).
-6. Click **Create** and copy the **Client ID** (format: `xxxxx.apps.googleusercontent.com`).
-7. In `frontend/index.html`, uncomment and fill in:
-   ```html
-   <script>window.GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID.apps.googleusercontent.com";</script>
-   ```
-8. The backend validates the token at `POST /auth/google`. Make sure the backend is running.
-
-> If no Client ID is set, the app shows a "Continue in demo mode" button and skips Google auth entirely.
 
 ---
 
-## 4. Architecture
+## Frontend Architecture
 
-### Backend (`backend/`)
+No bundler. Script load order in `index.html` is strict:
 
-| File | Role |
-|------|------|
-| `main.py` | FastAPI app, all routes |
-| `models.py` | SQLModel table definitions |
-| `schemas.py` | Pydantic request/response models |
-| `database.py` | Engine, session, `create_db()` |
-| `ai_engine.py` | AI calls — CV analysis, quick-parse, transcript processing |
-| `cv_extractor.py` | PDF / DOCX text extraction |
-| `crypto.py` | Fernet encrypt/decrypt/mask for API keys |
+1. `data.jsx` → `window.CANDID_DATA` (constants: STATUS, skills lists, sample data)
+2. `translations.jsx` → i18n strings + `window.useT()`
+3. `ui.jsx` → primitives: `Icons`, `Btn`, `Badge`, `Avatar`, `Modal`, `Rating`, `Sidebar`, `Topbar`, `StatusBadge`
+4. `tweaks-panel.jsx` → runtime design knobs (`useTweaks`)
+5. `screens/*.jsx` → one component per screen, each assigns to `window.*Screen`
+6. `app.jsx` → `<App>` — routing, auth, fetch interceptor (injects Bearer token)
 
-### Frontend
+`window.API_BASE = "http://localhost:8000"` is set in `index.html`.
 
-No bundler. React 18 + Babel Standalone from CDN. Script load order in `index.html` is strict:
+The fetch wrapper in `app.jsx` auto-injects `Authorization: Bearer <token>` for all requests to `API_BASE` and auto-logs out on 401.
 
-1. `data.jsx` → `window.CANDID_DATA` (mock data)
-2. `ui.jsx` → primitives, icons, Sidebar, Topbar
-3. `tweaks-panel.jsx` → design knobs system
-4. `screens/*.jsx` → one component per screen
-5. `app.jsx` → root `<App>` + routing
+### Auth
 
-`window.API_BASE = "http://localhost:8000"` is set in `index.html`. When the backend is unreachable, screens fall back to mock data so the UI stays functional as a standalone prototype.
+Login flow: `POST /auth/demo` (dev) or `POST /auth/google` (prod) → JWT stored in `localStorage` as part of the user object.
+
+To enable Google OAuth: uncomment and fill `window.GOOGLE_CLIENT_ID` in `index.html`, then create an OAuth 2.0 credential in [Google Cloud Console](https://console.cloud.google.com) with your dev/prod origins.
 
 ---
 
-## 5. API Reference
+## API Reference
+
+All endpoints except `/auth/*` require `Authorization: Bearer <token>`.
+
+### Auth
+```
+POST  /auth/demo                        → { id, name, email, token }
+POST  /auth/google   { token }          → { id, name, email, picture, token }
+```
 
 ### Candidates
 ```
-GET    /candidates              list (optional ?status=&q= filters)
-POST   /candidates              create
-GET    /candidates/{id}         get (includes interviews + evaluation)
-PATCH  /candidates/{id}         update fields
-DELETE /candidates/{id}         delete
+GET   /candidates              ?status= ?q=    list (includes has_ai, ai_score, eval_avg)
+POST  /candidates              { first_name, last_name, ... }
+GET   /candidates/{id}                  get (includes interviews, evaluation, status_history)
+GET   /candidates/{id}/cv               download original CV file (PDF/DOCX)
+PATCH /candidates/{id}         { ...fields }
+DELETE /candidates/{id}
+GET   /candidates/stats                 { total, by_status, by_source, avg_score }
 ```
 
-### CV & AI Analysis
+### CV & Analysis
 ```
-POST   /upload-cv               multipart; returns { filename, text, word_count }
-POST   /analyze                 { job_title, job_description, cv_text, candidate_id? }
-                                → { strengths[], weaknesses[], questions[], extracted{} }
+POST  /upload-cv    file (multipart), candidate_id? (form)
+                    → { filename, text, word_count }
+                    Saves raw binary to candidate.cv_file when candidate_id provided.
+POST  /analyze      { candidate_id?, job_title, cv_text, job_description?, notes? }
+                    → { overview, strengths[], weaknesses[], questions[],
+                        career_history[], role_fits[], extracted{} }
 ```
 
 ### Interviews
 ```
-GET    /interviews              list (optional ?candidate_id= filter)
-POST   /interviews              create
-PATCH  /interviews/{id}         update
-POST   /interviews/{id}/process { raw_content } → AI-cleaned transcript + summary
+GET   /interviews              ?candidate_id=
+POST  /interviews              { candidate_id, type, title?, interviewer?, raw_content? }
+PATCH /interviews/{id}
+DELETE /interviews/{id}
+POST  /interviews/{id}/process { raw_content } → { cleaned_transcript, summary, extra_info }
 ```
 
 ### Evaluations
 ```
-GET    /evaluations/{candidate_id}
-POST   /evaluations             upsert { candidate_id, human_skills, technical_skills,
-                                         final_recommendation, notes }
+GET   /evaluations/{candidate_id}
+POST  /evaluations   { candidate_id, human_skills{}, technical_skills{},
+                       final_recommendation, notes? }   (upsert)
 ```
 
-### Quick-Add
+### Roles
 ```
-POST   /quick-add               { text } → { first_name, last_name, email, phone,
-                                             current_role, years_of_experience, summary }
+GET   /roles
+POST  /roles              { name, department?, description?, headcount }
+PATCH /roles/{id}
+DELETE /roles/{id}
+POST  /roles/improve-description  { text, role_name }  → { improved_text }
 ```
 
-### Config
+### Job Descriptions (Positions)
 ```
-GET    /config                  { provider, model_name, api_key_masked }
-PUT    /config                  { provider, model_name, api_key }
-POST   /config/test             test connection with current config
+GET   /job-descriptions
+POST  /job-descriptions   { role_id, title, description?, requirements?,
+                            location?, remote_ok, status, openings, owner? }
+PATCH /job-descriptions/{id}
+DELETE /job-descriptions/{id}
+POST  /job-descriptions/improve-jd  { text, role_name }  → { improved_text }
+```
+
+### Employees (People)
+```
+GET   /employees
+POST  /employees   { first_name, last_name, email?, role_id?, role_name?,
+                     department?, salary?, currency, hire_date?, location?,
+                     manager?, candidate_id? }
+PATCH /employees/{id}
+DELETE /employees/{id}
+```
+
+### Quick Add
+```
+POST  /quick-add   { text }  → parsed candidate fields (AI extraction)
+```
+
+### Config & API Keys
+```
+GET   /config                           { provider, model_name, api_key_masked }
+PUT   /config       { provider, model_name, api_key? }
+POST  /config/test                      test AI connection
+GET   /config/keys                      list stored providers
+POST  /config/keys  { provider, api_key }   upsert encrypted key
+DELETE /config/keys/{provider}
+```
+
+### AI Rewrite
+```
+POST  /ai/rewrite   { action, text, to?, subject?, candidate_name?, role? }
+                    actions: rewrite_email | rewrite_candidate_email
+                    → { result }
 ```
 
 ---
 
-## 6. Database Schema
+## Database Schema
 
-**candidates** — id (PK), first_name, last_name, email, phone, current_role, years_of_experience, location, status, source, applied_at, score, cv_text, cv_filename, job_title, job_description, ai_pre_analysis (JSON), extra_information
+**candidate** — id, first_name, last_name, email, phone, current_role, years_of_experience, location, status, source, applied_at, score, cv_text, cv_filename, cv_file (BYTEA), job_title, job_description, ai_pre_analysis (JSON), career_history (JSON), status_history (JSON), extra_information
 
-**interviews** — id (PK), candidate_id (FK), type, title, interviewer, date, duration, raw_content, cleaned_transcript, ai_summary, extra_info
+**interview** — id, candidate_id (FK), type, title, interviewer, date, duration, raw_content, cleaned_transcript, ai_summary, extra_info
 
-**evaluations** — id (PK), candidate_id (FK, unique), human_skills (JSON), technical_skills (JSON), final_recommendation, notes
+**evaluation** — id, candidate_id (FK unique), human_skills (JSON), technical_skills (JSON), final_recommendation, notes
 
-**config** — id=1 (single row), provider, model_name, encrypted_api_key
+**role** — id, name, department, description, headcount
 
----
+**job_description** — id, role_id (FK), title, description, requirements, location, remote_ok, status, openings, owner
 
-## 7. AI Flows
+**employee** — id, first_name, last_name, email, role_id (FK), role_name, department, salary, currency, hire_date, location, manager, candidate_id
 
-### CV vs JD Analysis
+**config** — id=1 (singleton), provider, model_name, encrypted_api_key
 
-1. User uploads PDF/DOCX → `POST /upload-cv` → backend extracts text
-2. User clicks "Run AI analysis" → `POST /analyze`
-3. Backend prompts the LLM with CV + JD, returns `{ strengths, weaknesses, deep_dive_questions, extracted_info }`
-4. Frontend animates results (streaming or instant mode via Tweaks panel)
-
-### Quick Paste (Manual Ingestion)
-
-1. User pastes raw notes into Quick Add modal → `POST /quick-add`
-2. Backend parses with LLM → structured fields
-3. User reviews, clicks "Create candidate" → `POST /candidates`
-
-### Live Interview Transcript
-
-1. Web Speech API captures transcript in browser (Chrome only)
-2. After stop, `POST /interviews/{id}/process` with `raw_content`
-3. Backend runs speaker separation + summary with LLM
-4. Result stored as `cleaned_transcript` + `ai_summary`
+**api_key** — provider (PK), encrypted_key
 
 ---
 
-## 8. Evaluation System (1–5 scale)
+## AI Flows
 
-**Human skills:** Communication, Problem Solving, Adaptability, Cultural Fit
+### CV Analysis
+1. User uploads PDF/DOCX → `POST /upload-cv` → text extracted, raw binary saved to `candidate.cv_file`
+2. `POST /analyze` → LLM returns overview, strengths/weaknesses, interview questions, role fit scores against all active positions, career history, extracted name/email/role
+3. Results stored on candidate as `ai_pre_analysis` JSON
 
-**Technical skills:** Domain Knowledge, Execution Speed, Analytical Thinking
+### Quick Add
+1. Paste raw notes / email / LinkedIn text → `POST /quick-add`
+2. LLM extracts structured fields → user reviews → `POST /candidates`
 
+### Live Interview
+1. Web Speech API (Chrome) captures transcript in browser
+2. `POST /interviews/{id}/process` → LLM cleans transcript, separates speakers, generates summary
+3. Stored as `cleaned_transcript` + `ai_summary`
+
+---
+
+## Evaluation System
+
+**Human skills:** Communication, Problem Solving, Adaptability, Cultural Fit  
+**Technical skills:** Domain Knowledge, Execution Speed, Analytical Thinking  
+**Ratings:** 1–5 per skill  
 **Final recommendation:** No Hire / Lean No / Lean Hire / Strong Hire
 
 ---
 
-## 9. Security Notes
+## Security Notes
 
-- API keys are encrypted with Fernet before storage; only the masked form is returned by `GET /config`
-- Generate your `FERNET_KEY` once and store it securely; losing it means stored keys can't be decrypted
-- CORS is open in development (`allow_origins=["*"]`); restrict to your domain in production
-- `FERNET_KEY` and database credentials must never be committed; use `.env` (already in `.gitignore`)
+- API keys encrypted with Fernet before DB storage; masked on read
+- `FERNET_KEY` and `SESSION_SECRET` must be in `.env` (gitignored); losing `FERNET_KEY` makes stored keys unrecoverable
+- JWT tokens expire after 48 h; 401 responses auto-log out the frontend
+- CORS is `allow_origins=["*"]` in dev — restrict in production

@@ -19,13 +19,7 @@ const ReportsScreen = () => {
   }, []);
 
   const funnel = useMemo(() => {
-    if (!stats) {
-      return [
-        { stage: "Applied", n: 142 }, { stage: "Screened", n: 38 },
-        { stage: "Pre-Interview", n: 18 }, { stage: "In Evaluation", n: 11 },
-        { stage: "Final", n: 4 }, { stage: "Offer", n: 2 },
-      ];
-    }
+    if (!stats) return [];
     const byStatus = stats.by_status || {};
     return [
       { stage: "New", n: byStatus.new || 0 },
@@ -34,16 +28,11 @@ const ReportsScreen = () => {
       { stage: "In Evaluation", n: byStatus.eval || 0 },
       { stage: "Final Round", n: byStatus.final || 0 },
       { stage: "Offer", n: byStatus.offer || 0 },
-    ].filter(f => f.n > 0 || !stats);
+    ].filter(f => f.n > 0);
   }, [stats]);
 
   const sources = useMemo(() => {
-    if (!stats?.by_source) {
-      return [
-        { source: "Referral", n: 38 }, { source: "Inbound", n: 42 },
-        { source: "LinkedIn", n: 35 }, { source: "Job board", n: 27 },
-      ];
-    }
+    if (!stats?.by_source) return [];
     return Object.entries(stats.by_source)
       .map(([source, n]) => ({ source, n }))
       .sort((a, b) => b.n - a.n);

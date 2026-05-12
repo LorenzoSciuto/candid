@@ -10,6 +10,27 @@ const mapCandidate = (c) => ({
   appliedAt: c.applied_at, score: c.score,
 });
 
+// ── Styled delete / destructive confirm ────────────────────────────────────────
+
+const ConfirmDialog = ({ title, message, confirmLabel, onConfirm, onCancel }) => (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
+    onClick={onCancel}>
+    <div className="card col" style={{ width: 400, padding: 28, gap: 20 }}
+      onClick={e => e.stopPropagation()}>
+      <div className="col gap-6">
+        <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>{title}</span>
+        <span className="text-13 text-secondary">{message}</span>
+      </div>
+      <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+        <Btn onClick={onCancel}>Cancel</Btn>
+        <Btn kind="danger" onClick={onConfirm}>{confirmLabel || "Delete"}</Btn>
+      </div>
+    </div>
+  </div>
+);
+
+// ── New candidate modal ────────────────────────────────────────────────────────
+
 const NewCandidateModal = ({ onClose, onCreated }) => {
   const t = window.useT();
   const [first, setFirst] = useState("");
@@ -47,7 +68,6 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
         setError("Failed to create candidate.");
       }
     } catch {
-      // Offline: create a local-only record
       onCreated({ id: `local-${Date.now()}`, first_name: first, last_name: last, email, phone, current_role: role, location, years_of_experience: experience ? parseInt(experience) : null, source, status, applied_at: new Date().toISOString().slice(0, 10), score: null });
     }
     setSaving(false);
@@ -113,9 +133,11 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
   );
 };
 
+// ── Main screen ───────────────────────────────────────────────────────────────
+
 const CandidatesScreen = ({ onOpenCandidate }) => {
   const t = window.useT();
-  const [candidates, setCandidates] = useState(window.CANDID_DATA.CANDIDATES);
+  const [candidates, setCandidates] = useState([]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [source, setSource] = useState("all");
@@ -125,6 +147,8 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
   const [menuOpen, setMenuOpen] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const [createOpen, setCreateOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, name }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -163,18 +187,37 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
     setMenuOpen(null);
   };
 
-  const deleteCandidate = (id) => {
-    if (!confirm("Delete this candidate? This cannot be undone.")) return;
-    setCandidates(prev => prev.filter(c => c.id !== id));
-    fetch(`${window.API_BASE}/candidates/${id}`, { method: "DELETE" }).catch(() => {});
+  const restoreCandidate = (id) => {
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, status: "new" } : c));
+    fetch(`${window.API_BASE}/candidates/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "new" }),
+    }).catch(() => {});
     setMenuOpen(null);
+  };
+
+  const promptDelete = (id) => {
+    const c = candidates.find(x => x.id === id);
+    setDeleteTarget({ id, name: c ? `${c.first} ${c.last}` : "this candidate" });
+    setMenuOpen(null);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    setCandidates(prev => prev.filter(c => c.id !== deleteTarget.id));
+    fetch(`${window.API_BASE}/candidates/${deleteTarget.id}`, { method: "DELETE" }).catch(() => {});
+    setDeleteTarget(null);
   };
 
   const rows = useMemo(() => {
     let r = candidates.filter(c => {
-      if (c.status === "archived" || c.status === "hired") return false;
+      if (showArchived) {
+        if (c.status !== "archived") return false;
+      } else {
+        if (c.status === "archived" || c.status === "hired") return false;
+        if (status !== "all" && c.status !== status) return false;
+      }
       if (q && !((c.first + " " + c.last + " " + (c.email || "")).toLowerCase().includes(q.toLowerCase()))) return false;
-      if (status !== "all" && c.status !== status) return false;
       if (source !== "all" && !c.source?.startsWith(source)) return false;
       if (exp === "junior" && (c.experience || 0) >= 5) return false;
       if (exp === "mid" && ((c.experience || 0) < 5 || (c.experience || 0) >= 8)) return false;
@@ -188,16 +231,17 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
       if (sortBy === "exp") return (b.experience || 0) - (a.experience || 0);
       return 0;
     });
-  }, [candidates, q, status, source, exp, sortBy]);
+  }, [candidates, q, status, source, exp, sortBy, showArchived]);
 
-  const activeFilters = (status !== "all") + (source !== "all") + (exp !== "all") + (q ? 1 : 0);
+  const archivedCount = useMemo(() => candidates.filter(c => c.status === "archived").length, [candidates]);
+  const activeFilters = (!showArchived && status !== "all" ? 1 : 0) + (source !== "all" ? 1 : 0) + (exp !== "all" ? 1 : 0) + (q ? 1 : 0);
 
   return (
     <div className="page page-wide">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
           <h1 className="page-h1">{t('candidates.title')}</h1>
-          <div className="page-sub">{rows.length} of {candidates.length} {t('candidates.title').toLowerCase()}</div>
+          <div className="page-sub">{rows.length} {showArchived ? "archived" : `of ${candidates.filter(c => c.status !== "archived" && c.status !== "hired").length} active`} candidates</div>
         </div>
         <div className="row gap-8">
           <SegControl value={view} onChange={setView} options={[{ value: "table", label: "Table" }, { value: "grid", label: "Grid" }]} />
@@ -211,7 +255,25 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
           <input className="input" style={{ border: 0, padding: "4px 0", background: "transparent" }} placeholder={t('candidates.searchPh')} value={q} onChange={e => setQ(e.target.value)} />
           {q && <button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setQ("")}><Icons.X size={12} /></button>}
         </div>
-        <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...ALL_S]} />
+
+        {/* Archive toggle */}
+        <button
+          onClick={() => { setShowArchived(a => !a); setStatus("all"); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "5px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer",
+            border: `1px solid ${showArchived ? "var(--ink-secondary)" : "var(--border)"}`,
+            background: showArchived ? "var(--bg-sunken)" : "transparent",
+            color: showArchived ? "var(--ink)" : "var(--ink-muted)",
+            fontWeight: showArchived ? 500 : 400,
+          }}>
+          <Icons.Archive size={13} />
+          Archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
+        </button>
+
+        {!showArchived && (
+          <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...ALL_S]} />
+        )}
         <FilterPill label={t('candidates.source')} value={source} onChange={setSource} options={[{ id: "all", label: t('candidates.anySource') }, ...SOURCES.map(s => ({ id: s, label: s }))]} />
         <FilterPill label={t('candidates.experience')} value={exp} onChange={setExp} options={[
           { id: "all", label: t('candidates.exp.any') },
@@ -237,28 +299,47 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
       {view === "table"
         ? <CandidateTable rows={rows} onOpen={onOpenCandidate} t={t}
             menuOpen={menuOpen} openMenu={openMenu}
-            onArchive={archiveCandidate} onDelete={deleteCandidate} />
+            showArchived={showArchived}
+            onArchive={archiveCandidate} onRestore={restoreCandidate} onDelete={promptDelete} />
         : <CandidateGrid rows={rows} onOpen={onOpenCandidate} />}
 
       {createOpen && <NewCandidateModal onClose={() => setCreateOpen(false)} onCreated={handleCreated} />}
 
       {/* Dropdown rendered at page root — escapes table overflow:hidden */}
       {menuOpen && (() => {
-        const c = rows.find(r => r.id === menuOpen);
+        const c = candidates.find(r => r.id === menuOpen);
         if (!c) return null;
+        const isArchived = c.status === "archived";
         return (
           <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", top: menuPos.top, right: menuPos.right, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", padding: 4, minWidth: 160, zIndex: 200 }}>
-            <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
-              onClick={() => archiveCandidate(c.id)}>
-              <Icons.EyeOff size={13} /> Archive
-            </button>
+            {isArchived ? (
+              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
+                onClick={() => restoreCandidate(c.id)}>
+                <Icons.RotateCcw size={13} /> Restore
+              </button>
+            ) : (
+              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
+                onClick={() => archiveCandidate(c.id)}>
+                <Icons.Archive size={13} /> Archive
+              </button>
+            )}
             <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start", color: "var(--danger)" }}
-              onClick={() => deleteCandidate(c.id)}>
+              onClick={() => promptDelete(c.id)}>
               <Icons.X size={13} /> {t('common.delete')}
             </button>
           </div>
         );
       })()}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete candidate?"
+          message={`${deleteTarget.name} and all associated data will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete permanently"
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };
@@ -293,7 +374,7 @@ const FilterPill = ({ label, value, onChange, options }) => {
   );
 };
 
-const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, onArchive, onDelete }) => (
+const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, showArchived, onArchive, onRestore, onDelete }) => (
   <div className="card" style={{ overflow: "hidden" }}>
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
       <thead>
@@ -305,9 +386,10 @@ const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, onArchive, onDele
       </thead>
       <tbody>
         {rows.map(c => (
-          <tr key={c.id} onClick={() => onOpen(c.id)} style={{ borderBottom: "1px solid var(--border-soft)", cursor: "pointer" }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-hover)"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <tr key={c.id} onClick={() => onOpen(c.id)}
+            style={{ borderBottom: "1px solid var(--border-soft)", cursor: "pointer", opacity: showArchived ? 0.75 : 1 }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-hover)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             <Td><div className="row gap-8"><Avatar name={`${c.first} ${c.last}`} /><div className="col"><span className="weight-500">{c.first} {c.last}</span><span className="text-12 text-muted">{c.email || "—"}</span></div></div></Td>
             <Td><StatusBadge status={c.status} /></Td>
             <Td><span className="text-13 text-secondary">{c.source || "—"}</span></Td>
@@ -323,7 +405,11 @@ const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, onArchive, onDele
         ))}
       </tbody>
     </table>
-    {rows.length === 0 && <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>{t('candidates.noMatch')}</div>}
+    {rows.length === 0 && (
+      <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
+        {showArchived ? "No archived candidates." : t('candidates.noMatch')}
+      </div>
+    )}
   </div>
 );
 

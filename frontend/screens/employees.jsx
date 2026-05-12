@@ -12,7 +12,7 @@ const getEmpLocations = () => {
 
 const EmployeesScreen = () => {
   const t = window.useT();
-  const [employees, setEmployees] = useState(window.CANDID_DATA.EMPLOYEES);
+  const [employees, setEmployees] = useState([]);
   const [showSalary, setShowSalary] = useState(false);
   const [roleFilter, setRoleFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
@@ -165,7 +165,7 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
 
   const save = async () => {
     setSaving(true);
-    const roles = window.CANDID_DATA.ROLES;
+    const roles = window.CANDID_DATA.ROLES || [];
     const role = roles.find(r => r.id === roleId);
     const body = {
       first_name: first, last_name: last, email: email || null,

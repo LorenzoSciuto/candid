@@ -56,8 +56,9 @@ class AnalysisRouter:
             engine = self._ai_factory.from_session(session)
             result = engine.analyze_cv(
                 cv_text=body.cv_text,
-                jd_text=body.job_description,
                 position_name=body.job_title,
+                jd_text=body.job_description,
+                notes=body.notes,
             )
         except Exception as exc:
             raise HTTPException(502, f"AI error: {exc}") from exc
@@ -67,7 +68,8 @@ class AnalysisRouter:
             if candidate:
                 candidate.ai_pre_analysis = json.dumps(result)
                 candidate.job_title = body.job_title
-                candidate.job_description = body.job_description
+                if body.job_description:
+                    candidate.job_description = body.job_description
                 session.add(candidate)
                 session.commit()
 

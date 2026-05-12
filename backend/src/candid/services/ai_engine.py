@@ -17,11 +17,14 @@ class AIEngine:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def analyze_cv(self, cv_text: str, jd_text: str, position_name: str) -> dict:
+    def analyze_cv(self, cv_text: str, position_name: str, jd_text: Optional[str] = None, notes: Optional[str] = None) -> dict:
+        jd_section = f"\nJob Description:\n{jd_text}\n" if jd_text else ""
+        notes_section = f"\nAdditional notes from recruiter:\n{notes}\n" if notes else ""
         prompt = Prompts.CV_ANALYSIS.format(
             position_name=position_name,
             cv_text=cv_text,
-            jd_text=jd_text,
+            jd_section=jd_section,
+            notes_section=notes_section,
         )
         result = self._parse_json(self._call(prompt))
         return {

@@ -1,4 +1,8 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from sqlmodel import Session, select
 
 from candid.database import Database
@@ -86,12 +90,18 @@ class ConfigRouter:
     def _upsert_key(self, session: Session, body: ApiKeyUpsert) -> dict:
         if body.provider not in _PROVIDERS:
             raise HTTPException(400, f"Unknown provider: {body.provider}")
-        row = session.get(ApiKey, body.provider)
-        if not row:
-            row = ApiKey(provider=body.provider)
-        row.encrypted_key = self._crypto.encrypt(body.api_key)
-        session.add(row)
-        session.commit()
+        try:
+            row = session.get(ApiKey, body.provider)
+            if not row:
+                row = ApiKey(provider=body.provider)
+            row.encrypted_key = self._crypto.encrypt(body.api_key)
+            session.add(row)
+            session.commit()
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+        except Exception:
+            logger.exception("Failed to save API key")
+            raise HTTPException(500, "Failed to save key — check server logs")
         return {"ok": True}
 
     def _test(self, session: Session) -> dict:

@@ -3,7 +3,7 @@ const { STATUS } = window.CANDID_DATA;
 
 const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
   const t = window.useT();
-  const [candidates, setCandidates] = useState(window.CANDID_DATA.CANDIDATES);
+  const [candidates, setCandidates] = useState([]);
   const [filter, setFilter] = useState("");
   const [dragOver, setDragOver] = useState(null);
   const dragging = React.useRef(null);

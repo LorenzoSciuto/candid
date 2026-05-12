@@ -6,9 +6,12 @@ from sqlmodel.pool import StaticPool
 from candid.app import Application
 from candid.config import Settings
 from candid.database import Database
+from candid.dependencies import require_user
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.ai_engine import AIEngineFactory
+
+_TEST_USER = {"sub": "test-user", "email": "test@candid.test", "name": "Test User"}
 
 
 TEST_DB_URL = "sqlite://"  # in-memory SQLite
@@ -74,6 +77,9 @@ def client(db: Database, crypto: CryptoService, ai_factory: AIEngineFactory, ext
 
     app = FastAPI(lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+    # Bypass auth in tests
+    app.dependency_overrides[require_user] = lambda: _TEST_USER
 
     for router in [
         CandidatesRouter(db).router,

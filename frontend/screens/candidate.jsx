@@ -184,8 +184,7 @@ const EditCandidateModal = ({ candidate, onClose, onSaved }) => {
 
 const CandidateScreen = ({ id, onRoute }) => {
   const t = window.useT();
-  const mockC = window.CANDID_DATA.CANDIDATES.find(x => x.id === id) || window.CANDID_DATA.CANDIDATES[0];
-  const [c, setC] = useState(mockC);
+  const [c, setC] = useState({ first: "", last: "", email: null, phone: null, role: null, experience: null, location: null, status: "new", source: null, pre: null, interviews: [], evaluation: null, score: null, cvText: null, jobDescription: null });
   const [tab, setTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [hiring, setHiring] = useState(false);

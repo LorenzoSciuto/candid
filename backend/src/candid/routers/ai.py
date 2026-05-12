@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -5,6 +7,8 @@ from sqlmodel import Session
 from candid.database import Database
 from candid.prompts import Prompts
 from candid.services.ai_engine import AIEngineFactory
+
+logger = logging.getLogger(__name__)
 
 
 class RewriteRequest(BaseModel):
@@ -50,4 +54,5 @@ class AIRouter:
             result = engine.run_prompt(prompt)
             return {"result": result}
         except Exception as e:
+            logger.exception("AI rewrite failed")
             raise HTTPException(status_code=500, detail=str(e))

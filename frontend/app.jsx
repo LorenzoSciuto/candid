@@ -251,7 +251,7 @@ const OrgSetupWizard = ({ user, onComplete }) => {
   };
 
   const createOrg = async () => {
-    if (!orgName.trim()) return;
+    if (!orgName.trim() || loading) return;
     setLoading(true);
     setError("");
     try {

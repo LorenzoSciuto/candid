@@ -10,7 +10,20 @@ from sqlmodel import Session, select
 from candid.config import Settings
 from candid.database import Database
 from candid.dependencies import UserCtx, require_user
-from candid.models import Invitation, Membership, Organization, User
+from candid.models import (
+    Candidate,
+    Employee,
+    Evaluation,
+    Interview,
+    Invitation,
+    JobDescription,
+    Membership,
+    OrgApiKey,
+    OrgConfig,
+    Organization,
+    Role,
+    User,
+)
 from candid.schemas import InviteRequest
 
 logger = logging.getLogger(__name__)
@@ -69,6 +82,13 @@ class OrganizationsRouter:
             ctx: UserCtx = Depends(require_user),
         ):
             self._remove_member(session, ctx, user_id)
+
+        @self.router.delete("/current", status_code=204)
+        def delete_org(
+            session: Session = Depends(db.get_session),
+            ctx: UserCtx = Depends(require_user),
+        ):
+            self._delete_org(session, ctx)
 
         # Public endpoint — no auth required
         @self.router.get("/invitations/accept", include_in_schema=True)
@@ -244,6 +264,32 @@ class OrganizationsRouter:
 
         redirect_url = f"{self._settings.app_url}/index.html#?invite_accepted=1&org_id={inv.org_id}"
         return RedirectResponse(url=redirect_url, status_code=302)
+
+    def _delete_org(self, session: Session, ctx: UserCtx) -> None:
+        org = session.get(Organization, ctx.org_id)
+        if not org:
+            raise HTTPException(404, "Organization not found")
+        if org.owner_id != ctx.user_id:
+            raise HTTPException(403, "Only the organization owner can delete the organization")
+
+        # Delete in FK-safe order: dependents before parents
+        for stmt in [
+            select(Evaluation).where(Evaluation.org_id == ctx.org_id),
+            select(Interview).where(Interview.org_id == ctx.org_id),
+            select(Employee).where(Employee.org_id == ctx.org_id),
+            select(JobDescription).where(JobDescription.org_id == ctx.org_id),
+            select(Candidate).where(Candidate.org_id == ctx.org_id),
+            select(Role).where(Role.org_id == ctx.org_id),
+            select(OrgApiKey).where(OrgApiKey.org_id == ctx.org_id),
+            select(OrgConfig).where(OrgConfig.org_id == ctx.org_id),
+            select(Invitation).where(Invitation.org_id == ctx.org_id),
+            select(Membership).where(Membership.org_id == ctx.org_id),
+        ]:
+            for item in session.exec(stmt).all():
+                session.delete(item)
+
+        session.delete(org)
+        session.commit()
 
     def _require_admin(self, session: Session, ctx: UserCtx) -> None:
         mbr = session.exec(

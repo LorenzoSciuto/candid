@@ -33,7 +33,7 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
       {tab === "locale"       && <LocaleSettings t={t} locale={locale} onChange={handleLocale} />}
       {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />}
       {tab === "locations"    && <LocationsSettings t={t} />}
-      {tab === "team"         && <TeamSettings t={t} />}
+      {tab === "team"         && <TeamSettings t={t} user={user} onLogout={onLogout} />}
       {tab === "integrations" && <IntegrationsSettings t={t} />}
     </div>
   );
@@ -530,13 +530,16 @@ window.getTeamMembers = () => {
   return [];
 };
 
-const TeamSettings = ({ t }) => {
+const TeamSettings = ({ t, user, onLogout }) => {
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState("");
   const [adding, setAdding] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const reload = () => {
     setLoading(true);
@@ -586,6 +589,17 @@ const TeamSettings = ({ t }) => {
     reload();
   };
 
+  const deleteOrg = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`${window.API_BASE}/organizations/current`, { method: "DELETE" });
+    } catch {}
+    setDeleting(false);
+    onLogout && onLogout();
+  };
+
+  const isOwner = user && org && org.owner_id === user.id;
   const members = org?.members || [];
   const pending = org?.pending_invitations || [];
 
@@ -659,6 +673,51 @@ const TeamSettings = ({ t }) => {
           </div>
         )}
       </div>
+
+      {/* Danger zone — owner only */}
+      {isOwner && (
+        <div className="card" style={{ border: "1px solid var(--danger-soft, oklch(0.88 0.06 25))" }}>
+          <div className="card-header" style={{ borderBottom: "1px solid var(--danger-soft, oklch(0.88 0.06 25))" }}>
+            <span className="card-title" style={{ color: "var(--danger)" }}>Danger zone</span>
+          </div>
+          <div className="row" style={{ padding: "16px 18px", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+            <div className="col gap-2">
+              <span className="weight-500">Delete this organization</span>
+              <span className="text-12 text-secondary">Permanently deletes the org and all its data — candidates, interviews, employees, roles, and settings. Cannot be undone.</span>
+            </div>
+            <Btn kind="danger" onClick={() => { setConfirmName(""); setDeleteOpen(true); }} style={{ flexShrink: 0 }}>
+              Delete organization
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
+          onClick={() => !deleting && setDeleteOpen(false)}>
+          <div className="card col" style={{ width: 420, padding: 28, gap: 16 }} onClick={e => e.stopPropagation()}>
+            <div className="col gap-4">
+              <span style={{ fontWeight: 600, fontSize: 16, color: "var(--danger)" }}>Delete "{org?.name}"?</span>
+              <span className="text-13 text-secondary">
+                This will permanently delete the organization and <strong>all its data</strong>: candidates, interviews, employees, roles, positions, API keys, and settings. This action cannot be undone.
+              </span>
+            </div>
+            <div>
+              <label className="label">Type <strong>{org?.name}</strong> to confirm</label>
+              <input className="input" value={confirmName} onChange={e => setConfirmName(e.target.value)}
+                placeholder={org?.name} autoFocus />
+            </div>
+            <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+              <Btn onClick={() => setDeleteOpen(false)} disabled={deleting}>{t('common.cancel')}</Btn>
+              <Btn kind="danger" onClick={deleteOrg}
+                disabled={confirmName !== org?.name || deleting}>
+                {deleting ? "Deleting…" : "Delete forever"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

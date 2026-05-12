@@ -69,7 +69,7 @@ const OwnerSelect = ({ value, onChange }) => {
 
 const JobsScreen = ({ onRoute }) => {
   const t = window.useT();
-  const [jds, setJds] = useState(window.CANDID_DATA.JDS_DATA);
+  const [jds, setJds] = useState([]);
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [q, setQ] = useState("");

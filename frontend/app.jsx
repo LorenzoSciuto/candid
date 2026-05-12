@@ -214,7 +214,17 @@ const LoginScreen = ({ onLogin }) => {
     }
   };
 
-  const demoLogin = () => {
+  const demoLogin = async () => {
+    try {
+      const res = await fetch(`${window.API_BASE}/auth/demo`, { method: "POST" });
+      if (res.ok) {
+        const u = await res.json();
+        saveUser({ ...u, role: "Recruiter" });
+        onLogin({ ...u, role: "Recruiter" });
+        return;
+      }
+    } catch {}
+    // Fallback when backend is down — no token, read-only demo
     const u = { id: "demo", name: "Demo User", email: "demo@candid.app", picture: null, role: "Recruiter" };
     saveUser(u);
     onLogin(u);
@@ -300,6 +310,23 @@ const App = () => {
   // Persist locale
   useEffect(() => { localStorage.setItem("candid_locale", locale); }, [locale]);
 
+  // Inject Authorization header for all API calls
+  useEffect(() => {
+    const token = user?.token;
+    if (!token) return;
+    const original = window._baseFetch || window.fetch;
+    window._baseFetch = original;
+    window.fetch = (url, opts = {}) => {
+      if (typeof url === "string" && url.startsWith(window.API_BASE)) {
+        opts = { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) } };
+      }
+      return original(url, opts);
+    };
+    return () => {
+      if (window._baseFetch) window.fetch = window._baseFetch;
+    };
+  }, [user?.token]);
+
   // Real sidebar counts
   useEffect(() => {
     if (!user) return;
@@ -344,6 +371,11 @@ const App = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Force re-login if existing session has no token (pre-auth sessions)
+  useEffect(() => {
+    if (user && !user.token) { clearUser(); setUser(null); }
+  }, []);
+
   const handleLogin = (u) => setUser(u);
   const handleLogout = () => { clearUser(); setUser(null); window.location.hash = ""; };
 
@@ -371,10 +403,8 @@ const App = () => {
       case "reports":      return ["Workspace", "Reports"];
       case "preinterview": return ["AI Co-pilot", "Pre-Interview Analysis"];
       case "liveroom":     return ["AI Co-pilot", "Live Room"];
-      case "candidate": {
-        const c = window.CANDID_DATA.CANDIDATES.find(x => x.id === candidateId);
-        return ["Candidates", c ? `${c.first} ${c.last}` : "—"];
-      }
+      case "candidate":
+        return ["Candidates", "—"];
       case "settings":     return ["Settings"];
       default:             return ["Candid"];
     }

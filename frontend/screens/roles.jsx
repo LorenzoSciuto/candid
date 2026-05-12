@@ -1,7 +1,7 @@
 // Roles configuration screen
 const RolesScreen = ({ onRoute }) => {
   const t = window.useT();
-  const [roles, setRoles] = useState(window.CANDID_DATA.ROLES);
+  const [roles, setRoles] = useState([]);
   const [editRole, setEditRole] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -15,13 +15,13 @@ const RolesScreen = ({ onRoute }) => {
 
   const empByRole = useMemo(() => {
     const m = {};
-    window.CANDID_DATA.EMPLOYEES.forEach(e => {
+    (window.CANDID_DATA.EMPLOYEES || []).forEach(e => {
       m[e.role_id] = (m[e.role_id] || 0) + 1;
     });
     return m;
   }, []);
 
-  const [liveJds, setLiveJds] = useState(window.CANDID_DATA.JDS_DATA);
+  const [liveJds, setLiveJds] = useState([]);
   useEffect(() => {
     fetch(`${window.API_BASE}/job-descriptions`)
       .then(r => r.ok ? r.json() : null)

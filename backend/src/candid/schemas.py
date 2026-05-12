@@ -36,8 +36,9 @@ class CandidateUpdate(BaseModel):
 class AnalyzeRequest(BaseModel):
     candidate_id: Optional[str] = None
     job_title: str
-    job_description: str
+    job_description: Optional[str] = None
     cv_text: str
+    notes: Optional[str] = None
 
 
 class QuickAddRequest(BaseModel):

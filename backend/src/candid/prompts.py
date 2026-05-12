@@ -4,10 +4,10 @@ from __future__ import annotations
 
 class Prompts:
     CV_ANALYSIS = """\
-Compare the Candidate CV against the Job Description for the position: {position_name}.
+You are a senior technical recruiter. Analyse the candidate CV for the position: {position_name}.
 
 Return a JSON object with exactly these keys:
-- "strengths": array of 3-5 strings — top technical/soft skill matches vs the JD
+- "strengths": array of 3-5 strings — top technical/soft skill matches for the role
 - "weaknesses": array of 2-4 strings — gaps, missing requirements, or risks to probe
 - "deep_dive_questions": array of exactly 3 strings — strategic questions tailored to \
 uncover actual expertise in critical areas
@@ -16,10 +16,7 @@ uncover actual expertise in critical areas
 
 CV:
 {cv_text}
-
-Job Description:
-{jd_text}
-
+{jd_section}{notes_section}
 Return only valid JSON. No markdown fences. No explanation."""
 
     QUICK_PARSE = """\

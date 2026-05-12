@@ -1,12 +1,10 @@
 // Pre-Interview CV Analysis screen
-const { JD_DEFAULT, SAMPLE_CV, STREAMING_PRE } = window.CANDID_DATA;
 
 const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
-  const mockActive = (window.CANDID_DATA.JDS_DATA || []).filter(j => j.status === "Active");
-  const [openJds, setOpenJds] = useState(mockActive);
-  const [selectedJdId, setSelectedJdId] = useState(mockActive[0]?.id || "");
-  const [position, setPosition] = useState(mockActive[0]?.title || "");
-  const [jd, setJd] = useState(mockActive[0]?.description || JD_DEFAULT);
+  const [openJds, setOpenJds] = useState([]);
+  const [selectedJdId, setSelectedJdId] = useState("");
+  const [position, setPosition] = useState("");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     fetch(`${window.API_BASE}/job-descriptions`)
@@ -18,7 +16,6 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
         setOpenJds(active);
         setSelectedJdId(active[0].id);
         setPosition(active[0].title);
-        if (active[0].description) setJd(active[0].description);
       })
       .catch(() => {});
   }, []);
@@ -26,11 +23,9 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
   const handleJdSelect = (id) => {
     setSelectedJdId(id);
     const found = openJds.find(j => j.id === id);
-    if (found) {
-      setPosition(found.title);
-      if (found.description) setJd(found.description);
-    }
+    if (found) setPosition(found.title);
   };
+
   const [cvName, setCvName] = useState("");
   const [cvText, setCvText] = useState("");
   const [stage, setStage] = useState("idle"); // idle | uploading | extracting | analyzing | done
@@ -38,7 +33,7 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
-  // ── Upload: try real API, fall back to sample data ──────────────────────────
+  // ── Upload ───────────────────────────────────────────────────────────────────
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -54,16 +49,14 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
       setCvText(data.text);
       setStage("idle");
     } catch (err) {
-      // API unreachable — use sample data so the UI stays functional
-      setCvText(SAMPLE_CV);
+      setError("CV upload failed. Check that the backend is running.");
+      setCvName("");
       setStage("idle");
     }
   };
 
-  // Click-to-browse dropzone
   const handleDropzoneClick = () => fileInputRef.current?.click();
 
-  // Drag-and-drop
   const handleDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
@@ -74,7 +67,7 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
     handleFileChange({ target: fileInputRef.current });
   };
 
-  // ── Analysis: try real API, fall back to simulated ──────────────────────────
+  // ── Analysis ─────────────────────────────────────────────────────────────────
   const runAnalysis = async () => {
     setError("");
     setStage("analyzing");
@@ -87,23 +80,18 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           job_title: position,
-          job_description: jd,
           cv_text: cvText,
+          notes: notes || undefined,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       result = await res.json();
     } catch (err) {
-      // Fall back to canned data
-      result = {
-        strengths: STREAMING_PRE.strengths,
-        weaknesses: STREAMING_PRE.weaknesses,
-        questions: STREAMING_PRE.questions,
-        extracted: STREAMING_PRE.extracted,
-      };
+      setError(`Analysis failed: ${err.message}`);
+      setStage("idle");
+      return;
     }
 
-    // Animate display regardless of data source
     if (tweaks.streaming) {
       const items = [
         ...result.strengths.map(t => ["strengths", t]),
@@ -140,7 +128,7 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
         <span className="ai-tag"><span className="ai-spark" /> Pre-Interview Analysis</span>
       </div>
       <h1 className="page-h1">Read the CV before you read the CV.</h1>
-      <div className="page-sub">Drop a CV, paste the JD, and get strengths, gaps, and three deep-dive questions ready before the call.</div>
+      <div className="page-sub">Drop a CV and get strengths, gaps, and three deep-dive questions ready before the call.</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.1fr)", gap: 24, alignItems: "start" }}>
         {/* LEFT — inputs */}
@@ -157,15 +145,20 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
               )}
             </div>
             <div>
-              <label className="label">Job description</label>
-              <textarea className="textarea" rows={9} value={jd} onChange={e => setJd(e.target.value)} />
-              <div className="help">Used as the comparison reference. Edit freely.</div>
+              <label className="label">Notes for the analysis</label>
+              <textarea
+                className="textarea"
+                rows={5}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Add any context, focus areas, or red flags you'd like the AI to consider…"
+              />
+              <div className="help">Passed to the AI as additional context. Optional.</div>
             </div>
           </div>
 
           <div className="card card-pad col gap-12">
             <label className="label">Candidate CV</label>
-            {/* Hidden real file input */}
             <input
               ref={fileInputRef}
               type="file"
@@ -217,7 +210,7 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
               <div className="ai-tag" style={{ display: "inline-flex", marginBottom: 12 }}><Icons.Sparkles size={11} /> Ready</div>
               <div className="weight-600 text-15">Upload a CV to begin</div>
               <div className="text-13 text-secondary mt-4" style={{ maxWidth: 380, margin: "4px auto 0" }}>
-                Candid will compare it to your JD and surface 3–5 strengths, gaps, and tailored questions.
+                Candid will surface 3–5 strengths, gaps, and tailored questions.
               </div>
             </div>
           )}
@@ -245,8 +238,8 @@ const PreInterviewScreen = ({ tweaks, onCreatedCandidate }) => {
 
 const AnalyzingPanel = () => (
   <div className="ai-panel card-pad col gap-12">
-    <div className="row gap-8"><span className="ai-spark" /><span className="weight-500 text-13">Analyzing CV against JD…</span></div>
-    {["Extracting candidate info", "Comparing skills to JD", "Drafting deep-dive questions"].map((s, i) => (
+    <div className="row gap-8"><span className="ai-spark" /><span className="weight-500 text-13">Analyzing CV…</span></div>
+    {["Extracting candidate info", "Comparing skills to position", "Drafting deep-dive questions"].map((s, i) => (
       <div key={i} className="row gap-8" style={{ height: 14 }}>
         <div className="shimmer" style={{ height: 10, width: `${65 + i * 10}%`, background: "var(--bg-sunken)", borderRadius: 4 }} />
       </div>
@@ -257,7 +250,7 @@ const AnalyzingPanel = () => (
 
 const ResultPanels = ({ data, streaming }) => (
   <div className="col gap-12">
-    <ResultBlock title="Strengths" hint="Top matches against the JD" kind="positive" items={data.strengths} icon={<Icons.Check size={12} />} streaming={streaming} />
+    <ResultBlock title="Strengths" hint="Top matches for the role" kind="positive" items={data.strengths} icon={<Icons.Check size={12} />} streaming={streaming} />
     <ResultBlock title="Weaknesses" hint="Gaps and risks to probe" kind="warn" items={data.weaknesses} icon={<Icons.X size={12} />} streaming={streaming} />
     <ResultBlock title="Suggested deep-dive questions" hint="Tailored to uncover real expertise" kind="ai" items={data.questions} icon={<Icons.Sparkles size={11} />} streaming={streaming} />
   </div>

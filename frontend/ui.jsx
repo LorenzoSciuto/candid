@@ -44,6 +44,7 @@ const Icons = {
   ClipPaste: (p) => <Icon {...p} d={<><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></>} />,
   Lock: (p) => <Icon {...p} d={<><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>} />,
   Eye: (p) => <Icon {...p} d={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>} />,
+  Download: (p) => <Icon {...p} d={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></>} />,
   TrendUp: (p) => <Icon {...p} d={<><path d="m23 6-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" /></>} />,
   Building: (p) => <Icon {...p} d={<><rect x="4" y="2" width="16" height="20" rx="1" /><path d="M9 22v-5h6v5M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01" /></>} />,
   Award: (p) => <Icon {...p} d={<><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></>} />,

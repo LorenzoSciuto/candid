@@ -162,6 +162,7 @@ class EmployeeCreate(BaseModel):
     hire_date: Optional[str] = None
     location: Optional[str] = None
     manager: Optional[str] = None
+    candidate_id: Optional[str] = None
 
 
 class EmployeeUpdate(BaseModel):

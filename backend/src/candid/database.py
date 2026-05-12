@@ -5,8 +5,10 @@ from sqlmodel import SQLModel, Session, create_engine
 
 # (table, column, ddl_type) — append new columns here as the schema evolves
 _MIGRATIONS: list[tuple[str, str, str]] = [
-    ("candidate", "career_history", "TEXT"),
-    ("candidate", "cv_filename",    "TEXT"),
+    ("candidate", "career_history",  "TEXT"),
+    ("candidate", "cv_filename",     "TEXT"),
+    ("candidate", "status_history",  "TEXT"),
+    ("employee",  "candidate_id",    "TEXT"),
 ]
 
 

@@ -108,6 +108,24 @@ Return only valid JSON. No markdown fences."""
             raise ValueError(f"Unknown prompt action: {action!r}")
         return template.format_map(kwargs)
 
+    IMPROVE_ROLE_DESC = """\
+You are an expert copywriter specialising in organisational design. Write a concise, \
+impersonal role description for the following role. Describe what the person in this role \
+does, their responsibilities, and their place in the organisation. Use declarative, \
+third-person language (e.g. "The {role_name} is responsible for…"). Do NOT write a job \
+ad, do NOT include requirements, qualifications, or benefits. Keep it to 3-5 sentences or \
+a short paragraph.
+
+Role: {role_name}
+
+Notes provided by the user:
+{desc_text}
+
+Return a JSON object with exactly one key:
+- "improved_text" — the role description as a plain string
+
+Return only valid JSON. No markdown fences."""
+
     IMPROVE_JD = """\
 You are an expert technical recruiter and copywriter. Improve the following job description \
 to be more compelling, clear, and structured. Keep the role name and core requirements intact \

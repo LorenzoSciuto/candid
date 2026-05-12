@@ -88,7 +88,7 @@ def client(db: Database, crypto: CryptoService, ai_factory: AIEngineFactory, ext
         EvaluationsRouter(db).router,
         ConfigRouter(db, crypto).router,
         QuickAddRouter(db, ai_factory).router,
-        RolesRouter(db).router,
+        RolesRouter(db, ai_factory).router,
         EmployeesRouter(db).router,
         JobDescriptionsRouter(db, ai_factory).router,
         AIRouter(db, ai_factory).router,
@@ -101,11 +101,11 @@ def client(db: Database, crypto: CryptoService, ai_factory: AIEngineFactory, ext
 @pytest.fixture(autouse=True)
 def clean_tables(db: Database) -> None:
     """Wipe all rows between tests."""
-    from candid.models import Candidate, Config, Employee, Evaluation, Interview, JobDescription, Role
+    from candid.models import ApiKey, Candidate, Config, Employee, Evaluation, Interview, JobDescription, Role
     from sqlmodel import select
     with Session(db._engine) as session:
         # deletion order respects FK constraints
-        for model in (Evaluation, Interview, JobDescription, Employee, Candidate, Config, Role):
+        for model in (Evaluation, Interview, JobDescription, Employee, Candidate, ApiKey, Config, Role):
             for row in session.exec(select(model)).all():
                 session.delete(row)
         session.commit()

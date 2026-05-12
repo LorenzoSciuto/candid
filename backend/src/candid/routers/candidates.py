@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -115,6 +116,9 @@ class CandidatesRouter:
         if candidate.career_history:
             result["career_history"] = json.loads(candidate.career_history)
 
+        if candidate.status_history:
+            result["status_history"] = json.loads(candidate.status_history)
+
         return result
 
     def _update(
@@ -123,7 +127,15 @@ class CandidatesRouter:
         candidate = session.get(Candidate, candidate_id)
         if not candidate:
             raise HTTPException(404, "Candidate not found")
-        for field, value in body.model_dump(exclude_none=True).items():
+        data = body.model_dump(exclude_none=True)
+        if "status" in data and data["status"] != candidate.status:
+            history = json.loads(candidate.status_history or "[]")
+            history.append({
+                "status": data["status"],
+                "at": datetime.now(timezone.utc).isoformat(),
+            })
+            candidate.status_history = json.dumps(history)
+        for field, value in data.items():
             setattr(candidate, field, value)
         session.add(candidate)
         session.commit()

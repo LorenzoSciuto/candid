@@ -354,7 +354,9 @@ const App = () => {
         interviews: ivs ? ivs.length : null,
       });
     });
+    window.refreshCounts = refresh;
     refresh();
+    return () => { delete window.refreshCounts; };
   }, [user]);
 
   // Browser history

@@ -20,6 +20,11 @@ class UserUpdate(BaseModel):
     title: str | None = None
     department: str | None = None
 
+
+class AcceptInviteRequest(BaseModel):
+    token: str = ""
+    invitation_id: str = ""
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,14 +83,14 @@ class AuthRouter:
 
         @self.router.post("/accept-invite")
         def accept_invite_wizard(
-            body: dict,
+            body: AcceptInviteRequest,
             session: Session = Depends(db.get_session),
             ctx: UserCtx = Depends(require_user),
         ):
             return self._accept_invite_wizard(
                 session, ctx,
-                token=body.get("token", ""),
-                invitation_id=body.get("invitation_id", ""),
+                token=body.token,
+                invitation_id=body.invitation_id,
             )
 
         @self.router.patch("/users/me")

@@ -1,4 +1,4 @@
-// Employees / People screen
+// Employees screen
 
 const CURRENCY_SYMBOLS = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF", JPY: "¥", CAD: "CA$", AUD: "A$", SEK: "kr", DKK: "kr", NOK: "kr" };
 
@@ -197,12 +197,12 @@ const EmployeesScreen = () => {
           onClick={() => setDeleteTarget(null)}>
           <div className="card col" style={{ width: 400, padding: 28, gap: 20 }} onClick={ev => ev.stopPropagation()}>
             <div className="col gap-6">
-              <span style={{ fontWeight: 600, fontSize: 16 }}>Remove employee?</span>
-              <span className="text-13 text-secondary">{deleteTarget.first_name} {deleteTarget.last_name} will be permanently deleted.</span>
+              <span style={{ fontWeight: 600, fontSize: 16 }}>{t('employees.deleteTitle')}</span>
+              <span className="text-13 text-secondary">{deleteTarget.first_name} {deleteTarget.last_name} {t('employees.deleteBody')}</span>
             </div>
             <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
               <Btn onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</Btn>
-              <Btn kind="danger" onClick={() => deleteEmployee(deleteTarget.id)}>Delete</Btn>
+              <Btn kind="danger" onClick={() => deleteEmployee(deleteTarget.id)}>{t('common.delete')}</Btn>
             </div>
           </div>
         </div>
@@ -307,7 +307,7 @@ const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
   };
 
   return (
-    <Modal open title="Edit employee" onClose={onClose}
+    <Modal open title={t('employees.edit')} onClose={onClose}
       footer={<><Btn onClick={onClose}>{t('common.cancel')}</Btn><Btn kind="primary" onClick={save} disabled={!first || !last || saving}>{saving ? t('common.saving') : t('common.save')}</Btn></>}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div><label className="label">{t('employees.form.first')}</label><input className="input" value={first} onChange={e => setFirst(e.target.value)} /></div>
@@ -332,6 +332,7 @@ const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
 };
 
 const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClose }) => {
+  const t = window.useT();
   const [cvText, setCvText] = useState(null);
   const [cvFilename, setCvFilename] = useState(null);
   const [hasCvFile, setHasCvFile] = useState(false);
@@ -390,10 +391,10 @@ const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClos
           {(cvText || loadingCv) && (
             <div className="row gap-8">
               <Btn icon={<Icons.Eye size={13} />} onClick={() => setCvModal(true)} disabled={!cvText}>
-                View CV
+                {t('employees.profile.viewCv')}
               </Btn>
               <Btn icon={<Icons.Download size={13} />} onClick={download} disabled={!cvText}>
-                Download CV
+                {t('employees.profile.downloadCv')}
               </Btn>
             </div>
           )}
@@ -402,11 +403,11 @@ const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClos
         {/* Details grid */}
         <div style={{ padding: "16px 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px" }}>
           {[
-            ["Email", emp.email || "—"],
-            ["Location", emp.location || "—"],
-            ["Hire date", emp.hire_date || "—"],
-            ["Salary", emp.salary ? (showSalary ? fmtSalary(emp.salary) + ` ${currencyCode}` : "••••") : "—"],
-            ["Manager", emp.manager || "—"],
+            [t('employees.form.email'), emp.email || "—"],
+            [t('employees.col.location'), emp.location || "—"],
+            [t('employees.col.hireDate'), emp.hire_date || "—"],
+            [t('employees.col.salary'), emp.salary ? (showSalary ? fmtSalary(emp.salary) + ` ${currencyCode}` : "••••") : "—"],
+            [t('employees.col.manager'), emp.manager || "—"],
           ].map(([label, value]) => (
             <div key={label} className="col gap-2">
               <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>

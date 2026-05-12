@@ -117,3 +117,100 @@ class TestConfigTest:
         data = resp.json()
         assert data["ok"] is True
         assert data["provider"] == "openai"
+
+
+class TestDeleteKey:
+    def test_delete_existing_key_returns_204(self, client: TestClient) -> None:
+        client.put("/config/keys", json={"provider": "openai", "api_key": "sk-to-delete-key"})
+        resp = client.delete("/config/keys/openai")
+        assert resp.status_code == 204
+
+    def test_deleted_key_shows_empty(self, client: TestClient) -> None:
+        client.put("/config/keys", json={"provider": "openai", "api_key": "sk-temp-key-abc123"})
+        client.delete("/config/keys/openai")
+        keys = client.get("/config/keys").json()
+        assert keys["openai"] == ""
+
+    def test_delete_nonexistent_key_is_idempotent(self, client: TestClient) -> None:
+        resp = client.delete("/config/keys/openai")
+        assert resp.status_code == 204
+
+    def test_delete_unknown_provider_returns_400(self, client: TestClient) -> None:
+        resp = client.delete("/config/keys/fakeprovider")
+        assert resp.status_code == 400
+
+
+class TestPipelineStages:
+    def test_returns_default_stages_when_none_saved(self, client: TestClient) -> None:
+        resp = client.get("/config/stages")
+        assert resp.status_code == 200
+        stages = resp.json()
+        assert isinstance(stages, list)
+        assert len(stages) > 0
+        assert all("id" in s and "label" in s and "dot" in s for s in stages)
+
+    def test_save_and_retrieve_custom_stages(self, client: TestClient) -> None:
+        custom = [
+            {"id": "applied", "label": "Applied", "dot": "#6366f1"},
+            {"id": "screen",  "label": "Screen",  "dot": "#3b82f6"},
+            {"id": "offer",   "label": "Offer",   "dot": "#10b981"},
+        ]
+        resp = client.put("/config/stages", json={"stages": custom})
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        retrieved = client.get("/config/stages").json()
+        assert len(retrieved) == 3
+        assert retrieved[0]["id"] == "applied"
+        assert retrieved[2]["label"] == "Offer"
+
+    def test_stage_missing_id_returns_400(self, client: TestClient) -> None:
+        resp = client.put("/config/stages", json={"stages": [{"label": "No ID", "dot": "#000"}]})
+        assert resp.status_code == 400
+
+    def test_stage_missing_label_returns_400(self, client: TestClient) -> None:
+        resp = client.put("/config/stages", json={"stages": [{"id": "nolabel", "dot": "#000"}]})
+        assert resp.status_code == 400
+
+    def test_save_empty_stages_list(self, client: TestClient) -> None:
+        resp = client.put("/config/stages", json={"stages": []})
+        assert resp.status_code == 200
+        assert client.get("/config/stages").json() == []
+
+
+class TestOrgIsolation:
+    """Verify that org_id scoping actually prevents cross-org data access."""
+
+    def test_candidates_isolated_by_org(self, client: TestClient, db) -> None:
+        from candid.models import Candidate
+        from sqlmodel import Session
+
+        with Session(db._engine) as session:
+            other_c = Candidate(org_id="org-other", first_name="Eve", last_name="Outsider")
+            session.add(other_c)
+            session.commit()
+            other_id = other_c.id
+
+        # test client uses org-test — should not see org-other candidate
+        listed = client.get("/candidates/").json()
+        assert not any(c["id"] == other_id for c in listed)
+
+        # 404 when fetching by id
+        resp = client.get(f"/candidates/{other_id}")
+        assert resp.status_code == 404
+
+    def test_stages_isolated_by_org(self, client: TestClient, db) -> None:
+        from candid.models import OrgConfig
+        from sqlmodel import Session
+        import json
+
+        # Save stages for a different org directly
+        with Session(db._engine) as session:
+            cfg = OrgConfig(org_id="org-other", stages_json=json.dumps([
+                {"id": "secret", "label": "Secret Stage", "dot": "#ff0000"}
+            ]))
+            session.add(cfg)
+            session.commit()
+
+        # test client org should still get its own (default) stages
+        stages = client.get("/config/stages").json()
+        assert not any(s["id"] == "secret" for s in stages)

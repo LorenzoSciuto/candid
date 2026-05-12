@@ -1,12 +1,18 @@
 // Pipeline (Kanban) screen — with drag-and-drop between columns
-const { STATUS } = window.CANDID_DATA;
 
 const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
   const t = window.useT();
+  const [stages, setStages] = useState(() => window.CANDID_DATA.STATUS || []);
   const [candidates, setCandidates] = useState([]);
   const [filter, setFilter] = useState("");
   const [dragOver, setDragOver] = useState(null);
   const dragging = React.useRef(null);
+
+  useEffect(() => {
+    const onStages = (e) => setStages(e.detail);
+    window.addEventListener("candid:stages", onStages);
+    return () => window.removeEventListener("candid:stages", onStages);
+  }, []);
 
   useEffect(() => {
     fetch(`${window.API_BASE}/candidates`)
@@ -26,12 +32,12 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
 
   const grouped = useMemo(() => {
     const out = {};
-    STATUS.forEach(s => { out[s.id] = []; });
+    stages.forEach(s => { out[s.id] = []; });
     candidates
       .filter(c => !filter || (`${c.first} ${c.last}`).toLowerCase().includes(filter.toLowerCase()))
       .forEach(c => { if (out[c.status]) out[c.status].push(c); });
     return out;
-  }, [candidates, filter]);
+  }, [candidates, filter, stages]);
 
   const onDragStart = (e, candidate) => {
     dragging.current = { id: candidate.id, fromStatus: candidate.status };
@@ -70,7 +76,7 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
       </div>
 
       <div className="kanban">
-        {STATUS.map(col => (
+        {stages.map(col => (
           <div
             key={col.id}
             className={`kcol${dragOver === col.id ? " drag-over" : ""}`}

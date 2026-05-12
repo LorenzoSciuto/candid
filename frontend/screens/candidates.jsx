@@ -1,5 +1,4 @@
 // Candidates list screen — table with filters, API-backed
-const { STATUS: ALL_S } = window.CANDID_DATA;
 
 const SOURCES = ["Referral", "LinkedIn", "Inbound", "Job board"];
 
@@ -256,6 +255,7 @@ const HireModal = ({ candidate, onClose, onHired }) => {
 
 const CandidatesScreen = ({ onOpenCandidate }) => {
   const t = window.useT();
+  const [stages, setStages] = useState(() => window.CANDID_DATA.STATUS || []);
   const [candidates, setCandidates] = useState([]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
@@ -269,6 +269,12 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
   const [showArchived, setShowArchived] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [hireTarget, setHireTarget] = useState(null);
+
+  useEffect(() => {
+    const onStages = (e) => setStages(e.detail);
+    window.addEventListener("candid:stages", onStages);
+    return () => window.removeEventListener("candid:stages", onStages);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -404,7 +410,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
         </button>
 
         {!showArchived && (
-          <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...ALL_S]} />
+          <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...stages]} />
         )}
         <FilterPill label={t('candidates.source')} value={source} onChange={setSource} options={[{ id: "all", label: t('candidates.anySource') }, ...SOURCES.map(s => ({ id: s, label: s }))]} />
         <FilterPill label={t('candidates.experience')} value={exp} onChange={setExp} options={[

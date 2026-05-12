@@ -134,7 +134,7 @@ const RolesScreen = ({ onRoute }) => {
                                 <span className="text-13 weight-600">{openJds}</span>
                               </div>
                               <div className="col gap-1">
-                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>In people</span>
+                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('roles.inEmployees')}</span>
                                 <span className="text-13 weight-600">{filled}</span>
                               </div>
                             </div>

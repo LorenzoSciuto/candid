@@ -794,10 +794,6 @@ const SkillRow = ({ label, value, onChange }) => (
 
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
-const STATUS_LABELS = Object.fromEntries(
-  (window.CANDID_DATA.STATUS || []).map(s => [s.id, s.label])
-);
-
 const fmtDate = (iso) => {
   if (!iso) return "—";
   try {
@@ -807,12 +803,13 @@ const fmtDate = (iso) => {
 };
 
 const ActivityTab = ({ c }) => {
+  const statusLabels = Object.fromEntries((window.CANDID_DATA.STATUS || []).map(s => [s.id, s.label]));
   const raw = [
     { type: "system", when: c.appliedAt, what: "Candidate added to pipeline", sort: c.appliedAt || "0000" },
     ...(c.statusHistory || []).map(h => ({
       type: "status",
       when: h.at,
-      what: `Stage moved to ${STATUS_LABELS[h.status] || h.status}`,
+      what: `Stage moved to ${statusLabels[h.status] || h.status}`,
       who: h.by || null,
       sort: h.at,
     })),

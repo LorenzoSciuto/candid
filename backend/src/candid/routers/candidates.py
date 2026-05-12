@@ -168,7 +168,10 @@ class CandidatesRouter:
         result["interviews"] = [
             i.model_dump()
             for i in session.exec(
-                select(Interview).where(Interview.candidate_id == candidate_id)
+                select(Interview).where(
+                    Interview.candidate_id == candidate_id,
+                    Interview.org_id == org_id,
+                )
             ).all()
         ]
 

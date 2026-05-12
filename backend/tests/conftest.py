@@ -29,6 +29,7 @@ def settings() -> Settings:
     return Settings(
         database_url=TEST_DB_URL,
         fernet_key="Bx_RzRCOqO-3t6G3bXGF2eVZKHHZ7mfYF4oJwGrJ7Zg=",
+        session_secret="test-session-secret-at-least-32-bytes!!",
     )
 
 
@@ -68,6 +69,7 @@ def email_service() -> EmailService:
 @pytest.fixture(scope="session")
 def client(
     db: Database,
+    settings: Settings,
     crypto: CryptoService,
     ai_factory: AIEngineFactory,
     extractor: CVExtractor,
@@ -106,7 +108,7 @@ def client(
         EmployeesRouter(db).router,
         JobDescriptionsRouter(db, ai_factory).router,
         AIRouter(db, ai_factory).router,
-        OrganizationsRouter(db, email_service).router,
+        OrganizationsRouter(db, email_service, settings).router,
     ]:
         app.include_router(router)
 

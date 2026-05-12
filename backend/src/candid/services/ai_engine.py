@@ -2,9 +2,9 @@ import json
 import os
 from typing import Any, Optional
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from candid.models import Config
+from candid.models import OrgApiKey, OrgConfig
 from candid.prompts import Prompts
 from candid.services.crypto import CryptoService
 
@@ -62,14 +62,16 @@ class AIEngine:
         prompt = Prompts.TRANSCRIPT.format(raw_transcript=raw_transcript)
         return self._parse_json(self._call(prompt))
 
+    def summarize_interview(self, text: str) -> dict:
+        prompt = Prompts.INTERVIEW_SUMMARY.format(text=text)
+        return self._parse_json(self._call(prompt))
+
     def rewrite_text(self, text: str, instruction: str) -> str:
-        """Generic rewrite — wraps text+instruction in REWRITE_TEXT envelope."""
         prompt = Prompts.REWRITE_TEXT.format(text=text, instruction=instruction)
         result = self._parse_json(self._call(prompt))
         return result.get("result", text)
 
     def run_prompt(self, prompt: str, result_key: str = "result") -> str:
-        """Call LLM with a fully-rendered prompt; return parsed JSON[result_key]."""
         raw = self._call(prompt)
         parsed = self._parse_json(raw)
         return parsed.get(result_key, "")
@@ -98,13 +100,17 @@ class AIEngine:
             return self._call_groq(prompt)
         return self._call_openai(prompt)
 
+    _JSON_SYSTEM = "You are a recruiting assistant. Always respond with valid JSON."
+
     def _call_openai(self, prompt: str) -> str:
         from openai import OpenAI
-
         client = OpenAI(api_key=self._api_key)
         response = client.chat.completions.create(
             model=self._model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": self._JSON_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
             response_format={"type": "json_object"},
             max_tokens=1500,
         )
@@ -112,11 +118,13 @@ class AIEngine:
 
     def _call_groq(self, prompt: str) -> str:
         from groq import Groq
-
         client = Groq(api_key=self._api_key)
         response = client.chat.completions.create(
             model=self._model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": self._JSON_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
             response_format={"type": "json_object"},
             max_tokens=1500,
         )
@@ -124,14 +132,12 @@ class AIEngine:
 
     def _call_gemini(self, prompt: str) -> str:
         from google import genai
-
         client = genai.Client(api_key=self._api_key)
         response = client.models.generate_content(model=self._model, contents=prompt)
         return response.text
 
     def _call_anthropic(self, prompt: str) -> str:
         import anthropic
-
         client = anthropic.Anthropic(api_key=self._api_key)
         message = client.messages.create(
             model=self._model,
@@ -152,33 +158,24 @@ class AIEngine:
 
 
 class AIEngineFactory:
-    """Builds an AIEngine from the current database Config row."""
-
     def __init__(self, crypto: CryptoService) -> None:
         self._crypto = crypto
 
-    def from_session(self, session: Session) -> AIEngine:
-        from candid.models import ApiKey
-
-        cfg: Optional[Config] = session.get(Config, 1)
-        if not cfg:
-            return self._from_env()
-
-        provider = cfg.provider
-        model = cfg.model_name
-
-        # Try ApiKey table first (new multi-key storage)
-        api_key_row: Optional[ApiKey] = session.get(ApiKey, provider)
-        if api_key_row and api_key_row.encrypted_key:
-            api_key = self._crypto.decrypt(api_key_row.encrypted_key)
-            return AIEngine(provider, model, api_key)
-
-        # Fall back to legacy single-key in Config
-        if cfg.encrypted_api_key:
-            api_key = self._crypto.decrypt(cfg.encrypted_api_key)
-            return AIEngine(provider, model, api_key)
-
-        return self._from_env(provider, model)
+    def from_session(self, session: Session, org_id: str = "") -> AIEngine:
+        if org_id:
+            cfg = session.get(OrgConfig, org_id)
+            if cfg:
+                provider, model = cfg.provider, cfg.model_name
+                key_row = session.exec(
+                    select(OrgApiKey).where(
+                        OrgApiKey.org_id == org_id,
+                        OrgApiKey.provider == provider,
+                    )
+                ).first()
+                if key_row and key_row.encrypted_key:
+                    return AIEngine(provider, model, self._crypto.decrypt(key_row.encrypted_key))
+                return self._from_env(provider, model)
+        return self._from_env()
 
     def _from_env(self, provider: Optional[str] = None, model: Optional[str] = None) -> AIEngine:
         provider = provider or os.environ.get("DEFAULT_PROVIDER", "openai")
@@ -189,5 +186,4 @@ class AIEngineFactory:
             "gemini": os.environ.get("GEMINI_API_KEY", ""),
             "groq": os.environ.get("GROQ_API_KEY", ""),
         }
-        api_key = key_map.get(provider) or ""
-        return AIEngine(provider, model, api_key)
+        return AIEngine(provider, model, key_map.get(provider, ""))

@@ -447,7 +447,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
             {!isArchived && (
               <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
                 onClick={() => promptHire(c.id)}>
-                <Icons.UserCheck size={13} /> Hire → People
+                <Icons.UserCheck size={13} /> Hire → Employees
               </button>
             )}
             {isArchived ? (

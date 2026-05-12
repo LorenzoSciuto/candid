@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from candid.database import Database
+from candid.dependencies import UserCtx, require_user
 from candid.models import Evaluation
 from candid.schemas import EvaluationUpsert
 
@@ -21,50 +22,51 @@ class EvaluationsRouter:
         def get_evaluation(
             candidate_id: str,
             session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_user),
         ):
-            return self._get(session, candidate_id)
+            return self._get(session, user.org_id, candidate_id)
 
         @self.router.post("/")
         def upsert_evaluation(
             body: EvaluationUpsert,
             session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_user),
         ):
-            return self._upsert(session, body)
+            return self._upsert(session, user.org_id, body)
 
-    # ── Implementations ────────────────────────────────────────────────────────
-
-    def _get(self, session: Session, candidate_id: str) -> dict:
-        evaluation = session.exec(
-            select(Evaluation).where(Evaluation.candidate_id == candidate_id)
+    def _get(self, session, org_id, candidate_id) -> dict:
+        ev = session.exec(
+            select(Evaluation).where(
+                Evaluation.candidate_id == candidate_id,
+                Evaluation.org_id == org_id,
+            )
         ).first()
-        if not evaluation:
+        if not ev:
             raise HTTPException(404, "Evaluation not found")
-        return self._serialize(evaluation)
+        return self._serialize(ev)
 
-    def _upsert(self, session: Session, body: EvaluationUpsert) -> dict:
-        evaluation = session.exec(
+    def _upsert(self, session, org_id, body: EvaluationUpsert) -> dict:
+        ev = session.exec(
             select(Evaluation).where(Evaluation.candidate_id == body.candidate_id)
         ).first()
-        if not evaluation:
-            evaluation = Evaluation(candidate_id=body.candidate_id)
-
-        evaluation.human_skills = json.dumps(body.human_skills or {})
-        evaluation.technical_skills = json.dumps(body.technical_skills or {})
-        evaluation.final_recommendation = body.final_recommendation
-        evaluation.notes = body.notes
-
-        session.add(evaluation)
+        if not ev:
+            ev = Evaluation(candidate_id=body.candidate_id, org_id=org_id)
+        ev.human_skills = json.dumps(body.human_skills or {})
+        ev.technical_skills = json.dumps(body.technical_skills or {})
+        ev.final_recommendation = body.final_recommendation
+        ev.notes = body.notes
+        session.add(ev)
         session.commit()
-        session.refresh(evaluation)
-        return self._serialize(evaluation)
+        session.refresh(ev)
+        return self._serialize(ev)
 
     @staticmethod
-    def _serialize(evaluation: Evaluation) -> dict:
+    def _serialize(ev: Evaluation) -> dict:
         return {
-            "id": evaluation.id,
-            "candidate_id": evaluation.candidate_id,
-            "human_skills": json.loads(evaluation.human_skills) if evaluation.human_skills else {},
-            "technical_skills": json.loads(evaluation.technical_skills) if evaluation.technical_skills else {},
-            "final_recommendation": evaluation.final_recommendation,
-            "notes": evaluation.notes,
+            "id": ev.id,
+            "candidate_id": ev.candidate_id,
+            "human_skills": json.loads(ev.human_skills) if ev.human_skills else {},
+            "technical_skills": json.loads(ev.technical_skills) if ev.technical_skills else {},
+            "final_recommendation": ev.final_recommendation,
+            "notes": ev.notes,
         }

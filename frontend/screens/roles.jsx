@@ -143,7 +143,7 @@ const RolesScreen = ({ onRoute }) => {
                           {/* Right — actions */}
                           <div className="row gap-6" style={{ flexShrink: 0, alignItems: "center" }}>
                             <Btn onClick={() => onRoute && onRoute("jobs")} style={{ fontSize: 12 }}>Positions</Btn>
-                            <Btn onClick={() => onRoute && onRoute("employees")} style={{ fontSize: 12 }}>People</Btn>
+                            <Btn onClick={() => onRoute && onRoute("employees")} style={{ fontSize: 12 }}>Employees</Btn>
                             <button className="icon-btn" onClick={() => setEditRole(role)} title="Edit">
                               <Icons.Edit size={14} />
                             </button>

@@ -1,3 +1,4 @@
+import os
 import unittest.mock as mock
 
 from fastapi.testclient import TestClient
@@ -102,8 +103,10 @@ class TestApiKeys:
 
 class TestConfigTest:
     def test_no_key_returns_400(self, client: TestClient) -> None:
-        # No config / key stored → test endpoint should fail gracefully
-        resp = client.post("/config/test")
+        # No DB key + no env key → should fail gracefully with 400
+        _empty = {"OPENAI_API_KEY": "", "ANTHROPIC_API_KEY": "", "GEMINI_API_KEY": "", "GROQ_API_KEY": ""}
+        with mock.patch.dict(os.environ, _empty):
+            resp = client.post("/config/test")
         assert resp.status_code == 400
 
     def test_with_key_calls_ai_and_returns_ok(self, client: TestClient) -> None:

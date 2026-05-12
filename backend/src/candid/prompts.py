@@ -142,3 +142,18 @@ Return a JSON object with exactly one key:
 use plain section titles followed by newline)
 
 Return only valid JSON. No markdown fences."""
+
+    INTERVIEW_SUMMARY = """\
+You are a professional recruiting analyst. Summarize the following interview transcript or notes \
+into a clear, concise debrief.
+
+Interview text:
+{text}
+
+Return a JSON object with exactly two keys:
+- "bullets" — an array of 4-6 short, plain-English bullet points covering key observations, \
+  strengths, concerns, and standout moments
+- "summary" — a 3-5 sentence discursive paragraph giving a holistic view of the candidate \
+  based on this interview (communication, depth, fit, next steps)
+
+Return only valid JSON. No markdown fences."""

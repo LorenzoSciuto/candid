@@ -292,10 +292,10 @@ const CandidateScreen = ({ id, onRoute }) => {
           )}
           {(c.status === "offer" || c.status === "hired") && !hired && (
             <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={convertToEmployee} disabled={hiring || c.status === "hired"}>
-              {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → People"}
+              {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → Employees"}
             </Btn>
           )}
-          {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to People</Badge>}
+          {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to Employees</Badge>}
           {c.status !== "offer" && c.status !== "hired" && (
             <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { candidateName: `${c.first} ${c.last}`, candidateId: c.id, title: "Interview", type: "Live" })}>{t('candidate.startInterview')}</Btn>
           )}
@@ -813,6 +813,7 @@ const ActivityTab = ({ c }) => {
       type: "status",
       when: h.at,
       what: `Stage moved to ${STATUS_LABELS[h.status] || h.status}`,
+      who: h.by || null,
       sort: h.at,
     })),
     ...(c.pre ? [{ type: "ai", when: c.appliedAt, what: "CV analysis generated", sort: c.appliedAt || "0001" }] : []),

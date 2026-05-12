@@ -9,8 +9,69 @@ def _uid(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
+# ── Users & Organizations ─────────────────────────────────────────────────────
+
+class User(SQLModel, table=True):
+    id: str = Field(primary_key=True)           # Google sub
+    email: str = Field(unique=True, index=True)
+    name: str
+    picture: Optional[str] = None
+    title: Optional[str] = None                 # job title / role shown in profile
+    department: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: date.today().isoformat())
+
+
+class Organization(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: _uid("org"), primary_key=True)
+    name: str
+    slug: str = Field(unique=True, index=True)
+    owner_id: str
+    created_at: str = Field(default_factory=lambda: date.today().isoformat())
+
+
+class Membership(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: _uid("mbr"), primary_key=True)
+    org_id: str = Field(index=True)
+    user_id: str = Field(index=True)
+    role: str = "member"                        # "owner" | "admin" | "member"
+    joined_at: str = Field(default_factory=lambda: date.today().isoformat())
+
+
+class Invitation(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: _uid("inv"), primary_key=True)
+    org_id: str = Field(index=True)
+    email: str = Field(index=True)
+    token: str = Field(unique=True, index=True)
+    role: str = "member"
+    invited_by: str
+    created_at: str = Field(default_factory=lambda: date.today().isoformat())
+    expires_at: str
+    accepted_at: Optional[str] = None
+
+
+# ── Per-org AI config ─────────────────────────────────────────────────────────
+
+class OrgConfig(SQLModel, table=True):
+    __tablename__ = "org_config"
+    org_id: str = Field(primary_key=True)
+    provider: str = "openai"
+    model_name: str = "gpt-4o"
+    stages_json: Optional[str] = None          # JSON list of {id, label, dot}
+
+
+class OrgApiKey(SQLModel, table=True):
+    __tablename__ = "org_api_key"
+    id: str = Field(default_factory=lambda: _uid("ak"), primary_key=True)
+    org_id: str = Field(index=True)
+    provider: str = Field(index=True)
+    encrypted_key: Optional[str] = None
+
+
+# ── Recruiting entities (all scoped to org_id) ────────────────────────────────
+
 class Candidate(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("c"), primary_key=True)
+    org_id: str = Field(default="", index=True)
     first_name: str
     last_name: str
     email: Optional[str] = None
@@ -18,7 +79,7 @@ class Candidate(SQLModel, table=True):
     current_role: Optional[str] = None
     years_of_experience: Optional[int] = None
     location: Optional[str] = None
-    status: str = Field(default="new")  # new | screening | pre | eval | final | offer
+    status: str = Field(default="new")
     source: Optional[str] = None
     applied_at: str = Field(default_factory=lambda: date.today().isoformat())
     score: Optional[float] = None
@@ -30,17 +91,17 @@ class Candidate(SQLModel, table=True):
     ai_pre_analysis: Optional[str] = None
     # JSON: [{title, company, period, description}]
     career_history: Optional[str] = None
-    # JSON: [{status, at}]
+    # JSON: [{status, at, by}]
     status_history: Optional[str] = None
     extra_information: Optional[str] = None
-    # Original uploaded file stored as raw bytes (BYTEA / BLOB)
     cv_file: Optional[bytes] = None
 
 
 class Interview(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("i"), primary_key=True)
+    org_id: str = Field(default="", index=True)
     candidate_id: str = Field(foreign_key="candidate.id", index=True)
-    type: str = "Manual Paste"  # "Live Recording" | "Manual Paste"
+    type: str = "Manual Paste"
     title: Optional[str] = None
     interviewer: Optional[str] = None
     date: Optional[str] = None
@@ -53,61 +114,50 @@ class Interview(SQLModel, table=True):
 
 class Evaluation(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("e"), primary_key=True)
+    org_id: str = Field(default="", index=True)
     candidate_id: str = Field(foreign_key="candidate.id", unique=True, index=True)
-    human_skills: Optional[str] = None   # JSON: {"Communication": 4, ...}
-    technical_skills: Optional[str] = None  # JSON: {"Domain Knowledge": 5, ...}
+    human_skills: Optional[str] = None         # JSON: {"Communication": 4, ...}
+    technical_skills: Optional[str] = None     # JSON: {"Domain Knowledge": 5, ...}
     final_recommendation: str = "Pending"
     notes: Optional[str] = None
 
 
-class Config(SQLModel, table=True):
-    id: int = Field(default=1, primary_key=True)
-    provider: str = "openai"
-    model_name: str = "gpt-4o"
-    encrypted_api_key: Optional[str] = None
-
-
-class ApiKey(SQLModel, table=True):
-    """One row per AI provider; stores the encrypted API key."""
-    __tablename__ = "api_key"
-
-    provider: str = Field(primary_key=True)   # openai | anthropic | gemini | groq
-    encrypted_key: Optional[str] = None
-
-
 class Role(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("r"), primary_key=True)
+    org_id: str = Field(default="", index=True)
     name: str
     department: Optional[str] = None
     description: Optional[str] = None
-    headcount: int = Field(default=1)  # approved headcount
+    headcount: int = Field(default=1)
 
 
 class JobDescription(SQLModel, table=True):
     __tablename__ = "job_description"
 
     id: str = Field(default_factory=lambda: _uid("jd"), primary_key=True)
+    org_id: str = Field(default="", index=True)
     role_id: str = Field(foreign_key="role.id", index=True)
     title: str
     description: Optional[str] = None
     requirements: Optional[str] = None
     location: Optional[str] = None
     remote_ok: bool = False
-    status: str = "Draft"   # Active | On hold | Draft | Closed
+    status: str = "Draft"
     openings: int = 1
     owner: Optional[str] = None
 
 
 class Employee(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("emp"), primary_key=True)
+    org_id: str = Field(default="", index=True)
     first_name: str
     last_name: str
     email: Optional[str] = None
     role_id: Optional[str] = Field(default=None, foreign_key="role.id", index=True)
-    role_name: Optional[str] = None     # denormalized for display
+    role_name: Optional[str] = None
     department: Optional[str] = None
     salary: Optional[float] = None
-    currency: str = "USD"
+    currency: str = "EUR"
     hire_date: Optional[str] = None
     location: Optional[str] = None
     manager: Optional[str] = None

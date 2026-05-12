@@ -1,5 +1,5 @@
 // Settings — AI providers, locale, team
-const SettingsScreen = ({ user, onLocaleChange, onLogout }) => {
+const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
   const t = window.useT();
   const { locale, setLocale } = window.useContext(window.LocaleContext || React.createContext({ locale: 'en', setLocale: () => {} }));
   const [tab, setTab] = useState("ai");
@@ -29,7 +29,7 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout }) => {
 
       {tab === "ai"           && <AISettings t={t} />}
       {tab === "locale"       && <LocaleSettings t={t} locale={locale} onChange={handleLocale} />}
-      {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} />}
+      {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />}
       {tab === "locations"    && <LocationsSettings t={t} />}
       {tab === "team"         && <TeamSettings t={t} />}
       {tab === "integrations" && <IntegrationsSettings t={t} />}
@@ -246,12 +246,13 @@ const loadLocations = () => {
   return DEFAULT_LOCATIONS;
 };
 
-const ProfileSettings = ({ t, user, onLogout }) => {
+const ProfileSettings = ({ t, user, onLogout, onUserUpdate }) => {
   const [role, setRole] = useState(() => localStorage.getItem("candid_role") || user?.role || "");
   const [saved, setSaved] = useState(false);
 
   const save = () => {
     localStorage.setItem("candid_role", role);
+    onUserUpdate && onUserUpdate({ ...user, role });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

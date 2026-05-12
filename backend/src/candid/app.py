@@ -49,9 +49,15 @@ class Application:
             lifespan=lifespan,
         )
 
+        cors_origins = (
+            [o.strip() for o in self._settings.cors_origins.split(",")]
+            if self._settings.cors_origins != "*"
+            else ["*"]
+        )
         fastapi_app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],  # tighten in production
+            allow_origins=cors_origins,
+            allow_credentials=cors_origins != ["*"],
             allow_methods=["*"],
             allow_headers=["*"],
         )

@@ -1,9 +1,9 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
-from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.models import ApiKey, Config
@@ -38,6 +38,10 @@ class ConfigRouter:
         @self.router.put("/keys")
         def upsert_key(body: ApiKeyUpsert, session: Session = Depends(db.get_session)):
             return self._upsert_key(session, body)
+
+        @self.router.delete("/keys/{provider}", status_code=204)
+        def delete_key(provider: str, session: Session = Depends(db.get_session)):
+            self._delete_key(session, provider)
 
         @self.router.post("/test")
         def test_config(session: Session = Depends(db.get_session)):
@@ -103,6 +107,14 @@ class ConfigRouter:
             logger.exception("Failed to save API key")
             raise HTTPException(500, "Failed to save key — check server logs")
         return {"ok": True}
+
+    def _delete_key(self, session: Session, provider: str) -> None:
+        if provider not in _PROVIDERS:
+            raise HTTPException(400, f"Unknown provider: {provider}")
+        row = session.get(ApiKey, provider)
+        if row:
+            session.delete(row)
+            session.commit()
 
     def _test(self, session: Session) -> dict:
         from candid.services.ai_engine import AIEngineFactory

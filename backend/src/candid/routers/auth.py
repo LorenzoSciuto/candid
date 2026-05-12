@@ -15,12 +15,24 @@ class AuthRouter:
     def _register(self) -> None:
         settings = self._settings
 
+        @self.router.get("/config")
+        def auth_config():
+            """Public — returns auth configuration for the frontend."""
+            return {
+                "google_client_id": settings.google_client_id or None,
+                "demo_mode": settings.demo_mode,
+            }
+
         @self.router.post("/google")
         async def google_auth(body: GoogleAuthRequest):
+            if not settings.google_client_id:
+                raise HTTPException(400, "Google SSO is not configured on this server")
             return await self._verify_google(body.token)
 
         @self.router.post("/demo")
         def demo_auth():
+            if not settings.demo_mode:
+                raise HTTPException(403, "Demo mode is disabled")
             user = {"id": "demo", "name": "Demo User", "email": "demo@candid.app", "picture": None}
             token = create_token(
                 {"sub": user["id"], "email": user["email"], "name": user["name"]},

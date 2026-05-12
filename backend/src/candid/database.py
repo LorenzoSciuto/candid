@@ -1,7 +1,10 @@
+import logging
 from collections.abc import Generator
 
 from sqlalchemy import text
 from sqlmodel import SQLModel, Session, create_engine
+
+logger = logging.getLogger(__name__)
 
 # (table, column, ddl_type) — append new columns here as the schema evolves
 _MIGRATIONS: list[tuple[str, str, str]] = [
@@ -33,7 +36,7 @@ class Database:
                 ).first()
                 if not exists:
                     conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}'))
-                    print(f"Migration: added {table}.{column}")
+                    logger.info("Migration: added %s.%s", table, column)
 
     def get_session(self) -> Generator[Session, None, None]:
         with Session(self._engine) as session:

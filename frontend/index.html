@@ -13,8 +13,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Backend base URL — change to "" if serving from same origin -->
-  <script>window.API_BASE = "http://localhost:8000";</script>
+  <!-- Backend base URL — mirrors frontend protocol so HTTP/HTTPS both work -->
+  <script>window.API_BASE = (window.location.protocol === "https:" ? "https" : "http") + "://localhost:8000";</script>
 
   <!-- Google OAuth Client ID — set your own from Google Cloud Console -->
   <!-- <script>window.GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID.apps.googleusercontent.com";</script> -->
@@ -43,8 +43,8 @@
   <script type="text/babel" src="screens/candidate.jsx?v=6"></script>
   <script type="text/babel" src="screens/roles.jsx?v=6"></script>
   <script type="text/babel" src="screens/employees.jsx?v=5"></script>
-  <script type="text/babel" src="screens/settings.jsx?v=3"></script>
+  <script type="text/babel" src="screens/settings.jsx?v=4"></script>
   <script type="text/babel" src="screens/quickadd.jsx?v=5"></script>
-  <script type="text/babel" src="app.jsx?v=5"></script>
+  <script type="text/babel" src="app.jsx?v=6"></script>
 </body>
 </html>

@@ -16,6 +16,8 @@ class CandidateCreate(BaseModel):
     status: str = "new"
     source: Optional[str] = None
     extra_information: Optional[str] = None
+    cv_text: Optional[str] = None
+    cv_filename: Optional[str] = None
 
 
 class CandidateUpdate(BaseModel):
@@ -30,6 +32,8 @@ class CandidateUpdate(BaseModel):
     source: Optional[str] = None
     score: Optional[float] = None
     extra_information: Optional[str] = None
+    cv_text: Optional[str] = None
+    cv_filename: Optional[str] = None
 
 
 # ── Analysis ───────────────────────────────────────────────────────────────────

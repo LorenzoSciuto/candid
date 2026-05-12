@@ -26,8 +26,10 @@ class Candidate(SQLModel, table=True):
     cv_filename: Optional[str] = None
     job_title: Optional[str] = None
     job_description: Optional[str] = None
-    # JSON: {strengths[], weaknesses[], questions[], extracted{}}
+    # JSON: {overview, strengths[], weaknesses[], questions[], extracted{}, career_history[], role_fits[]}
     ai_pre_analysis: Optional[str] = None
+    # JSON: [{title, company, period, description}]
+    career_history: Optional[str] = None
     extra_information: Optional[str] = None
 
 

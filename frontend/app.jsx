@@ -457,7 +457,7 @@ const App = () => {
           </div>
         </div>
 
-        <window.QuickAdd open={quickOpen} onClose={() => setQuickOpen(false)} onCreate={() => openCandidate("c-004")} tweaks={t_tweaks} />
+        <window.QuickAdd open={quickOpen} onClose={() => setQuickOpen(false)} onCreate={(id) => openCandidate(id)} tweaks={t_tweaks} />
         {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
         {planOpen && <HiringPlanModal onClose={() => setPlanOpen(false)} onNavigate={navigate} />}
 

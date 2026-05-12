@@ -17,8 +17,10 @@ const mapCandidate = (c) => ({
   appliedAt: c.applied_at,
   score: c.score,
   cvText: c.cv_text,
+  cvFilename: c.cv_filename,
   jobDescription: c.job_description,
   pre: c.ai_pre_analysis || null,
+  careerHistory: c.career_history || null,
   interviews: (c.interviews || []).map(iv => ({
     id: iv.id,
     title: iv.title || iv.type,
@@ -294,7 +296,7 @@ const CandidateScreen = ({ id, onRoute }) => {
       </div>
 
       {tab === "overview"    && <OverviewTab c={c} onTab={setTab} t={t} />}
-      {tab === "cv-analysis" && <CVAnalysisTab c={c} t={t} />}
+      {tab === "cv-analysis" && <CVAnalysisTab c={c} t={t} onRefresh={refreshCandidate} />}
       {tab === "interviews"  && <InterviewsTab c={c} onRoute={onRoute} onRefresh={refreshCandidate} t={t} />}
       {tab === "evaluation"  && <EvaluationTab c={c} onSaved={refreshCandidate} t={t} />}
       {tab === "activity"    && <ActivityTab c={c} />}
@@ -323,122 +325,263 @@ const Stat = ({ label, value, unit, sub, trend, small }) => (
   </div>
 );
 
-// ── Overview ──────────────────────────────────────────────────────────────────
+// ── Fractional star rating ────────────────────────────────────────────────────
 
-const OverviewTab = ({ c, onTab, t }) => {
-  if (!c.pre) return <EmptyOverview c={c} t={t} />;
+const StarScore = ({ score, max = 5, size = 14 }) => {
+  const pct = Math.max(0, Math.min(1, score / max)) * 100;
+  const star = { fontSize: size, lineHeight: 1, letterSpacing: 1 };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 20 }}>
-      <div className="col gap-16">
-        <div className="ai-panel card-pad">
-          <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-            <span className="ai-tag"><Icons.Sparkles size={11} /> {t('candidate.overview.aiSummary')}</span>
-            <button className="link text-12" onClick={() => onTab("cv-analysis")}>{t('candidate.overview.fullAnalysis')}</button>
-          </div>
-          <div className="text-13" style={{ lineHeight: 1.6 }}>
-            {c.pre?.strengths?.[0] || "AI analysis completed."}
-          </div>
-        </div>
-
-        {c.pre?.strengths?.length > 0 && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">{t('candidate.overview.strengths')}</span><Badge kind="positive">{c.pre.strengths.length}</Badge></div>
-            <div style={{ padding: 14 }}>
-              <ul className="ai-list strengths">
-                {c.pre.strengths.slice(0, 3).map((s, i) => (
-                  <li key={i}><span className="marker"><Icons.Check size={11} /></span><span>{s}</span></li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="col gap-16">
-        <div className="card card-pad">
-          <div className="weight-500 mb-8" style={{ marginBottom: 12 }}>{t('candidate.overview.pipeline')}</div>
-          <div className="col gap-8">
-            {window.CANDID_DATA.STATUS.map((s, i) => {
-              const myIdx = window.CANDID_DATA.STATUS.findIndex(x => x.id === c.status);
-              const done = i < myIdx, here = i === myIdx;
-              return (
-                <div key={s.id} className="row gap-8" style={{ alignItems: "center" }}>
-                  <span style={{ width: 18, height: 18, borderRadius: 999, background: done || here ? s.dot : "var(--bg-sunken)", display: "grid", placeItems: "center", color: "white" }}>
-                    {done && <Icons.Check size={10} />}
-                    {here && <span style={{ width: 6, height: 6, borderRadius: 999, background: "white" }} />}
-                  </span>
-                  <span className={here ? "weight-600" : (done ? "text-secondary" : "text-muted")} style={{ fontSize: 13 }}>{s.label}</span>
-                  {here && <span className="text-12 text-muted" style={{ marginLeft: "auto" }}>now</span>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {c.pre?.questions?.length > 0 && (
-          <div className="card card-pad col gap-8">
-            <div className="weight-500">{t('candidate.overview.suggestedQ')}</div>
-            <ul className="ai-list questions" style={{ padding: "0 0 0 4px", margin: 0 }}>
-              {c.pre.questions.slice(0, 2).map((q, i) => (
-                <li key={i} style={{ paddingLeft: 8 }}><span className="marker">{i + 1}</span><span className="text-13" style={{ lineHeight: 1.5 }}>{q}</span></li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      <span style={{ ...star, color: "var(--bg-sunken)", filter: "brightness(1.8)" }}>{"★".repeat(max)}</span>
+      <span style={{ ...star, color: "var(--ai)", position: "absolute", left: 0, top: 0, overflow: "hidden", width: `${pct}%`, whiteSpace: "nowrap" }}>{"★".repeat(max)}</span>
     </div>
   );
 };
 
-const EmptyOverview = ({ c, t }) => (
-  <div className="card card-pad" style={{ textAlign: "center", padding: 48 }}>
-    <Icons.Sparkles size={24} style={{ color: "var(--ai)", marginBottom: 8 }} />
-    <div className="weight-600">{t('candidate.overview.noAnalysis')}</div>
-    <div className="text-13 text-secondary mt-4" style={{ marginBottom: 16 }}>Upload a CV to generate strengths, gaps, and tailored questions for {c.first}.</div>
-    <Btn kind="ai" icon={<Icons.Upload size={14} />}>{t('candidate.overview.runAnalysis')}</Btn>
+// ── Overview ──────────────────────────────────────────────────────────────────
+
+const OverviewTab = ({ c, onTab, t }) => (
+  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 20 }}>
+    <div className="col gap-16">
+      {c.pre ? (
+        <>
+          <div className="ai-panel card-pad">
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+              <span className="ai-tag"><Icons.Sparkles size={11} /> {t('candidate.overview.aiSummary')}</span>
+              <button className="link text-12" onClick={() => onTab("cv-analysis")}>{t('candidate.overview.fullAnalysis')}</button>
+            </div>
+            <div className="text-13" style={{ lineHeight: 1.6 }}>
+              {c.pre?.overview || c.pre?.strengths?.[0] || "AI analysis completed."}
+            </div>
+          </div>
+          {c.pre?.strengths?.length > 0 && (
+            <div className="card">
+              <div className="card-header"><span className="card-title">{t('candidate.overview.strengths')}</span><Badge kind="positive">{c.pre.strengths.length}</Badge></div>
+              <div style={{ padding: 14 }}>
+                <ul className="ai-list strengths">
+                  {c.pre.strengths.slice(0, 3).map((s, i) => (
+                    <li key={i}><span className="marker"><Icons.Check size={11} /></span><span>{s}</span></li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="card card-pad" style={{ textAlign: "center", padding: 40 }}>
+          <Icons.Sparkles size={22} style={{ color: "var(--ai)", marginBottom: 8 }} />
+          <div className="weight-600">{t('candidate.overview.noAnalysis')}</div>
+          <div className="text-13 text-secondary mt-4" style={{ marginBottom: 14 }}>Go to CV Analysis to upload a CV and run AI analysis.</div>
+          <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => onTab("cv-analysis")}>{t('candidate.overview.runAnalysis')}</Btn>
+        </div>
+      )}
+    </div>
+
+    <div className="col gap-16">
+      {/* Career history */}
+      {c.careerHistory?.length > 0 && (
+        <div className="card card-pad col gap-10">
+          <div className="weight-500" style={{ marginBottom: 4 }}>Career history</div>
+          {c.careerHistory.map((role, i) => (
+            <div key={i} className="row gap-10" style={{ alignItems: "flex-start" }}>
+              <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ai)", marginTop: 5, flexShrink: 0 }} />
+              <div className="col" style={{ minWidth: 0 }}>
+                <span className="text-13 weight-500">{role.title}</span>
+                <span className="text-12 text-muted">{[role.company, role.period].filter(Boolean).join(" · ")}</span>
+                {role.description && <span className="text-12 text-secondary" style={{ marginTop: 2 }}>{role.description}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pipeline tracker */}
+      <div className="card card-pad">
+        <div className="weight-500" style={{ marginBottom: 12 }}>{t('candidate.overview.pipeline')}</div>
+        <div className="col gap-8">
+          {window.CANDID_DATA.STATUS.map((s, i) => {
+            const myIdx = window.CANDID_DATA.STATUS.findIndex(x => x.id === c.status);
+            const done = i < myIdx, here = i === myIdx;
+            return (
+              <div key={s.id} className="row gap-8" style={{ alignItems: "center" }}>
+                <span style={{ width: 18, height: 18, borderRadius: 999, background: done || here ? s.dot : "var(--bg-sunken)", display: "grid", placeItems: "center", color: "white" }}>
+                  {done && <Icons.Check size={10} />}
+                  {here && <span style={{ width: 6, height: 6, borderRadius: 999, background: "white" }} />}
+                </span>
+                <span className={here ? "weight-600" : (done ? "text-secondary" : "text-muted")} style={{ fontSize: 13 }}>{s.label}</span>
+                {here && <span className="text-12 text-muted" style={{ marginLeft: "auto" }}>now</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {c.pre?.questions?.length > 0 && (
+        <div className="card card-pad col gap-8">
+          <div className="weight-500">{t('candidate.overview.suggestedQ')}</div>
+          <ul className="ai-list questions" style={{ padding: "0 0 0 4px", margin: 0 }}>
+            {c.pre.questions.slice(0, 2).map((q, i) => (
+              <li key={i} style={{ paddingLeft: 8 }}><span className="marker">{i + 1}</span><span className="text-13" style={{ lineHeight: 1.5 }}>{q}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   </div>
 );
 
 // ── CV Analysis ───────────────────────────────────────────────────────────────
 
-const CVAnalysisTab = ({ c, t }) => {
-  if (!c.pre) return <EmptyOverview c={c} t={t} />;
+const CVAnalysisTab = ({ c, t, onRefresh }) => {
+  const [stage, setStage] = useState("idle"); // idle | uploading | analyzing
+  const [error, setError] = useState("");
+  const [localCvText, setLocalCvText] = useState("");
+  const fileInputRef = useRef(null);
+
+  const runAnalysis = async (cvText) => {
+    const text = cvText || c.cvText || localCvText;
+    if (!text) return;
+    setError("");
+    setStage("analyzing");
+    try {
+      const res = await fetch(`${window.API_BASE}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_id: c.id, job_title: c.role || "", cv_text: text }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      onRefresh && onRefresh();
+    } catch (err) {
+      setError(`Analysis failed: ${err.message}`);
+    }
+    setStage("idle");
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setStage("uploading");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${window.API_BASE}/upload-cv`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setLocalCvText(data.text);
+      await runAnalysis(data.text);
+    } catch (err) {
+      setError(`Upload failed: ${err.message}`);
+      setStage("idle");
+    }
+  };
+
+  const displayCvText = c.cvText || localCvText;
+  const busy = stage !== "idle";
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: 20 }}>
-      <div className="col gap-12">
-        {c.pre.strengths?.length > 0 && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">{t('candidate.cv.strengths')}</span><Badge kind="positive">{c.pre.strengths.length}</Badge></div>
-            <div style={{ padding: 14 }}><ul className="ai-list strengths">{c.pre.strengths.map((s, i) => <li key={i}><span className="marker"><Icons.Check size={11} /></span><span>{s}</span></li>)}</ul></div>
+    <div className="col gap-16">
+      {/* Top bar: overview + run button */}
+      <div className="ai-panel card-pad row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+        <div className="col gap-6" style={{ flex: 1 }}>
+          <span className="ai-tag" style={{ display: "inline-flex" }}><Icons.Sparkles size={11} /> AI Overview</span>
+          <div className="text-13" style={{ lineHeight: 1.6 }}>
+            {c.pre?.overview || <span className="text-muted">No analysis yet — upload a CV or run analysis to get started.</span>}
           </div>
-        )}
-        {c.pre.weaknesses?.length > 0 && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">{t('candidate.cv.weaknesses')}</span><Badge kind="warn">{c.pre.weaknesses.length}</Badge></div>
-            <div style={{ padding: 14 }}><ul className="ai-list weaknesses">{c.pre.weaknesses.map((s, i) => <li key={i}><span className="marker"><Icons.X size={11} /></span><span>{s}</span></li>)}</ul></div>
-          </div>
-        )}
-        {c.pre.questions?.length > 0 && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">{t('candidate.cv.questions')}</span><Badge kind="ai">{c.pre.questions.length}</Badge></div>
-            <div style={{ padding: 14 }}><ul className="ai-list questions">{c.pre.questions.map((s, i) => <li key={i}><span className="marker">{i + 1}</span><span>{s}</span></li>)}</ul></div>
-          </div>
-        )}
+        </div>
+        <div className="col gap-6" style={{ alignItems: "flex-end", flexShrink: 0 }}>
+          <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc" style={{ display: "none" }} onChange={handleFileChange} />
+          {!displayCvText ? (
+            <Btn kind="ai" icon={<Icons.Upload size={14} />} disabled={busy} onClick={() => fileInputRef.current?.click()}>
+              {stage === "uploading" ? "Uploading…" : "Upload CV"}
+            </Btn>
+          ) : (
+            <Btn kind="ai" icon={<Icons.Sparkles size={14} />} disabled={busy} onClick={() => runAnalysis()}>
+              {stage === "analyzing" ? "Analyzing…" : c.pre ? "Re-run analysis" : "Run analysis"}
+            </Btn>
+          )}
+          {displayCvText && (
+            <button className="text-12 text-muted link" onClick={() => fileInputRef.current?.click()}>
+              {stage === "uploading" ? "Uploading…" : "Replace CV"}
+            </button>
+          )}
+        </div>
       </div>
-      <div className="col gap-12">
-        {c.jobDescription && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">{t('candidate.cv.jd')}</span><span className="card-sub">{t('candidate.cv.jdSub')}</span></div>
-            <div style={{ padding: 14, fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.55, whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto" }}>{c.jobDescription}</div>
+      {error && <div className="text-12" style={{ color: "var(--danger)" }}>{error}</div>}
+
+      {c.pre ? (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: 16 }}>
+          <div className="col gap-12">
+            {/* Strengths */}
+            {c.pre.strengths?.length > 0 && (
+              <div className="card">
+                <div className="card-header"><span className="card-title">{t('candidate.cv.strengths')}</span><Badge kind="positive">{c.pre.strengths.length}</Badge></div>
+                <div style={{ padding: 14 }}><ul className="ai-list strengths">{c.pre.strengths.map((s, i) => <li key={i}><span className="marker"><Icons.Check size={11} /></span><span>{s}</span></li>)}</ul></div>
+              </div>
+            )}
+            {/* Weaknesses */}
+            {c.pre.weaknesses?.length > 0 && (
+              <div className="card">
+                <div className="card-header"><span className="card-title">{t('candidate.cv.weaknesses')}</span><Badge kind="warn">{c.pre.weaknesses.length}</Badge></div>
+                <div style={{ padding: 14 }}><ul className="ai-list weaknesses">{c.pre.weaknesses.map((s, i) => <li key={i}><span className="marker"><Icons.X size={11} /></span><span>{s}</span></li>)}</ul></div>
+              </div>
+            )}
+            {/* Interview questions */}
+            {c.pre.questions?.length > 0 && (
+              <div className="card">
+                <div className="card-header"><span className="card-title">{t('candidate.cv.questions')}</span><Badge kind="ai">{c.pre.questions.length}</Badge></div>
+                <div style={{ padding: 14 }}><ul className="ai-list questions">{c.pre.questions.map((s, i) => <li key={i}><span className="marker">{i + 1}</span><span>{s}</span></li>)}</ul></div>
+              </div>
+            )}
           </div>
-        )}
-        {c.cvText && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">{t('candidate.cv.extracted')}</span><span className="card-sub">{c.cvText.split(/\s+/).length} words</span></div>
-            <div style={{ padding: 14, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--ink-secondary)", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 280, overflow: "auto" }}>{c.cvText}</div>
+
+          <div className="col gap-12">
+            {/* Role fit scores */}
+            {c.pre.role_fits?.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <span className="card-title">Role fit</span>
+                  <span className="card-sub">Scored against open positions</span>
+                </div>
+                <div style={{ padding: "10px 16px" }}>
+                  {c.pre.role_fits.map((rf, i) => (
+                    <div key={i} style={{ padding: "8px 0", borderBottom: i < c.pre.role_fits.length - 1 ? "1px solid var(--border)" : "none" }}>
+                      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                        <span className="text-13 weight-500">{rf.title}</span>
+                        <div className="row gap-6" style={{ alignItems: "center" }}>
+                          <StarScore score={rf.score} />
+                          <span className="text-12 text-mono text-muted">{Number(rf.score).toFixed(1)}</span>
+                        </div>
+                      </div>
+                      {rf.reason && <span className="text-12 text-secondary">{rf.reason}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* CV text */}
+            {displayCvText && (
+              <div className="card">
+                <div className="card-header">
+                  <span className="card-title">CV text</span>
+                  <span className="card-sub">{displayCvText.split(/\s+/).filter(Boolean).length} words</span>
+                </div>
+                <div style={{ padding: 14, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--ink-secondary)", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 320, overflow: "auto" }}>{displayCvText}</div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        !busy && !displayCvText && (
+          <div className="card card-pad" style={{ textAlign: "center", padding: 40 }}>
+            <Icons.FileText size={22} style={{ color: "var(--ink-muted)", marginBottom: 8 }} />
+            <div className="weight-500">No CV uploaded</div>
+            <div className="text-13 text-secondary mt-4" style={{ marginBottom: 14 }}>Upload a PDF or DOCX to extract skills, generate analysis, and score against open roles.</div>
+            <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => fileInputRef.current?.click()}>Upload CV</Btn>
+          </div>
+        )
+      )}
     </div>
   );
 };

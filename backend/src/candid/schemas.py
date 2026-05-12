@@ -15,6 +15,7 @@ class CandidateCreate(BaseModel):
     location: Optional[str] = None
     status: str = "new"
     source: Optional[str] = None
+    extra_information: Optional[str] = None
 
 
 class CandidateUpdate(BaseModel):

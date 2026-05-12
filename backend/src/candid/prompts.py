@@ -21,7 +21,7 @@ Return only valid JSON. No markdown fences. No explanation."""
 
     QUICK_PARSE = """\
 Extract structured candidate information from the following raw text \
-(notes, email, DM, etc.).
+(notes, email, CV, DM, etc.).
 
 Return a JSON object with exactly these keys (null if not found):
 - "first_name", "last_name" — strings
@@ -29,7 +29,9 @@ Return a JSON object with exactly these keys (null if not found):
 - "phone" — string
 - "current_role" — current job title and company as one string
 - "years_of_experience" — integer estimate, or null
-- "summary" — 1-2 sentence summary of key points
+- "location" — city / country, or null
+- "source" — how this candidate was found (Referral, LinkedIn, Inbound, etc.), or null
+- "summary" — 1-2 sentence summary of key signals and notable points
 
 Text:
 {raw_text}

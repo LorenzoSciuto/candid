@@ -310,17 +310,25 @@ const App = () => {
   // Persist locale
   useEffect(() => { localStorage.setItem("candid_locale", locale); }, [locale]);
 
-  // Inject Authorization header for all API calls
+  // Stable ref to logout so fetch wrapper never captures stale closure
+  const logoutRef = useRef(null);
+  logoutRef.current = () => { clearUser(); setUser(null); };
+
+  // Inject Authorization header + auto-logout on 401
   useEffect(() => {
     const token = user?.token;
     if (!token) return;
     const original = window._baseFetch || window.fetch;
     window._baseFetch = original;
-    window.fetch = (url, opts = {}) => {
+    window.fetch = async (url, opts = {}) => {
       if (typeof url === "string" && url.startsWith(window.API_BASE)) {
         opts = { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) } };
       }
-      return original(url, opts);
+      const res = await original(url, opts);
+      if (res.status === 401) {
+        logoutRef.current?.();
+      }
+      return res;
     };
     return () => {
       if (window._baseFetch) window.fetch = window._baseFetch;

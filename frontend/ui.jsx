@@ -292,4 +292,36 @@ const JDSelect = ({ value, onChange, roleId, placeholder = "Select position…",
   );
 };
 
-Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, useContext, useApiData });
+const Tooltip = ({ text, children }) => {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const show = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, left: r.left });
+    }
+    setVisible(true);
+  };
+
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={show} onMouseLeave={() => setVisible(false)}>
+      {children}
+      {visible && (
+        <div style={{
+          position: "fixed", top: pos.top, left: pos.left, zIndex: 9999,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 8, padding: "8px 12px", maxWidth: 260,
+          fontSize: 12, lineHeight: 1.55, color: "var(--ink-secondary)",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.18)", pointerEvents: "none",
+        }}>
+          {text}
+        </div>
+      )}
+    </span>
+  );
+};
+
+Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, Tooltip, useContext, useApiData });

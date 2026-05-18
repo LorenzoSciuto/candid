@@ -36,3 +36,13 @@ def require_user(
         )
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+def require_org(ctx: UserCtx = Depends(require_user)) -> UserCtx:
+    """Like require_user but rejects wizard/setup tokens that have no org_id."""
+    if not ctx.org_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Organization context required — complete org setup first",
+        )
+    return ctx

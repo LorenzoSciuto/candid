@@ -1,0 +1,134 @@
+# Candid — Backend
+
+FastAPI application. Python ≥ 3.11, managed with [uv](https://github.com/astral-sh/uv).
+
+---
+
+## Running
+
+```bash
+cd backend
+uv run uvicorn candid.app:create_app --factory --host 0.0.0.0 --port 8000 --reload
+# or use the root script:
+../scripts/server.sh
+```
+
+Interactive API docs: `https://localhost:8000/docs`
+
+---
+
+## Configuration
+
+Copy `.env.example` → `.env` and set:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `DATABASE_URL` | yes | PostgreSQL DSN |
+| `FERNET_KEY` | yes | Generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `SESSION_SECRET` | yes | Any string ≥ 32 bytes |
+| `GOOGLE_CLIENT_ID` | yes | OAuth 2.0 client ID from Google Cloud Console |
+| `CORS_ORIGINS` | no | Comma-separated or `*` (default) |
+| `APP_URL` | no | Used in invitation email links |
+| `SMTP_*` | no | If absent, invite links are printed to the console |
+
+API keys for AI providers (OpenAI, Anthropic, etc.) are stored in the database (Fernet-encrypted) and can be configured via the Settings UI after login.
+
+---
+
+## Architecture
+
+```
+src/candid/
+├── app.py              Application — single DI root, mounts all routers
+├── config.py           Settings (pydantic-settings, reads .env)
+├── database.py         Database — SQLModel engine, session factory, startup migrations
+├── dependencies.py     require_user / require_org FastAPI dependencies
+├── models.py           SQLModel table definitions (all multi-tenant with org_id)
+├── schemas.py          Pydantic request/response models
+├── prompts.py          All LLM prompt templates
+├── services/
+│   ├── ai_engine.py    AIEngine abstraction + AIEngineFactory
+│   ├── auth_service.py JWT create/verify (HS256, 48 h TTL)
+│   ├── crypto.py       CryptoService — Fernet encrypt/decrypt/mask
+│   ├── cv_extractor.py PDF (PyMuPDF) + DOCX text extraction
+│   └── email_service.py SMTP for team invitations
+└── routers/            One class per resource (see below)
+```
+
+### DI pattern
+
+`Application` in `app.py` is the composition root. Every router is a class:
+
+```python
+class CandidatesRouter:
+    def __init__(self, db: Database, crypto: CryptoService) -> None:
+        self._db = db
+        self.router = APIRouter(prefix="/candidates", tags=["candidates"])
+        self._register()
+
+    def _register(self) -> None:
+        @self.router.get("")
+        def list_candidates(...):
+            return self._list(...)
+```
+
+`_register()` defines route closures; all logic lives in `_method()` implementations. No global state, no circular imports.
+
+### Auth dependencies
+
+| Dependency | Accepts | Used by |
+|------------|---------|---------|
+| `require_user` | Any valid JWT, incl. wizard tokens (no `org_id`) | `/auth/*` |
+| `require_org` | JWT with `org_id` only | All data endpoints |
+
+New users receive a "wizard token" (no `org_id`) and see the org setup wizard. After creating or joining an org, a full token is issued.
+
+---
+
+## Database migrations
+
+No Alembic. `Database.create_tables()` calls `SQLModel.metadata.create_all()` (creates new tables) then `_migrate()` (applies additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements). Migrations are idempotent and run at startup.
+
+To add a column:
+
+```python
+# database.py — _migrate()
+migrations = [
+    "ALTER TABLE evaluation ADD COLUMN IF NOT EXISTS updated_at VARCHAR",
+    # append new ones here
+]
+```
+
+This approach is intentionally simple. If schema changes become complex (renames, drops, data transforms), consider adopting Alembic.
+
+---
+
+## Tests
+
+```bash
+cd backend
+uv run pytest                              # all tests (~154)
+uv run pytest tests/test_candidates.py    # single file
+uv run pytest -k "TestCreate"             # filter by class/name
+```
+
+Tests use in-memory SQLite and `app.dependency_overrides[require_org]` — no Postgres or real auth needed. Each test gets a fresh database via the `client` fixture in `conftest.py`.
+
+---
+
+## Routers
+
+| Router | Prefix | Key operations |
+|--------|--------|---------------|
+| `auth.py` | `/auth` | Google sign-in, org create, invite accept, org switch |
+| `organizations.py` | `/organizations` | CRUD, member management, invitations, delete |
+| `candidates.py` | `/candidates` | CRUD, CV download, stats |
+| `analysis.py` | — | `POST /upload-cv`, `POST /analyze` |
+| `interviews.py` | `/interviews` | CRUD, `/process` (LLM clean + summary), `/summarize` |
+| `evaluations.py` | `/evaluations` | Upsert + get (one per candidate) |
+| `roles.py` | `/roles` | CRUD, AI description improve |
+| `job_descriptions.py` | `/job-descriptions` | CRUD, AI improve |
+| `employees.py` | `/employees` | CRUD |
+| `config.py` | `/config` | AI provider config, encrypted API keys, pipeline stages |
+| `quick_add.py` | `/quick-add` | AI-extract candidate fields from free text |
+| `ai.py` | `/ai` | Email rewrite, send email |

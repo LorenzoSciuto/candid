@@ -1,13 +1,30 @@
 // Quick-Add modal — upload a CV or paste text, AI extracts candidate info
+
+// Defined outside QuickAdd so React sees a stable component type across renders.
+// If defined inside, every render creates a new function → React remounts the input → focus lost.
+const QuickAddField = ({ label, fieldKey, type = "text", parsed, onParsedChange }) => (
+  <div>
+    <label className="label">{label}</label>
+    <input
+      className="input"
+      type={type}
+      value={parsed?.[fieldKey] ?? ""}
+      onChange={e => onParsedChange(p => ({ ...p, [fieldKey]: e.target.value }))}
+    />
+  </div>
+);
+
 const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
+  const t = window.useT();
   const [text, setText] = useState("");
   const [cvName, setCvName] = useState("");
   const [stage, setStage] = useState("idle"); // idle | uploading | parsing | parsed
   const [parsed, setParsed] = useState(null);
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
+  const uploadedFileRef = useRef(null); // original file for re-upload after candidate creation
 
-  const reset = () => { setText(""); setCvName(""); setStage("idle"); setParsed(null); setError(""); };
+  const reset = () => { setText(""); setCvName(""); setStage("idle"); setParsed(null); setError(""); uploadedFileRef.current = null; };
   const close = () => { reset(); onClose(); };
 
   // ── CV upload ─────────────────────────────────────────────────────────────────
@@ -18,6 +35,7 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
     setStage("uploading");
     setCvName(file.name);
     setText("");
+    uploadedFileRef.current = file;
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -27,7 +45,7 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
       setText(data.text);
       await runParse(data.text);
     } catch (err) {
-      setError(`Upload failed: ${err.message}`);
+      setError(`${t('quickadd.uploading')} ${err.message}`);
       setStage("idle");
     }
   };
@@ -81,19 +99,6 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
     }
   };
 
-  // ── Editable form fields ──────────────────────────────────────────────────────
-  const Field = ({ label, fieldKey, type = "text" }) => (
-    <div>
-      <label className="label">{label}</label>
-      <input
-        className="input"
-        type={type}
-        value={parsed?.[fieldKey] ?? ""}
-        onChange={e => setParsed(p => ({ ...p, [fieldKey]: e.target.value }))}
-      />
-    </div>
-  );
-
   // ── Create candidate ──────────────────────────────────────────────────────────
   const handleCreate = async () => {
     const body = {
@@ -118,6 +123,12 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
       });
       if (res.ok) {
         const created = await res.json();
+        if (uploadedFileRef.current && created.id) {
+          const fd = new FormData();
+          fd.append("file", uploadedFileRef.current);
+          fd.append("candidate_id", created.id);
+          fetch(`${window.API_BASE}/upload-cv`, { method: "POST", body: fd }).catch(() => {});
+        }
         onCreate && onCreate(created.id);
         close();
         return;
@@ -126,20 +137,25 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
     close();
   };
 
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  const statusLabel = stage === "uploading" ? t('quickadd.uploading')
+    : stage === "parsing" ? t('quickadd.parsing')
+    : `${wordCount} ${t('quickadd.wordsExtracted')}`;
+
   return (
-    <Modal open={open} onClose={close} title="Quick add candidate" width={700}
+    <Modal open={open} onClose={close} title={t('quickadd.title')} width={700}
       footer={
         <>
-          <span className="text-12 text-muted">Upload a CV or paste notes — AI extracts the rest.</span>
+          <span className="text-12 text-muted">{t('quickadd.hint')}</span>
           <div className="row gap-8">
-            <Btn onClick={close}>Cancel</Btn>
+            <Btn onClick={close}>{t('common.cancel')}</Btn>
             {stage === "parsed" ? (
-              <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={handleCreate}>Create candidate</Btn>
+              <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={handleCreate}>{t('quickadd.create')}</Btn>
             ) : (
               <Btn kind="ai" icon={<Icons.Sparkles size={14} />}
                 disabled={!text.trim() || stage === "parsing" || stage === "uploading"}
                 onClick={() => runParse()}>
-                {stage === "parsing" ? "Parsing…" : stage === "uploading" ? "Uploading…" : "Extract with AI"}
+                {stage === "parsing" ? t('quickadd.parsing') : stage === "uploading" ? t('quickadd.uploading') : t('quickadd.extract')}
               </Btn>
             )}
           </div>
@@ -152,8 +168,8 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
           <div className="dropzone" onClick={handleDropzoneClick} onDragOver={e => e.preventDefault()} onDrop={handleDrop}
             style={{ padding: "16px 20px" }}>
             <Icons.Upload size={18} style={{ color: "var(--ink-muted)", marginBottom: 6 }} />
-            <div className="weight-500 text-13">Drop a PDF or DOCX, or click to browse</div>
-            <div className="text-12 text-muted mt-2">CV text extracted automatically</div>
+            <div className="weight-500 text-13">{t('quickadd.drop')}</div>
+            <div className="text-12 text-muted mt-2">{t('quickadd.dropSub')}</div>
           </div>
         ) : (
           <div className="dropzone has-file row" style={{ alignItems: "center", gap: 12, padding: "12px 16px" }}>
@@ -162,9 +178,7 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
             </div>
             <div className="col" style={{ flex: 1, minWidth: 0 }}>
               <span className="weight-500 text-13">{cvName}</span>
-              <span className="text-12 text-muted">
-                {stage === "uploading" ? "Uploading…" : stage === "parsing" ? "Parsing…" : `${text.split(/\s+/).filter(Boolean).length} words extracted`}
-              </span>
+              <span className="text-12 text-muted">{statusLabel}</span>
             </div>
             <button className="icon-btn" onClick={clearFile}><Icons.X size={13} /></button>
           </div>
@@ -172,9 +186,9 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
 
         {/* Paste text */}
         <div>
-          <label className="label">Or paste notes / message / email</label>
+          <label className="label">{t('quickadd.paste')}</label>
           <textarea className="textarea" rows={5}
-            placeholder="Notes from call, LinkedIn message, interview summary…"
+            placeholder={t('quickadd.pastePlaceholder')}
             value={text}
             onChange={e => { setText(e.target.value); if (cvName) { setCvName(""); if (fileInputRef.current) fileInputRef.current.value = ""; } }}
           />
@@ -186,21 +200,21 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
         {parsed && (
           <div className="ai-panel" style={{ padding: 16 }}>
             <div className="row gap-6" style={{ marginBottom: 14 }}>
-              <span className="ai-tag" style={{ display: "inline-flex" }}><Icons.Sparkles size={11} /> Extracted — review &amp; edit</span>
+              <span className="ai-tag" style={{ display: "inline-flex" }}><Icons.Sparkles size={11} /> {t('quickadd.extracted')}</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <Field label="First name" fieldKey="first_name" />
-              <Field label="Last name" fieldKey="last_name" />
-              <Field label="Email" fieldKey="email" type="email" />
-              <Field label="Phone" fieldKey="phone" type="tel" />
-              <Field label="Current role / company" fieldKey="current_role" />
-              <Field label="Years of experience" fieldKey="years_of_experience" type="number" />
-              <Field label="Location" fieldKey="location" />
-              <Field label="Source" fieldKey="source" />
+              <QuickAddField label={t('quickadd.field.firstName')} fieldKey="first_name" parsed={parsed} onParsedChange={setParsed} />
+              <QuickAddField label={t('quickadd.field.lastName')} fieldKey="last_name" parsed={parsed} onParsedChange={setParsed} />
+              <QuickAddField label={t('quickadd.field.email')} fieldKey="email" type="email" parsed={parsed} onParsedChange={setParsed} />
+              <QuickAddField label={t('quickadd.field.phone')} fieldKey="phone" type="tel" parsed={parsed} onParsedChange={setParsed} />
+              <QuickAddField label={t('quickadd.field.role')} fieldKey="current_role" parsed={parsed} onParsedChange={setParsed} />
+              <QuickAddField label={t('quickadd.field.experience')} fieldKey="years_of_experience" type="number" parsed={parsed} onParsedChange={setParsed} />
+              <QuickAddField label={t('quickadd.field.location')} fieldKey="location" parsed={parsed} onParsedChange={setParsed} />
+              <QuickAddField label={t('quickadd.field.source')} fieldKey="source" parsed={parsed} onParsedChange={setParsed} />
             </div>
             {parsed.summary && (
               <div style={{ marginTop: 10 }}>
-                <label className="label">Notes / summary</label>
+                <label className="label">{t('quickadd.field.notes')}</label>
                 <textarea className="textarea" rows={2} value={parsed.summary ?? ""}
                   onChange={e => setParsed(p => ({ ...p, summary: e.target.value }))} />
               </div>

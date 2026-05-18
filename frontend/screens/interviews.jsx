@@ -35,7 +35,8 @@ const ScheduleModal = ({ onClose, onSaved }) => {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const candidates = window.useApiData ? window.useApiData("/candidates", []) : [];
+  const allCandidates = window.useApiData ? window.useApiData("/candidates", []) : [];
+  const candidates = allCandidates.filter(c => c.status !== "hired" && c.status !== "archived");
   const team = window.getTeamMembers ? window.getTeamMembers() : [];
 
   const save = async () => {

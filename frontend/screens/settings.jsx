@@ -258,7 +258,7 @@ const LocaleSettings = ({ t, locale, onChange }) => (
 
 // ── Profile / Workspace ───────────────────────────────────────────────────────
 
-const DEFAULT_LOCATIONS = ["Remote", "SF / Remote", "SF", "NYC", "London", "Berlin", "Austin", "Toronto"];
+const DEFAULT_LOCATIONS = ["Milano", "Remote", "Milano / Remote", "Roma", "Torino", "Bergamo", "Brescia", "Monza"];
 
 const loadLocations = () => {
   try {
@@ -367,7 +367,7 @@ const LocationsSettings = ({ t }) => {
             value={newLoc}
             onChange={e => setNewLoc(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLocation(); } }}
-            placeholder="Add location… (e.g. Paris, Singapore)"
+            placeholder="Aggiungi sede… (es. Genova, Venezia)"
           />
           <Btn onClick={addLocation} disabled={!newLoc.trim()}>{t('common.add')}</Btn>
         </div>

@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -81,7 +81,7 @@ class Candidate(SQLModel, table=True):
     location: Optional[str] = None
     status: str = Field(default="new")
     source: Optional[str] = None
-    applied_at: str = Field(default_factory=lambda: date.today().isoformat())
+    applied_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     score: Optional[float] = None
     cv_text: Optional[str] = None
     cv_filename: Optional[str] = None
@@ -120,6 +120,7 @@ class Evaluation(SQLModel, table=True):
     technical_skills: Optional[str] = None     # JSON: {"Domain Knowledge": 5, ...}
     final_recommendation: str = "Pending"
     notes: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 class Role(SQLModel, table=True):

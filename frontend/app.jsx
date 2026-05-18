@@ -16,6 +16,8 @@ const ComposeModal = ({ onClose }) => {
   const [body, setBody] = useState("");
   const [rewriting, setRewriting] = useState(false);
   const [rewriteError, setRewriteError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
 
   const rewriteWithAI = async () => {
     if (!body.trim()) return;
@@ -39,9 +41,32 @@ const ComposeModal = ({ onClose }) => {
     setRewriting(false);
   };
 
-  const send = () => {
-    const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailto);
+  const send = async () => {
+    if (!to.trim() || !subject.trim() || !body.trim()) return;
+    setSending(true);
+    setSendError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/ai/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, subject, body }),
+      });
+      if (res.status === 503) {
+        window.open(`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+        onClose();
+        return;
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        setSendError(err?.detail || "Send failed");
+        setSending(false);
+        return;
+      }
+    } catch {
+      setSendError("Backend unreachable");
+      setSending(false);
+      return;
+    }
     onClose();
   };
 
@@ -49,9 +74,10 @@ const ComposeModal = ({ onClose }) => {
     <Modal open title={t('compose.title')} onClose={onClose} width={520}
       footer={
         <>
+          {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
-          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={send} disabled={!to.trim()}>
-            {t('compose.send')}
+          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={send} disabled={!to.trim() || sending}>
+            {sending ? t('compose.sending') || "Sending…" : t('compose.send')}
           </Btn>
         </>
       }>
@@ -161,6 +187,25 @@ const loadUser = () => {
 
 const saveUser = (u) => localStorage.setItem(SESSION_KEY, JSON.stringify(u));
 const clearUser = () => localStorage.removeItem(SESSION_KEY);
+
+// Patch window.fetch once at module load — child-component effects fire before parent
+// useEffect, so the token must be available synchronously via window._authToken.
+(function () {
+  const _orig = window.fetch;
+  window._baseFetch = _orig;
+  window.fetch = async (url, opts = {}) => {
+    if (typeof url === "string" && url.startsWith(window.API_BASE || "")) {
+      const token = window._authToken;
+      if (token) opts = { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) } };
+    }
+    const res = await _orig(url, opts);
+    if (res.status === 401 && typeof url === "string" && url.startsWith(window.API_BASE || "")) {
+      window.dispatchEvent(new CustomEvent("candid:unauthorized"));
+    }
+    return res;
+  };
+})();
+window._authToken = loadUser()?.token || null;
 
 // Decode Google JWT payload (no verification — display only)
 const decodeJwt = (token) => {
@@ -720,7 +765,7 @@ const App = () => {
   const [user, setUser] = useState(loadUser);
   const [locale, setLocale] = useState(() => localStorage.getItem("candid_locale") || "en");
   const [route, setRoute] = useState(routeFromHash);
-  const [candidateId, setCandidateId] = useState("c-001");
+  const [candidateId, setCandidateId] = useState(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
@@ -731,30 +776,15 @@ const App = () => {
   // Persist locale
   useEffect(() => { localStorage.setItem("candid_locale", locale); }, [locale]);
 
-  // Stable ref to logout so fetch wrapper never captures stale closure
-  const logoutRef = useRef(null);
-  logoutRef.current = () => { clearUser(); setUser(null); };
+  // Keep the module-level fetch interceptor's token in sync
+  useEffect(() => { window._authToken = user?.token || null; }, [user?.token]);
 
-  // Inject Authorization header + auto-logout on 401
+  // Auto-logout on 401 — dispatched by the module-level fetch interceptor
   useEffect(() => {
-    const token = user?.token;
-    if (!token) return;
-    const original = window._baseFetch || window.fetch;
-    window._baseFetch = original;
-    window.fetch = async (url, opts = {}) => {
-      if (typeof url === "string" && url.startsWith(window.API_BASE)) {
-        opts = { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) } };
-      }
-      const res = await original(url, opts);
-      if (res.status === 401) {
-        logoutRef.current?.();
-      }
-      return res;
-    };
-    return () => {
-      if (window._baseFetch) window.fetch = window._baseFetch;
-    };
-  }, [user?.token]);
+    const handler = () => { clearUser(); setUser(null); };
+    window.addEventListener("candid:unauthorized", handler);
+    return () => window.removeEventListener("candid:unauthorized", handler);
+  }, []);
 
   // Load org pipeline stages from API; broadcast to all screens via custom event
   useEffect(() => {
@@ -941,7 +971,7 @@ const App = () => {
             {route === "inbox"        && <window.InboxScreen onRoute={navigate} />}
             {route === "reports"      && <window.ReportsScreen />}
             {route === "liveroom"     && <window.LiveRoomScreen interview={liveInterview} onDone={() => navigate("interviews")} />}
-            {route === "candidate"    && <window.CandidateScreen id={candidateId} onRoute={navigate} />}
+            {route === "candidate" && candidateId && <window.CandidateScreen id={candidateId} onRoute={navigate} />}
             {route === "settings"     && <window.SettingsScreen user={user} onLocaleChange={setLocale} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />}
           </div>
         </div>

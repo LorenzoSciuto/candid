@@ -9,9 +9,23 @@ const STATUS = [
 
 const initials = (n) => n.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
-const HUMAN_SKILLS = ["Communication", "Problem Solving", "Adaptability", "Cultural Fit"];
-const TECH_SKILLS = ["Domain Knowledge", "Execution Speed", "Analytical Thinking"];
+const HUMAN_SKILLS = ["Communication", "Problem Solving", "Adaptability", "Cultural Fit", "Leadership Potential", "Ownership & Initiative"];
+const TECH_SKILLS = ["Domain Knowledge", "Analytical Thinking", "Execution Speed", "AI Tool Proficiency", "Systems Thinking"];
+
+const SKILL_KEYS = {
+  "Communication":        "skill.communication",
+  "Problem Solving":      "skill.problemSolving",
+  "Adaptability":         "skill.adaptability",
+  "Cultural Fit":         "skill.culturalFit",
+  "Leadership Potential": "skill.leadershipPotential",
+  "Ownership & Initiative": "skill.ownershipInitiative",
+  "Domain Knowledge":     "skill.domainKnowledge",
+  "Analytical Thinking":  "skill.analyticalThinking",
+  "Execution Speed":      "skill.executionSpeed",
+  "AI Tool Proficiency":  "skill.aiToolProficiency",
+  "Systems Thinking":     "skill.systemsThinking",
+};
 
 window.CANDID_DATA = {
-  STATUS, HUMAN_SKILLS, TECH_SKILLS, initials,
+  STATUS, HUMAN_SKILLS, TECH_SKILLS, SKILL_KEYS, initials,
 };

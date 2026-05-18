@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import Interview
 from candid.schemas import InterviewCreate, InterviewProcess, InterviewSummarize, InterviewUpdate
 from candid.services.ai_engine import AIEngineFactory
@@ -20,19 +20,19 @@ class InterviewsRouter:
     def _register(self) -> None:
         db = self._db
 
-        @self.router.get("/")
+        @self.router.get("")
         def list_interviews(
             candidate_id: Optional[str] = None,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._list(session, user.org_id, candidate_id)
 
-        @self.router.post("/", status_code=201)
+        @self.router.post("", status_code=201)
         def create_interview(
             body: InterviewCreate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._create(session, user.org_id, body)
 
@@ -41,7 +41,7 @@ class InterviewsRouter:
             interview_id: str,
             body: InterviewUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._update(session, user.org_id, interview_id, body)
 
@@ -50,7 +50,7 @@ class InterviewsRouter:
             interview_id: str,
             body: InterviewProcess,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._process(session, user.org_id, interview_id, body)
 
@@ -59,7 +59,7 @@ class InterviewsRouter:
             interview_id: str,
             body: InterviewSummarize,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._summarize(session, user.org_id, interview_id, body)
 

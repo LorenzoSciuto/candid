@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import OrgApiKey, OrgConfig
 from candid.schemas import ApiKeyUpsert, ConfigUpdate
 from candid.services.crypto import CryptoService
@@ -38,25 +38,25 @@ class ConfigRouter:
     def _register(self) -> None:
         db = self._db
 
-        @self.router.get("/")
+        @self.router.get("")
         def get_config(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._get(session, user.org_id)
 
-        @self.router.put("/")
+        @self.router.put("")
         def save_config(
             body: ConfigUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._save(session, user.org_id, body)
 
         @self.router.get("/keys")
         def get_keys(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._get_keys(session, user.org_id)
 
@@ -64,7 +64,7 @@ class ConfigRouter:
         def upsert_key(
             body: ApiKeyUpsert,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._upsert_key(session, user.org_id, body)
 
@@ -72,21 +72,21 @@ class ConfigRouter:
         def delete_key(
             provider: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             self._delete_key(session, user.org_id, provider)
 
         @self.router.post("/test")
         def test_config(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._test(session, user.org_id)
 
         @self.router.get("/stages")
         def get_stages(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._get_stages(session, user.org_id)
 
@@ -94,7 +94,7 @@ class ConfigRouter:
         def save_stages(
             body: StagesUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._save_stages(session, user.org_id, body.stages)
 

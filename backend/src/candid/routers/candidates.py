@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import Candidate, Evaluation, Interview
 from candid.schemas import CandidateCreate, CandidateUpdate
 
@@ -34,24 +34,24 @@ class CandidatesRouter:
         @self.router.get("/stats")
         def candidate_stats(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._stats(session, user.org_id)
 
-        @self.router.get("/")
+        @self.router.get("")
         def list_candidates(
             status: Optional[str] = None,
             q: Optional[str] = None,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._list(session, user.org_id, status, q)
 
-        @self.router.post("/", status_code=201)
+        @self.router.post("", status_code=201)
         def create_candidate(
             body: CandidateCreate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._create(session, user.org_id, body)
 
@@ -59,7 +59,7 @@ class CandidatesRouter:
         def download_cv(
             candidate_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._download_cv(session, user.org_id, candidate_id)
 
@@ -67,7 +67,7 @@ class CandidatesRouter:
         def get_candidate(
             candidate_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._get(session, user.org_id, candidate_id)
 
@@ -76,7 +76,7 @@ class CandidatesRouter:
             candidate_id: str,
             body: CandidateUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._update(session, user, candidate_id, body)
 
@@ -84,7 +84,7 @@ class CandidatesRouter:
         def delete_candidate(
             candidate_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             self._delete(session, user.org_id, candidate_id)
 
@@ -184,6 +184,7 @@ class CandidatesRouter:
                 "technical_skills": json.loads(evaluation.technical_skills) if evaluation.technical_skills else {},
                 "final_recommendation": evaluation.final_recommendation,
                 "notes": evaluation.notes,
+                "updated_at": evaluation.updated_at,
             }
 
         if candidate.ai_pre_analysis:

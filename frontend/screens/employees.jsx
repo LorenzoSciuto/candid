@@ -7,7 +7,7 @@ const getEmpLocations = () => {
     const s = localStorage.getItem("candid_locations");
     if (s) return JSON.parse(s);
   } catch {}
-  return ["Remote", "SF / Remote", "SF", "NYC", "London", "Berlin", "Austin", "Toronto"];
+  return ["Milano", "Remote", "Milano / Remote", "Roma", "Torino", "Bergamo", "Brescia", "Monza"];
 };
 
 const downloadText = (text, filename) => {
@@ -69,7 +69,24 @@ const EmployeesScreen = () => {
   const currencyCode = window.getCurrency ? window.getCurrency() : "EUR";
   const sym = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
   const fmtSalary = (n) => n ? `${sym}${(n / 1000).toFixed(0)}k` : "—";
-  const fmtBig = (n) => `${sym}${(n / 1000000).toFixed(2)}M`;
+  const fmtBig = (n) => `${sym}${(n / 1000).toFixed(0)}k`;
+
+  const [menuOpen, setMenuOpen] = useState(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(null);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [menuOpen]);
+
+  const openMenu = (e, id) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setMenuOpen(menuOpen === id ? null : id);
+  };
 
   return (
     <div className="page page-wide">
@@ -161,13 +178,9 @@ const EmployeesScreen = () => {
                   ) : <span className="text-muted">—</span>}
                 </EmpTd>
                 <EmpTd>
-                  <div className="row gap-4" onClick={ev => ev.stopPropagation()}>
-                    <button className="icon-btn" title="Edit" onClick={() => setEditEmp(employee)}>
-                      <Icons.Edit size={13} />
-                    </button>
-                    <button className="icon-btn" title="Delete" style={{ color: "var(--danger)" }}
-                      onClick={() => setDeleteTarget(employee)}>
-                      <Icons.X size={13} />
+                  <div onClick={ev => ev.stopPropagation()}>
+                    <button className="icon-btn" onClick={e => openMenu(e, employee.id)}>
+                      <Icons.MoreH size={14} />
                     </button>
                   </div>
                 </EmpTd>
@@ -179,6 +192,27 @@ const EmployeesScreen = () => {
           <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>{t('employees.noMatch')}</div>
         )}
       </div>
+
+      {/* Row action menu */}
+      {menuOpen && (() => {
+        const emp = employees.find(e => e.id === menuOpen);
+        if (!emp) return null;
+        return (
+          <div style={{ position: "fixed", top: menuPos.top, right: menuPos.right, zIndex: 500, minWidth: 160 }}
+            onMouseDown={e => e.stopPropagation()}>
+            <div className="card col" style={{ padding: "4px 0", gap: 0 }}>
+              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
+                onClick={() => { setEditEmp(emp); setMenuOpen(null); }}>
+                <Icons.Edit size={13} /> {t('common.edit')}
+              </button>
+              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start", color: "var(--danger)" }}
+                onClick={() => { setDeleteTarget(emp); setMenuOpen(null); }}>
+                <Icons.X size={13} /> {t('common.delete')}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {createOpen && <EmployeeModal t={t} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); reload(); }} />}
       {editEmp && <EmployeeEditModal t={t} employee={editEmp} onClose={() => setEditEmp(null)} onSaved={() => { setEditEmp(null); reload(); }} />}
@@ -269,7 +303,7 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
         </div>
         <div>
           <label className="label">{t('employees.form.salary')} <span className="text-11 text-muted">({currencyCode})</span></label>
-          <input className="input" type="number" value={salary} onChange={e => setSalary(e.target.value)} placeholder="e.g. 75000" />
+          <input className="input" type="number" value={salary} onChange={e => setSalary(e.target.value)} placeholder="es. 35000" />
         </div>
       </div>
     </Modal>

@@ -1,5 +1,4 @@
 // Candidates list screen — table with filters, API-backed
-const { STATUS: ALL_S } = window.CANDID_DATA;
 
 const SOURCES = ["Referral", "LinkedIn", "Inbound", "Job board"];
 
@@ -14,22 +13,25 @@ const mapCandidate = (c) => ({
 
 // ── Styled delete / destructive confirm ────────────────────────────────────────
 
-const ConfirmDialog = ({ title, message, confirmLabel, onConfirm, onCancel }) => (
-  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
-    onClick={onCancel}>
-    <div className="card col" style={{ width: 400, padding: 28, gap: 20 }}
-      onClick={e => e.stopPropagation()}>
-      <div className="col gap-6">
-        <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>{title}</span>
-        <span className="text-13 text-secondary">{message}</span>
-      </div>
-      <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
-        <Btn onClick={onCancel}>Cancel</Btn>
-        <Btn kind="danger" onClick={onConfirm}>{confirmLabel || "Delete"}</Btn>
+const ConfirmDialog = ({ title, message, confirmLabel, onConfirm, onCancel }) => {
+  const t = window.useT();
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
+      onClick={onCancel}>
+      <div className="card col" style={{ width: 400, padding: 28, gap: 20 }}
+        onClick={e => e.stopPropagation()}>
+        <div className="col gap-6">
+          <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>{title}</span>
+          <span className="text-13 text-secondary">{message}</span>
+        </div>
+        <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+          <Btn onClick={onCancel}>{t('common.cancel')}</Btn>
+          <Btn kind="danger" onClick={onConfirm}>{confirmLabel || t('common.delete')}</Btn>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── New candidate modal ────────────────────────────────────────────────────────
 
@@ -110,7 +112,7 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
           </div>
           <div>
             <label className="label">{t('employees.form.location')}</label>
-            <input className="input" value={location} onChange={e => setLocation(e.target.value)} placeholder="San Francisco, CA" />
+            <input className="input" value={location} onChange={e => setLocation(e.target.value)} placeholder="Milano, MI" />
           </div>
           <div>
             <label className="label">{t('candidates.form.experience')}</label>
@@ -256,6 +258,7 @@ const HireModal = ({ candidate, onClose, onHired }) => {
 
 const CandidatesScreen = ({ onOpenCandidate }) => {
   const t = window.useT();
+  const [stages, setStages] = useState(() => window.CANDID_DATA.STATUS || []);
   const [candidates, setCandidates] = useState([]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
@@ -269,6 +272,12 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
   const [showArchived, setShowArchived] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [hireTarget, setHireTarget] = useState(null);
+
+  useEffect(() => {
+    const onStages = (e) => setStages(e.detail);
+    window.addEventListener("candid:stages", onStages);
+    return () => window.removeEventListener("candid:stages", onStages);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -404,7 +413,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
         </button>
 
         {!showArchived && (
-          <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...ALL_S]} />
+          <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...stages]} />
         )}
         <FilterPill label={t('candidates.source')} value={source} onChange={setSource} options={[{ id: "all", label: t('candidates.anySource') }, ...SOURCES.map(s => ({ id: s, label: s }))]} />
         <FilterPill label={t('candidates.experience')} value={exp} onChange={setExp} options={[
@@ -447,7 +456,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
             {!isArchived && (
               <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
                 onClick={() => promptHire(c.id)}>
-                <Icons.UserCheck size={13} /> Hire → People
+                <Icons.UserCheck size={13} /> Hire → Employees
               </button>
             )}
             {isArchived ? (
@@ -471,9 +480,9 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Delete candidate?"
-          message={`${deleteTarget.name} and all associated data will be permanently deleted. This cannot be undone.`}
-          confirmLabel="Delete permanently"
+          title={t('candidates.deleteTitle')}
+          message={`${deleteTarget.name} ${t('candidates.deleteBody')}`}
+          confirmLabel={t('candidates.deleteConfirm')}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -522,12 +531,13 @@ const FilterPill = ({ label, value, onChange, options }) => {
 
 const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, showArchived, onArchive, onRestore, onDelete }) => (
   <div className="card" style={{ overflow: "hidden" }}>
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
+    <div style={{ overflowX: "auto" }}>
+    <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: 13.5 }}>
       <thead>
         <tr style={{ background: "var(--bg-sunken)", borderBottom: "1px solid var(--border)" }}>
           <Th>{t('candidates.col.candidate')}</Th><Th>{t('candidates.col.stage')}</Th>
           <Th>{t('candidates.col.source')}</Th><Th align="right">{t('candidates.col.exp')}</Th>
-          <Th align="right">AI Score</Th><Th align="right">Eval Avg</Th><Th>{t('candidates.col.applied')}</Th><Th width={40}></Th>
+          <Th align="right">{t('candidates.col.aiScore')}</Th><Th align="right">{t('candidates.col.evalAvg')}</Th><Th>{t('candidates.col.applied')}</Th><Th width={40}></Th>
         </tr>
       </thead>
       <tbody>
@@ -561,6 +571,7 @@ const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, showArchived, onA
         ))}
       </tbody>
     </table>
+    </div>
     {rows.length === 0 && (
       <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
         {showArchived ? "No archived candidates." : t('candidates.noMatch')}

@@ -27,12 +27,15 @@ ctx.load_cert_chain(cert, key)
 
 server = http.server.HTTPServer(("", port), http.server.SimpleHTTPRequestHandler)
 server.socket = ctx.wrap_socket(server.socket, server_side=True)
-server.serve_forever()
+try:
+    server.serve_forever()
+except KeyboardInterrupt:
+    pass
 PYEOF
 else
   echo "→  Candid frontend → http://localhost:${PORT}/index.html"
   echo "   (Chrome recommended — Live Room requires Web Speech API)"
   echo "   Tip: run ./scripts/gen-certs.sh to enable HTTPS"
   echo ""
-  exec python3 -m http.server "${PORT}"
+  python3 -m http.server "${PORT}" 2>/dev/null || true
 fi

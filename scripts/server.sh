@@ -6,10 +6,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="${SCRIPT_DIR}/../backend"
 CERT_DIR="${SCRIPT_DIR}/certs"
-HOST="${HOST:-0.0.0.0}"
+HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
 
 cd "${BACKEND_DIR}"
+
+# ── Ensure Postgres is running ────────────────────────────────────────────────
+"${SCRIPT_DIR}/postgres.sh"
 
 SSL_ARGS=()
 SCHEME="http"

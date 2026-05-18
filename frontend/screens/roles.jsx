@@ -53,7 +53,7 @@ const RolesScreen = ({ onRoute }) => {
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 }}>
         <div>
           <h1 className="page-h1">{t('roles.title')}</h1>
-          <div className="page-sub">{roles.length} roles across {depts.length} departments</div>
+          <div className="page-sub">{roles.length} {t('roles.countRoles')} · {depts.length} {t('roles.countDepts')}</div>
         </div>
         <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>{t('roles.new')}</Btn>
       </div>
@@ -62,9 +62,9 @@ const RolesScreen = ({ onRoute }) => {
       {roles.length === 0 ? (
         <div className="card card-pad" style={{ textAlign: "center", padding: 64 }}>
           <Icons.Briefcase size={28} style={{ color: "var(--ink-muted)", marginBottom: 12 }} />
-          <div className="weight-600" style={{ marginBottom: 6 }}>No roles yet</div>
-          <div className="text-13 text-secondary" style={{ marginBottom: 20 }}>Define your org structure before posting job descriptions.</div>
-          <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>Add first role</Btn>
+          <div className="weight-600" style={{ marginBottom: 6 }}>{t('roles.empty')}</div>
+          <div className="text-13 text-secondary" style={{ marginBottom: 20 }}>{t('roles.emptyDesc')}</div>
+          <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>{t('roles.addFirst')}</Btn>
         </div>
       ) : (
         <div className="col gap-24">
@@ -97,9 +97,9 @@ const RolesScreen = ({ onRoute }) => {
                             <div className="row gap-8" style={{ alignItems: "center", marginBottom: 4 }}>
                               <span className="weight-600" style={{ fontSize: 14.5 }}>{role.name}</span>
                               {hiring ? (
-                                <span className="badge ai" style={{ fontSize: 10.5 }}><span className="dot" /> Hiring</span>
+                                <span className="badge ai" style={{ fontSize: 10.5 }}><span className="dot" /> {t('roles.hiring')}</span>
                               ) : (
-                                <span className="badge" style={{ fontSize: 10.5, background: "var(--positive-soft)", color: "var(--positive)" }}>Full</span>
+                                <span className="badge" style={{ fontSize: 10.5, background: "var(--positive-soft)", color: "var(--positive)" }}>{t('roles.full')}</span>
                               )}
                             </div>
                             {role.description && (
@@ -112,7 +112,7 @@ const RolesScreen = ({ onRoute }) => {
                           {/* Center — headcount bar */}
                           <div className="col" style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
                             <div className="row" style={{ justifyContent: "space-between", marginBottom: 5 }}>
-                              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Headcount</span>
+                              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>{t('roles.headcount')}</span>
                               <span className="text-12 text-mono weight-500">{filled} / {total}</span>
                             </div>
                             <div style={{ height: 6, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden" }}>
@@ -126,15 +126,15 @@ const RolesScreen = ({ onRoute }) => {
                             </div>
                             <div className="row gap-16" style={{ marginTop: 10 }}>
                               <div className="col gap-1">
-                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Open seats</span>
+                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('roles.openSeats')}</span>
                                 <span className="text-13 weight-600" style={{ color: hiring ? "var(--warn)" : "var(--positive)" }}>{gap}</span>
                               </div>
                               <div className="col gap-1">
-                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Active JDs</span>
+                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('roles.activeJDs')}</span>
                                 <span className="text-13 weight-600">{openJds}</span>
                               </div>
                               <div className="col gap-1">
-                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>In people</span>
+                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('roles.inEmployees')}</span>
                                 <span className="text-13 weight-600">{filled}</span>
                               </div>
                             </div>
@@ -142,8 +142,8 @@ const RolesScreen = ({ onRoute }) => {
 
                           {/* Right — actions */}
                           <div className="row gap-6" style={{ flexShrink: 0, alignItems: "center" }}>
-                            <Btn onClick={() => onRoute && onRoute("jobs")} style={{ fontSize: 12 }}>Positions</Btn>
-                            <Btn onClick={() => onRoute && onRoute("employees")} style={{ fontSize: 12 }}>People</Btn>
+                            <Btn onClick={() => onRoute && onRoute("jobs")} style={{ fontSize: 12 }}>{t('roles.viewPositions')}</Btn>
+                            <Btn onClick={() => onRoute && onRoute("employees")} style={{ fontSize: 12 }}>{t('roles.viewEmployees')}</Btn>
                             <button className="icon-btn" onClick={() => setEditRole(role)} title="Edit">
                               <Icons.Edit size={14} />
                             </button>
@@ -168,7 +168,7 @@ const RolesScreen = ({ onRoute }) => {
             return (
               <div>
                 <div className="row gap-8" style={{ alignItems: "center", marginBottom: 10 }}>
-                  <span className="text-12 weight-500" style={{ color: "var(--ink-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Other</span>
+                  <span className="text-12 weight-500" style={{ color: "var(--ink-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('roles.other')}</span>
                   <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
                 </div>
               </div>
@@ -183,12 +183,12 @@ const RolesScreen = ({ onRoute }) => {
           onClick={() => setDeleteTarget(null)}>
           <div className="card col" style={{ width: 380, padding: 24, gap: 18 }} onClick={e => e.stopPropagation()}>
             <div className="col gap-4">
-              <span style={{ fontWeight: 600, fontSize: 15 }}>Delete "{deleteTarget.name}"?</span>
-              <span className="text-13 text-secondary">This only removes the role definition. Employees and JDs linked to it are not affected.</span>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>{t('roles.deleteTitle')} "{deleteTarget.name}"?</span>
+              <span className="text-13 text-secondary">{t('roles.deleteBody')}</span>
             </div>
             <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
-              <Btn onClick={() => setDeleteTarget(null)}>Cancel</Btn>
-              <Btn kind="danger" onClick={() => deleteRole(deleteTarget.id)}>Delete role</Btn>
+              <Btn onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</Btn>
+              <Btn kind="danger" onClick={() => deleteRole(deleteTarget.id)}>{t('roles.deleteRole')}</Btn>
             </div>
           </div>
         </div>
@@ -262,8 +262,8 @@ const RoleModal = ({ role, onClose, onSaved }) => {
               <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 12 }}
                 onClick={improveWithAI} disabled={improving || !desc.trim()}>
                 {improving
-                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> generating…</span>
-                  : "✨ Improve with AI"}
+                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> {t('roles.modal.generating')}</span>
+                  : t('roles.modal.improve')}
               </button>
             </div>
           </div>

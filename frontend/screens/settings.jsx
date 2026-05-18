@@ -17,6 +17,7 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
       <div className="tabs">
         {[
           { id: "ai",           label: t('settings.tab.ai') },
+          { id: "pipeline",     label: "Pipeline" },
           { id: "locale",       label: t('settings.tab.locale') },
           { id: "profile",      label: t('settings.tab.profile') },
           { id: "locations",    label: t('settings.tab.locations') },
@@ -28,10 +29,11 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
       </div>
 
       {tab === "ai"           && <AISettings t={t} />}
+      {tab === "pipeline"     && <PipelineSettings t={t} />}
       {tab === "locale"       && <LocaleSettings t={t} locale={locale} onChange={handleLocale} />}
       {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />}
       {tab === "locations"    && <LocationsSettings t={t} />}
-      {tab === "team"         && <TeamSettings t={t} />}
+      {tab === "team"         && <TeamSettings t={t} user={user} onLogout={onLogout} />}
       {tab === "integrations" && <IntegrationsSettings t={t} />}
     </div>
   );
@@ -97,16 +99,28 @@ const AISettings = ({ t }) => {
     }
   };
 
+  const parseApiError = (raw) => {
+    if (!raw) return "Test failed";
+    // Extract nested 'message' from OpenAI/Groq/Anthropic error strings
+    // e.g. "Error code: 400 - {'error': {'message': '...', ...}}"
+    try {
+      const m = raw.match(/'message':\s*"([^"]+)"/);
+      if (m) return m[1];
+      const m2 = raw.match(/'message':\s*'([^']+)'/);
+      if (m2) return m2[1];
+    } catch {}
+    return raw.length > 300 ? raw.slice(0, 300) + "…" : raw;
+  };
+
   const testConnection = async () => {
     setTestStatus("testing");
     setTestMsg("");
-    // Save active provider/model first
     await saveActiveProvider();
     try {
       const res = await fetch(`${window.API_BASE}/config/test`, { method: "POST" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail || "Test failed");
+        throw new Error(parseApiError(d.detail || "Test failed"));
       }
       const d = await res.json();
       setTestStatus("ok");
@@ -130,12 +144,20 @@ const AISettings = ({ t }) => {
           </div>
           <div className="row gap-8">
             {testStatus === "ok" && <Badge kind="positive"><span className="dot" />{testMsg}</Badge>}
-            {testStatus === "error" && <Badge kind="warn">{testMsg}</Badge>}
             <Btn onClick={testConnection} disabled={testStatus === "testing"}>
               {testStatus === "testing" ? t('settings.ai.testing') : t('common.test')}
             </Btn>
           </div>
         </div>
+        {testStatus === "error" && (
+          <div className="row gap-10" style={{ background: "oklch(0.97 0.02 25)", border: "1px solid oklch(0.88 0.06 25)", borderRadius: 8, padding: "10px 14px", alignItems: "flex-start" }}>
+            <Icons.X size={14} style={{ color: "var(--danger)", flexShrink: 0, marginTop: 1 }} />
+            <div className="col gap-2">
+              <span className="weight-500 text-13" style={{ color: "var(--danger)" }}>Connection failed — {activeProvider} / {activeModel}</span>
+              <span className="text-12 text-mono" style={{ color: "oklch(0.45 0.08 25)", wordBreak: "break-word" }}>{testMsg}</span>
+            </div>
+          </div>
+        )}
 
         <div className="row gap-8" style={{ flexWrap: "wrap" }}>
           {PROVIDERS.map(p => (
@@ -236,7 +258,7 @@ const LocaleSettings = ({ t, locale, onChange }) => (
 
 // ── Profile / Workspace ───────────────────────────────────────────────────────
 
-const DEFAULT_LOCATIONS = ["Remote", "SF / Remote", "SF", "NYC", "London", "Berlin", "Austin", "Toronto"];
+const DEFAULT_LOCATIONS = ["Milano", "Remote", "Milano / Remote", "Roma", "Torino", "Bergamo", "Brescia", "Monza"];
 
 const loadLocations = () => {
   try {
@@ -345,7 +367,7 @@ const LocationsSettings = ({ t }) => {
             value={newLoc}
             onChange={e => setNewLoc(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLocation(); } }}
-            placeholder="Add location… (e.g. Paris, Singapore)"
+            placeholder="Aggiungi sede… (es. Genova, Venezia)"
           />
           <Btn onClick={addLocation} disabled={!newLoc.trim()}>{t('common.add')}</Btn>
         </div>
@@ -354,69 +376,114 @@ const LocationsSettings = ({ t }) => {
   );
 };
 
-// ── Team ──────────────────────────────────────────────────────────────────────
+// ── Pipeline Stages ───────────────────────────────────────────────────────────
 
-const DEFAULT_TEAM = [
-  { name: "Sasha Rivera", email: "sasha@candid.app", role: "Hiring Manager" },
-  { name: "Devon Park",   email: "devon@candid.app", role: "Recruiter" },
-  { name: "Avi Chen",     email: "avi@candid.app",   role: "Engineering Manager" },
-  { name: "Mira Khan",    email: "mira@candid.app",  role: "Recruiter" },
-];
-
-const loadTeam = () => {
-  try { const s = localStorage.getItem("candid_team"); if (s) return JSON.parse(s); } catch {}
-  return DEFAULT_TEAM;
-};
-
-const saveTeamStore = (members) => localStorage.setItem("candid_team", JSON.stringify(members));
-
-// Exported for use in jobs modal
-window.getTeamMembers = loadTeam;
-
-// ── Currency helpers ──────────────────────────────────────────────────────────
-
-const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "DKK", "NOK"];
-
-const loadCurrency = () => localStorage.getItem("candid_currency") || "EUR";
-
-window.getCurrency = loadCurrency;
-
-const TeamSettings = ({ t }) => {
-  const [team, setTeam] = useState(loadTeam);
-  const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState("");
+const PipelineSettings = ({ t }) => {
+  const [stages, setStages] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newColor, setNewColor] = useState("#6366f1");
 
-  const update = (members) => { setTeam(members); saveTeamStore(members); };
+  useEffect(() => {
+    fetch(`${window.API_BASE}/config/stages`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (Array.isArray(d)) setStages(d); })
+      .catch(() => {});
+  }, []);
 
-  const add = () => {
-    if (!newName.trim()) return;
-    update([...team, { name: newName.trim(), email: newEmail.trim(), role: newRole.trim() }]);
-    setNewName(""); setNewEmail(""); setNewRole(""); setAdding(false);
+  const save = async (updatedStages) => {
+    setSaving(true);
+    setSaved(false);
+    setError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/config/stages`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stages: updatedStages }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to save");
+      const data = await res.json();
+      setStages(data.stages);
+      window.CANDID_DATA.STATUS = data.stages;
+      setSaved(true);
+    } catch (err) {
+      setError(err.message);
+    }
+    setSaving(false);
   };
 
-  const remove = (i) => update(team.filter((_, idx) => idx !== i));
+  const addStage = () => {
+    if (!newLabel.trim() || !stages) return;
+    const id = newLabel.trim().toLowerCase().replace(/\s+/g, "_");
+    const updated = [...stages, { id, label: newLabel.trim(), dot: newColor }];
+    setStages(updated);
+    setNewLabel("");
+    setAdding(false);
+    save(updated);
+  };
+
+  const removeStage = (id) => {
+    const updated = stages.filter(s => s.id !== id);
+    setStages(updated);
+    save(updated);
+  };
+
+  const updateLabel = (id, label) => {
+    setStages(prev => prev.map(s => s.id === id ? { ...s, label } : s));
+  };
+
+  const updateColor = (id, dot) => {
+    const updated = stages.map(s => s.id === id ? { ...s, dot } : s);
+    setStages(updated);
+    save(updated);
+  };
+
+  const move = (i, dir) => {
+    const arr = [...stages];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setStages(arr);
+    save(arr);
+  };
+
+  if (!stages) return <div className="text-13 text-muted" style={{ padding: "24px 0" }}>{t('common.loading')}</div>;
 
   return (
     <div className="col gap-16">
       <div className="card">
         <div className="card-header">
-          <span className="card-title">{t('settings.team.members')}</span>
-          <Btn icon={<Icons.Plus size={14} />} onClick={() => setAdding(v => !v)}>{t('settings.team.invite')}</Btn>
+          <span className="card-title">Pipeline stages</span>
+          <div className="row gap-8">
+            {saved && <Badge kind="positive">Saved</Badge>}
+            <Btn icon={<Icons.Plus size={14} />} onClick={() => setAdding(v => !v)}>Add stage</Btn>
+          </div>
         </div>
-        {team.map((m, i) => (
-          <div key={i} className="row" style={{ padding: "12px 18px", borderBottom: i === team.length - 1 && !adding ? 0 : "1px solid var(--border-soft)", justifyContent: "space-between" }}>
-            <div className="row gap-12">
-              <Avatar name={m.name} />
-              <div className="col">
-                <span className="weight-500">{m.name}</span>
-                <span className="text-12 text-muted">{m.email || "—"}</span>
+        {stages.map((stage, i) => (
+          <div key={stage.id} className="row" style={{ padding: "11px 18px", borderBottom: "1px solid var(--border-soft)", justifyContent: "space-between", gap: 12 }}>
+            <div className="row gap-12" style={{ flex: 1 }}>
+              <div className="row gap-6" style={{ flexShrink: 0 }}>
+                <button className="icon-btn" onClick={() => move(i, -1)} disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }}>
+                  <Icons.ChevronLeft size={13} />
+                </button>
+                <button className="icon-btn" onClick={() => move(i, 1)} disabled={i === stages.length - 1} style={{ opacity: i === stages.length - 1 ? 0.3 : 1 }}>
+                  <Icons.ChevronRight size={13} />
+                </button>
               </div>
+              <span className="kdot" style={{ background: stage.dot, flexShrink: 0 }} />
+              <input className="input" value={stage.label} style={{ maxWidth: 200 }}
+                onChange={e => updateLabel(stage.id, e.target.value)}
+                onBlur={() => save(stages)} />
+              <span className="text-12 text-muted">{stage.id}</span>
             </div>
-            <div className="row gap-8">
-              {m.role && <Badge>{m.role}</Badge>}
-              <button className="icon-btn" onClick={() => remove(i)} title="Remove">
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <input type="color" value={stage.dot?.startsWith("#") ? stage.dot : "#6366f1"}
+                onChange={e => updateColor(stage.id, e.target.value)}
+                style={{ width: 28, height: 28, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none" }} />
+              <button className="icon-btn" style={{ color: "var(--danger)" }} onClick={() => removeStage(stage.id)}>
                 <Icons.X size={13} />
               </button>
             </div>
@@ -424,18 +491,233 @@ const TeamSettings = ({ t }) => {
         ))}
         {adding && (
           <div className="col gap-10" style={{ padding: "14px 18px", borderTop: "1px solid var(--border-soft)" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              <div><label className="label">{t('employees.form.first').replace(' name','') + ' name'}</label><input className="input" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jane Smith" autoFocus /></div>
-              <div><label className="label">{t('employees.form.email')}</label><input className="input" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="jane@company.com" /></div>
-              <div><label className="label">{t('employees.form.role')}</label><input className="input" value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="Recruiter" /></div>
+            <div className="row gap-12">
+              <div style={{ flex: 1 }}>
+                <label className="label">Label</label>
+                <input className="input" value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Technical Screen" autoFocus onKeyDown={e => e.key === "Enter" && addStage()} />
+              </div>
+              <div>
+                <label className="label">Color</label>
+                <div style={{ marginTop: 6 }}>
+                  <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)}
+                    style={{ width: 36, height: 32, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none" }} />
+                </div>
+              </div>
             </div>
+            {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
             <div className="row gap-8">
-              <Btn kind="primary" onClick={add} disabled={!newName.trim()}>{t('common.add')}</Btn>
-              <Btn onClick={() => setAdding(false)}>{t('common.cancel')}</Btn>
+              <Btn kind="primary" onClick={addStage} disabled={!newLabel.trim() || saving}>Add</Btn>
+              <Btn onClick={() => setAdding(false)}>Cancel</Btn>
             </div>
           </div>
         )}
       </div>
+      <div className="text-12 text-muted">Stage IDs are generated from labels and used in candidate records. Removing a stage will hide candidates in that stage until reassigned.</div>
+    </div>
+  );
+};
+
+// ── Team ──────────────────────────────────────────────────────────────────────
+
+// Currency helpers (exported for use in other screens)
+const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "DKK", "NOK"];
+const loadCurrency = () => localStorage.getItem("candid_currency") || "EUR";
+window.getCurrency = loadCurrency;
+
+// getTeamMembers still exported for compatibility with jobs modal — returns cached org members
+window.getTeamMembers = () => {
+  try { const s = localStorage.getItem("candid_team_cache"); if (s) return JSON.parse(s); } catch {}
+  return [];
+};
+
+const TeamSettings = ({ t, user, onLogout }) => {
+  const [org, setOrg] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const reload = () => {
+    setLoading(true);
+    fetch(`${window.API_BASE}/organizations/current`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        setOrg(d);
+        if (d?.members) {
+          localStorage.setItem("candid_team_cache", JSON.stringify(
+            d.members.map(m => ({ name: m.name, email: m.email, role: m.role }))
+          ));
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(reload, []);
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteMsg("");
+    try {
+      const res = await fetch(`${window.API_BASE}/organizations/current/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      if (res.ok) {
+        setInviteMsg("Invitation sent.");
+        setInviteEmail("");
+        setAdding(false);
+        reload();
+      } else {
+        const body = await res.json().catch(() => null);
+        setInviteMsg(body?.detail || "Failed to send invitation.");
+      }
+    } catch {
+      setInviteMsg("Network error.");
+    }
+    setInviting(false);
+  };
+
+  const removeMember = async (userId) => {
+    await fetch(`${window.API_BASE}/organizations/current/members/${userId}`, { method: "DELETE" }).catch(() => {});
+    reload();
+  };
+
+  const deleteOrg = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`${window.API_BASE}/organizations/current`, { method: "DELETE" });
+    } catch {}
+    setDeleting(false);
+    onLogout && onLogout();
+  };
+
+  const isOwner = user && org && org.owner_id === user.id;
+  const members = org?.members || [];
+  const pending = org?.pending_invitations || [];
+
+  return (
+    <div className="col gap-16">
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">{org ? org.name : t('settings.team.members')}</span>
+          <Btn icon={<Icons.Plus size={14} />} onClick={() => setAdding(v => !v)}>{t('settings.team.invite')}</Btn>
+        </div>
+        {loading && <div className="text-13 text-muted" style={{ padding: "20px 18px" }}>{t('common.loading')}</div>}
+        {!loading && members.map((member) => (
+          <div key={member.user_id} className="row" style={{ padding: "12px 18px", borderBottom: "1px solid var(--border-soft)", justifyContent: "space-between" }}>
+            <div className="row gap-12">
+              <Avatar name={member.name} src={member.picture} />
+              <div className="col">
+                <span className="weight-500">{member.name}</span>
+                <span className="text-12 text-muted">{member.email || "—"}</span>
+              </div>
+            </div>
+            <div className="row gap-8">
+              <select className="select" style={{ fontSize: 12, padding: "3px 8px", height: "auto" }}
+                value={member.role}
+                onChange={async e => {
+                  const role = e.target.value;
+                  await fetch(`${window.API_BASE}/organizations/current/members/${member.user_id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ role }),
+                  }).catch(() => {});
+                  reload();
+                }}>
+                <option value="owner">Owner</option>
+                <option value="admin">Admin</option>
+                <option value="member">Member</option>
+              </select>
+              <button className="icon-btn" onClick={() => removeMember(member.user_id)} title="Remove">
+                <Icons.X size={13} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {!loading && pending.length > 0 && (
+          <>
+            <div className="text-11 text-muted" style={{ padding: "10px 18px 4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Pending invitations</div>
+            {pending.map((invitation) => (
+              <div key={invitation.id} className="row" style={{ padding: "10px 18px", borderBottom: "1px solid var(--border-soft)", justifyContent: "space-between", opacity: 0.7 }}>
+                <div className="row gap-12">
+                  <Avatar name={invitation.email} />
+                  <span className="text-13">{invitation.email}</span>
+                </div>
+                <Badge>Pending</Badge>
+              </div>
+            ))}
+          </>
+        )}
+        {adding && (
+          <div className="col gap-10" style={{ padding: "14px 18px", borderTop: "1px solid var(--border-soft)" }}>
+            <div>
+              <label className="label">{t('employees.form.email')}</label>
+              <input className="input" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="colleague@company.com" autoFocus
+                onKeyDown={e => e.key === "Enter" && sendInvite()} />
+            </div>
+            {inviteMsg && <span className="text-12" style={{ color: inviteMsg.includes("sent") ? "var(--positive)" : "var(--danger)" }}>{inviteMsg}</span>}
+            <div className="row gap-8">
+              <Btn kind="primary" onClick={sendInvite} disabled={!inviteEmail.trim() || inviting}>
+                {inviting ? "Sending…" : t('settings.team.invite')}
+              </Btn>
+              <Btn onClick={() => { setAdding(false); setInviteMsg(""); }}>{t('common.cancel')}</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Danger zone — owner only */}
+      {isOwner && (
+        <div className="card" style={{ border: "1px solid var(--danger-soft, oklch(0.88 0.06 25))" }}>
+          <div className="card-header" style={{ borderBottom: "1px solid var(--danger-soft, oklch(0.88 0.06 25))" }}>
+            <span className="card-title" style={{ color: "var(--danger)" }}>Danger zone</span>
+          </div>
+          <div className="row" style={{ padding: "16px 18px", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+            <div className="col gap-2">
+              <span className="weight-500">Delete this organization</span>
+              <span className="text-12 text-secondary">Permanently deletes the org and all its data — candidates, interviews, employees, roles, and settings. Cannot be undone.</span>
+            </div>
+            <Btn kind="danger" onClick={() => { setConfirmName(""); setDeleteOpen(true); }} style={{ flexShrink: 0 }}>
+              Delete organization
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
+          onClick={() => !deleting && setDeleteOpen(false)}>
+          <div className="card col" style={{ width: 420, padding: 28, gap: 16 }} onClick={e => e.stopPropagation()}>
+            <div className="col gap-4">
+              <span style={{ fontWeight: 600, fontSize: 16, color: "var(--danger)" }}>Delete "{org?.name}"?</span>
+              <span className="text-13 text-secondary">
+                This will permanently delete the organization and <strong>all its data</strong>: candidates, interviews, employees, roles, positions, API keys, and settings. This action cannot be undone.
+              </span>
+            </div>
+            <div>
+              <label className="label">Type <strong>{org?.name}</strong> to confirm</label>
+              <input className="input" value={confirmName} onChange={e => setConfirmName(e.target.value)}
+                placeholder={org?.name} autoFocus />
+            </div>
+            <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+              <Btn onClick={() => setDeleteOpen(false)} disabled={deleting}>{t('common.cancel')}</Btn>
+              <Btn kind="danger" onClick={deleteOrg}
+                disabled={confirmName !== org?.name || deleting}>
+                {deleting ? "Deleting…" : "Delete forever"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

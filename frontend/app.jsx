@@ -16,6 +16,8 @@ const ComposeModal = ({ onClose }) => {
   const [body, setBody] = useState("");
   const [rewriting, setRewriting] = useState(false);
   const [rewriteError, setRewriteError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
 
   const rewriteWithAI = async () => {
     if (!body.trim()) return;
@@ -39,9 +41,32 @@ const ComposeModal = ({ onClose }) => {
     setRewriting(false);
   };
 
-  const send = () => {
-    const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailto);
+  const send = async () => {
+    if (!to.trim() || !subject.trim() || !body.trim()) return;
+    setSending(true);
+    setSendError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/ai/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, subject, body }),
+      });
+      if (res.status === 503) {
+        window.open(`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+        onClose();
+        return;
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        setSendError(err?.detail || "Send failed");
+        setSending(false);
+        return;
+      }
+    } catch {
+      setSendError("Backend unreachable");
+      setSending(false);
+      return;
+    }
     onClose();
   };
 
@@ -49,9 +74,10 @@ const ComposeModal = ({ onClose }) => {
     <Modal open title={t('compose.title')} onClose={onClose} width={520}
       footer={
         <>
+          {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
-          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={send} disabled={!to.trim()}>
-            {t('compose.send')}
+          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={send} disabled={!to.trim() || sending}>
+            {sending ? t('compose.sending') || "Sending…" : t('compose.send')}
           </Btn>
         </>
       }>
@@ -162,6 +188,25 @@ const loadUser = () => {
 const saveUser = (u) => localStorage.setItem(SESSION_KEY, JSON.stringify(u));
 const clearUser = () => localStorage.removeItem(SESSION_KEY);
 
+// Patch window.fetch once at module load — child-component effects fire before parent
+// useEffect, so the token must be available synchronously via window._authToken.
+(function () {
+  const _orig = window.fetch;
+  window._baseFetch = _orig;
+  window.fetch = async (url, opts = {}) => {
+    if (typeof url === "string" && url.startsWith(window.API_BASE || "")) {
+      const token = window._authToken;
+      if (token) opts = { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) } };
+    }
+    const res = await _orig(url, opts);
+    if (res.status === 401 && typeof url === "string" && url.startsWith(window.API_BASE || "")) {
+      window.dispatchEvent(new CustomEvent("candid:unauthorized"));
+    }
+    return res;
+  };
+})();
+window._authToken = loadUser()?.token || null;
+
 // Decode Google JWT payload (no verification — display only)
 const decodeJwt = (token) => {
   try {
@@ -181,6 +226,440 @@ const GoogleLogo = () => (
   </svg>
 );
 
+// ── Org Setup Wizard ──────────────────────────────────────────────────────────
+
+const OrgSetupWizard = ({ user, onComplete }) => {
+  // Steps: "org" → pick/create org  |  "profile" → name + role + dept  |  "invite" → invite teammates
+  const [step, setStep] = useState("org");
+  const [subStep, setSubStep] = useState(
+    (user.pending_invitations?.length > 0) ? "invites" : "choose"
+  );
+  const [orgName, setOrgName] = useState("");
+  const [inviteToken, setInviteToken] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [pendingOrg, setPendingOrg] = useState(null);
+  const [displayName, setDisplayName] = useState(user.name || "");
+  const [title, setTitle] = useState(user.title || "");
+  const [department, setDepartment] = useState(user.department || "");
+  const [inviteEmails, setInviteEmails] = useState(["", "", ""]);
+  const [inviteSending, setInviteSending] = useState(false);
+  // Setup step
+  const [aiProvider, setAiProvider] = useState("openai");
+  const [aiModel, setAiModel] = useState("gpt-4o");
+  const [aiKey, setAiKey] = useState("");
+  const [setupLocations, setSetupLocations] = useState(["Remote", "On-site", "Hybrid"]);
+  const [newSetupLoc, setNewSetupLoc] = useState("");
+  const [setupSaving, setSetupSaving] = useState(false);
+
+  const invitations = user.pending_invitations || [];
+
+  const apiHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${user.token}` };
+
+  const joinByInvitation = async (invitationId) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/auth/accept-invite`, {
+        method: "POST",
+        headers: apiHeaders,
+        body: JSON.stringify({ invitation_id: invitationId }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to join organization");
+      const data = await res.json();
+      setPendingOrg({ token: data.token, org_id: data.org_id, org: data.org });
+      setStep("profile");
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const joinByToken = async () => {
+    if (!inviteToken.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/auth/accept-invite`, {
+        method: "POST",
+        headers: apiHeaders,
+        body: JSON.stringify({ token: inviteToken.trim() }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Invalid invitation token");
+      const data = await res.json();
+      setPendingOrg({ token: data.token, org_id: data.org_id, org: data.org });
+      setStep("profile");
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const createOrg = async () => {
+    if (!orgName.trim() || loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/auth/organizations`, {
+        method: "POST",
+        headers: apiHeaders,
+        body: JSON.stringify({ name: orgName.trim() }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to create organization");
+      const data = await res.json();
+      setPendingOrg({ token: data.token, org_id: data.org.id, org: { id: data.org.id, name: data.org.name, role: "owner" } });
+      setStep("profile");
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const completeProfile = async () => {
+    await fetch(`${window.API_BASE}/auth/users/me`, {
+      method: "PATCH",
+      headers: apiHeaders,
+      body: JSON.stringify({
+        name: displayName.trim() || undefined,
+        title: title.trim() || undefined,
+        department: department.trim() || undefined,
+      }),
+    }).catch(() => {});
+    setStep("setup");
+  };
+
+  const saveSetup = async () => {
+    setSetupSaving(true);
+    const orgToken = pendingOrg.token;
+    const orgHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${orgToken}` };
+    // Save AI provider + model
+    await fetch(`${window.API_BASE}/config`, {
+      method: "PUT",
+      headers: orgHeaders,
+      body: JSON.stringify({ provider: aiProvider, model_name: aiModel }),
+    }).catch(() => {});
+    // Save API key if provided
+    if (aiKey.trim()) {
+      await fetch(`${window.API_BASE}/config/keys`, {
+        method: "PUT",
+        headers: orgHeaders,
+        body: JSON.stringify({ provider: aiProvider, api_key: aiKey.trim() }),
+      }).catch(() => {});
+    }
+    // Save locations to localStorage
+    localStorage.setItem("candid_locations", JSON.stringify(setupLocations));
+    setSetupSaving(false);
+    setStep("invite");
+  };
+
+  const enterWorkspace = () => {
+    onComplete({
+      id: user.id,
+      email: user.email,
+      picture: user.picture,
+      name: displayName.trim() || user.name,
+      title: title.trim() || undefined,
+      department: department.trim() || undefined,
+      token: pendingOrg.token,
+      org_id: pendingOrg.org_id,
+      orgs: [pendingOrg.org],
+      needs_org_setup: false,
+    });
+  };
+
+  const sendInvites = async () => {
+    const emails = inviteEmails.map(e => e.trim()).filter(Boolean);
+    if (emails.length) {
+      setInviteSending(true);
+      const orgToken = pendingOrg.token;
+      await Promise.all(emails.map(email =>
+        fetch(`${window.API_BASE}/organizations/current/invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${orgToken}` },
+          body: JSON.stringify({ email }),
+        }).catch(() => {})
+      ));
+      setInviteSending(false);
+    }
+    setStep("recap");
+  };
+
+  const cardStyle = (active) => ({
+    padding: 20, cursor: "pointer", textAlign: "left",
+    border: `2px solid ${active ? "var(--ink)" : "var(--border)"}`,
+    borderRadius: 10, background: active ? "var(--surface)" : "var(--bg-sunken)",
+  });
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
+      <div className="card col" style={{ width: 480, padding: 40, gap: 24 }}>
+        {/* Header */}
+        <div className="col" style={{ alignItems: "center", gap: 8 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 10, background: "var(--ink)", display: "grid", placeItems: "center", color: "white", fontSize: 24, fontWeight: 600 }}>C</div>
+          {step === "org"     && <span style={{ fontSize: 20, fontWeight: 600 }}>Welcome, {(displayName || user.name)?.split(" ")[0]}</span>}
+          {step === "profile" && <span style={{ fontSize: 20, fontWeight: 600 }}>About you</span>}
+          {step === "setup"   && <span style={{ fontSize: 20, fontWeight: 600 }}>Quick setup</span>}
+          {step === "invite"  && <span style={{ fontSize: 20, fontWeight: 600 }}>Invite your team</span>}
+          {step === "recap"   && <span style={{ fontSize: 20, fontWeight: 600 }}>You're all set</span>}
+          <span className="text-13 text-secondary" style={{ textAlign: "center" }}>
+            {step === "org"     ? "Set up your workspace to get started"
+           : step === "profile" ? "Help your teammates know who you are"
+           : step === "setup"   ? "Configure AI and office locations — skip any time"
+           : step === "invite"  ? "Add colleagues to your organization"
+           : "Review your setup before entering the workspace"}
+          </span>
+        </div>
+
+        {/* Step indicator */}
+        {(() => {
+          const steps = ["org", "profile", "setup", "invite", "recap"];
+          const current = steps.indexOf(step);
+          return (
+            <div className="row gap-8" style={{ justifyContent: "center" }}>
+              {steps.map((s, i) => (
+                <div key={s} style={{ width: 20, height: 4, borderRadius: 2, background: i <= current ? "var(--ink)" : "var(--border)" }} />
+              ))}
+            </div>
+          );
+        })()}
+
+        <div style={{ height: 1, background: "var(--border)" }} />
+
+        {/* ── Step 1: Org ── */}
+        {step === "org" && subStep === "invites" && (
+          <div className="col gap-12">
+            <span className="weight-600 text-14">You have pending invitations</span>
+            {invitations.map(inv => (
+              <button key={inv.invitation_id} className="col" style={cardStyle(false)}
+                onClick={() => !loading && joinByInvitation(inv.invitation_id)}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <div className="col gap-2">
+                    <span className="weight-600">{inv.org_name}</span>
+                    <span className="text-12 text-secondary">Join as {inv.role}</span>
+                  </div>
+                  <span className="text-12 text-mono" style={{ background: "var(--bg-sunken)", padding: "3px 10px", borderRadius: 6 }}>
+                    {loading ? "Joining…" : "Join →"}
+                  </span>
+                </div>
+              </button>
+            ))}
+            {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
+            <div style={{ height: 1, background: "var(--border-soft)" }} />
+            <button className="col" style={cardStyle(false)} onClick={() => { setSubStep("create"); setError(""); }}>
+              <div className="weight-600" style={{ marginBottom: 2 }}>Create a new organization instead</div>
+              <div className="text-12 text-secondary">Start fresh with your own workspace</div>
+            </button>
+          </div>
+        )}
+
+        {step === "org" && subStep === "choose" && (
+          <div className="col gap-12">
+            <button className="col" style={cardStyle(false)} onClick={() => setSubStep("create")}>
+              <div className="weight-600" style={{ marginBottom: 4 }}>Create a new organization</div>
+              <div className="text-13 text-secondary">Start fresh with your own workspace</div>
+            </button>
+            <button className="col" style={cardStyle(false)} onClick={() => setSubStep("token")}>
+              <div className="weight-600" style={{ marginBottom: 4 }}>Join via invitation token</div>
+              <div className="text-13 text-secondary">Paste the token from your invitation email</div>
+            </button>
+          </div>
+        )}
+
+        {step === "org" && subStep === "create" && (
+          <div className="col gap-12">
+            <div>
+              <label className="label">Organization name</label>
+              <input className="input" value={orgName} onChange={e => setOrgName(e.target.value)}
+                placeholder="Acme Corp" autoFocus onKeyDown={e => e.key === "Enter" && createOrg()} />
+            </div>
+            {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
+            <div className="row gap-8">
+              <Btn kind="primary" onClick={createOrg} disabled={!orgName.trim() || loading}>
+                {loading ? "Creating…" : "Create organization"}
+              </Btn>
+              <Btn onClick={() => { setSubStep(invitations.length > 0 ? "invites" : "choose"); setError(""); }}>Back</Btn>
+            </div>
+          </div>
+        )}
+
+        {step === "org" && subStep === "token" && (
+          <div className="col gap-12">
+            <div>
+              <label className="label">Invitation token</label>
+              <input className="input" value={inviteToken} onChange={e => setInviteToken(e.target.value)}
+                placeholder="Paste your invitation token…" autoFocus onKeyDown={e => e.key === "Enter" && joinByToken()} />
+              <div className="text-12 text-muted" style={{ marginTop: 6 }}>Sent by email when a team member invited you.</div>
+            </div>
+            {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
+            <div className="row gap-8">
+              <Btn kind="primary" onClick={joinByToken} disabled={!inviteToken.trim() || loading}>
+                {loading ? "Joining…" : "Join organization"}
+              </Btn>
+              <Btn onClick={() => { setSubStep("choose"); setError(""); }}>Back</Btn>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Profile ── */}
+        {step === "profile" && (
+          <div className="col gap-16">
+            {/* Google identity — read-only */}
+            <div className="col gap-10" style={{ alignItems: "center" }}>
+              <Avatar name={displayName || user.name} src={user.picture} size="xl" />
+              <div className="col gap-1" style={{ alignItems: "center" }}>
+                <span className="weight-600" style={{ fontSize: 15 }}>{displayName || user.name}</span>
+                <span className="text-12 text-muted">{user.email}</span>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: "var(--border-soft)" }} />
+
+            {/* Organization context */}
+            <div className="row gap-8" style={{ alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 20, height: 20, borderRadius: 4, background: "var(--ink)", display: "grid", placeItems: "center", color: "white", fontSize: 11, fontWeight: 700 }}>
+                {(pendingOrg?.org?.name || "?")[0].toUpperCase()}
+              </div>
+              <span className="text-13 weight-500">{pendingOrg?.org?.name}</span>
+            </div>
+
+            {/* Editable profile fields */}
+            <div className="col gap-10">
+              <div>
+                <label className="label">Display name</label>
+                <input className="input" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Full name" autoFocus />
+              </div>
+              <div className="row gap-10">
+                <div style={{ flex: 1 }}>
+                  <label className="label">Role / title <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                  <input className="input" value={title} onChange={e => setTitle(e.target.value)}
+                    placeholder="e.g. Recruiting Manager" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="label">Department <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                  <input className="input" value={department} onChange={e => setDepartment(e.target.value)}
+                    placeholder="e.g. HR, Engineering"
+                    onKeyDown={e => e.key === "Enter" && completeProfile()} />
+                </div>
+              </div>
+            </div>
+
+            <div className="row gap-8">
+              <Btn kind="primary" onClick={completeProfile} disabled={loading}>Continue →</Btn>
+              <Btn onClick={() => setStep("org")}>Back</Btn>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Setup ── */}
+        {step === "setup" && (
+          <div className="col gap-16">
+            {/* AI provider */}
+            <div className="col gap-10">
+              <span className="weight-600 text-13">AI Provider</span>
+              <div className="row gap-6" style={{ flexWrap: "wrap" }}>
+                {[
+                  { id: "openai", label: "OpenAI", models: ["gpt-4o", "gpt-4o-mini"] },
+                  { id: "anthropic", label: "Anthropic", models: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"] },
+                  { id: "gemini", label: "Gemini", models: ["gemini-2.0-flash", "gemini-1.5-pro"] },
+                  { id: "groq", label: "Groq", models: ["llama-3.3-70b-versatile"] },
+                ].map(p => (
+                  <button key={p.id} onClick={() => { setAiProvider(p.id); setAiModel(p.models[0]); }}
+                    className="btn btn-sm" style={{ border: `1.5px solid ${aiProvider === p.id ? "var(--ink)" : "var(--border)"}`, background: aiProvider === p.id ? "var(--surface)" : "var(--bg-sunken)" }}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <input className="input" type="password" value={aiKey} onChange={e => setAiKey(e.target.value)}
+                placeholder="API key (optional — configure later in Settings)" />
+            </div>
+
+            <div style={{ height: 1, background: "var(--border-soft)" }} />
+
+            {/* Locations */}
+            <div className="col gap-8">
+              <span className="weight-600 text-13">Office locations</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {setupLocations.map(loc => (
+                  <span key={loc} className="row gap-4" style={{ background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 8px", fontSize: 12 }}>
+                    {loc}
+                    <button className="icon-btn" style={{ width: 14, height: 14 }} onClick={() => setSetupLocations(prev => prev.filter(l => l !== loc))}>
+                      <Icons.X size={9} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="row gap-8">
+                <input className="input" style={{ flex: 1 }} value={newSetupLoc} onChange={e => setNewSetupLoc(e.target.value)}
+                  placeholder="Add location…"
+                  onKeyDown={e => { if (e.key === "Enter" && newSetupLoc.trim()) { setSetupLocations(p => [...p, newSetupLoc.trim()]); setNewSetupLoc(""); } }} />
+                <Btn onClick={() => { if (newSetupLoc.trim()) { setSetupLocations(p => [...p, newSetupLoc.trim()]); setNewSetupLoc(""); } }} disabled={!newSetupLoc.trim()}>Add</Btn>
+              </div>
+            </div>
+
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <Btn kind="primary" onClick={saveSetup} disabled={setupSaving}>{setupSaving ? "Saving…" : "Save & continue →"}</Btn>
+              <button className="btn btn-ghost btn-sm text-muted" onClick={() => setStep("invite")}>Skip for now</button>
+              <button className="btn btn-ghost btn-sm text-muted" style={{ marginLeft: "auto" }} onClick={() => setStep("profile")}>← Back</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Invite ── */}
+        {step === "invite" && (
+          <div className="col gap-12">
+            <span className="text-13 text-secondary">Add email addresses of colleagues to invite. You can always invite more later from Settings → Team.</span>
+            <div className="col gap-8">
+              {inviteEmails.map((email, i) => (
+                <input key={i} className="input" type="email" value={email}
+                  onChange={e => setInviteEmails(prev => prev.map((v, j) => j === i ? e.target.value : v))}
+                  placeholder={`colleague${i + 1}@company.com`} />
+              ))}
+              <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start", fontSize: 12 }}
+                onClick={() => setInviteEmails(prev => [...prev, ""])}>
+                + Add another
+              </button>
+            </div>
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              {inviteEmails.some(e => e.trim())
+                ? <Btn kind="primary" onClick={sendInvites} disabled={inviteSending}>{inviteSending ? "Sending…" : "Send invites →"}</Btn>
+                : <Btn kind="primary" onClick={() => setStep("recap")}>Continue →</Btn>
+              }
+              <button className="btn btn-ghost btn-sm text-muted" style={{ marginLeft: "auto" }} onClick={() => setStep("setup")}>← Back</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 5: Recap ── */}
+        {step === "recap" && (
+          <div className="col gap-20" style={{ alignItems: "center", textAlign: "center" }}>
+            <div className="col gap-8" style={{ alignItems: "center" }}>
+              <Avatar name={displayName || user.name} src={user.picture} size="xl" />
+              <div className="col gap-2" style={{ alignItems: "center" }}>
+                <span className="weight-600" style={{ fontSize: 16 }}>{displayName || user.name}</span>
+                {(title || department) && <span className="text-13 text-secondary">{[title, department].filter(Boolean).join(" · ")}</span>}
+              </div>
+            </div>
+
+            <div className="row gap-8" style={{ alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 22, height: 22, borderRadius: 5, background: "var(--ink)", display: "grid", placeItems: "center", color: "white", fontSize: 11, fontWeight: 700 }}>
+                {(pendingOrg?.org?.name || "?")[0].toUpperCase()}
+              </div>
+              <span className="weight-500 text-14">{pendingOrg?.org?.name}</span>
+            </div>
+
+            <Btn kind="primary" onClick={enterWorkspace} style={{ width: "100%", justifyContent: "center" }}>
+              Enter workspace →
+            </Btn>
+            <button className="btn btn-ghost btn-sm text-muted" onClick={() => setStep("invite")}>← Back</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Login Screen ─────────────────────────────────────────────────────────────
+
 const LoginScreen = ({ onLogin }) => {
   const t = window.useT ? window.useT() : (k) => k;
   const [authCfg, setAuthCfg] = useState(null); // null = loading
@@ -191,13 +670,12 @@ const LoginScreen = ({ onLogin }) => {
   useEffect(() => {
     fetch(`${window.API_BASE}/auth/config`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => setAuthCfg(d || { google_client_id: null, demo_mode: true }))
-      .catch(() => setAuthCfg({ google_client_id: null, demo_mode: true }));
+      .then(d => setAuthCfg(d || {}))
+      .catch(() => setAuthCfg({}));
   }, []);
 
   // clientId: prefer backend config, allow index.html override for local dev
   const clientId = authCfg?.google_client_id || window.GOOGLE_CLIENT_ID || null;
-  const showDemo = !authCfg || authCfg.demo_mode;
 
   // Mount Google Sign-In button once clientId is known
   useEffect(() => {
@@ -221,31 +699,11 @@ const LoginScreen = ({ onLogin }) => {
         throw new Error(body?.detail || "Google sign-in failed");
       }
       const user = await res.json();
-      saveUser({ ...user, role: localStorage.getItem("candid_role") || "" });
       onLogin(user);
     } catch (err) {
       setError(err.message || "Sign-in failed. Is the backend running?");
       setLoading(false);
     }
-  };
-
-  const demoLogin = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${window.API_BASE}/auth/demo`, { method: "POST" });
-      if (res.ok) {
-        const u = await res.json();
-        saveUser({ ...u, role: localStorage.getItem("candid_role") || "Recruiter" });
-        onLogin(u);
-        return;
-      }
-      const body = await res.json().catch(() => null);
-      setError(body?.detail || "Demo login unavailable");
-    } catch {
-      setError("Backend unreachable");
-    }
-    setLoading(false);
   };
 
   return (
@@ -273,24 +731,13 @@ const LoginScreen = ({ onLogin }) => {
         ) : clientId ? (
           <div className="col" style={{ alignItems: "center", gap: 10, width: "100%" }}>
             <div id="g-signin-btn" style={{ minHeight: 44 }} />
-            {showDemo && (
-              <span className="text-12 text-muted">{t('login.demoNote')} — <button className="link text-12" onClick={demoLogin}>{t('login.demo')}</button></span>
-            )}
-          </div>
-        ) : showDemo ? (
-          <div className="col" style={{ alignItems: "center", gap: 10, width: "100%" }}>
-            <button onClick={demoLogin} style={{
-              width: "100%", padding: "12px 20px", borderRadius: 8,
-              border: "1px solid var(--border)", background: "var(--surface)",
-              fontSize: 14, fontWeight: 500, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            }}>
-              <GoogleLogo />{t('login.google')}
-            </button>
-            <span className="text-12 text-muted">{t('login.demoNote')}</span>
           </div>
         ) : (
-          <span className="text-13 text-muted">Contact your administrator for access.</span>
+          <div className="col gap-8" style={{ alignItems: "center", textAlign: "center" }}>
+            <Icons.Lock size={28} style={{ color: "var(--ink-secondary)" }} />
+            <span className="text-13 text-secondary">Google Sign-In is not configured.</span>
+            <span className="text-12 text-muted">Set <code>GOOGLE_CLIENT_ID</code> in <code>backend/.env</code> to enable login.</span>
+          </div>
         )}
 
         {loading && <span className="text-13 text-muted">{t('login.signingIn')}</span>}
@@ -304,7 +751,7 @@ const LoginScreen = ({ onLogin }) => {
 
 const VALID_ROUTES = [
   "pipeline", "candidates", "jobs", "roles", "employees", "interviews",
-  "inbox", "reports", "preinterview", "liveroom", "candidate", "settings",
+  "inbox", "reports", "candidate", "settings", "liveroom",
 ];
 
 const routeFromHash = () => {
@@ -318,41 +765,40 @@ const App = () => {
   const [user, setUser] = useState(loadUser);
   const [locale, setLocale] = useState(() => localStorage.getItem("candid_locale") || "en");
   const [route, setRoute] = useState(routeFromHash);
-  const [candidateId, setCandidateId] = useState("c-001");
+  const [candidateId, setCandidateId] = useState(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
-  const [liveInterview, setLiveInterview] = useState(null);
   const [t_tweaks, setTweak] = window.useTweaks(TWEAKS_DEFAULTS);
   const [liveCounts, setLiveCounts] = useState({});
+  const [liveInterview, setLiveInterview] = useState(null);
 
   // Persist locale
   useEffect(() => { localStorage.setItem("candid_locale", locale); }, [locale]);
 
-  // Stable ref to logout so fetch wrapper never captures stale closure
-  const logoutRef = useRef(null);
-  logoutRef.current = () => { clearUser(); setUser(null); };
+  // Keep the module-level fetch interceptor's token in sync
+  useEffect(() => { window._authToken = user?.token || null; }, [user?.token]);
 
-  // Inject Authorization header + auto-logout on 401
+  // Auto-logout on 401 — dispatched by the module-level fetch interceptor
   useEffect(() => {
-    const token = user?.token;
-    if (!token) return;
-    const original = window._baseFetch || window.fetch;
-    window._baseFetch = original;
-    window.fetch = async (url, opts = {}) => {
-      if (typeof url === "string" && url.startsWith(window.API_BASE)) {
-        opts = { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) } };
-      }
-      const res = await original(url, opts);
-      if (res.status === 401) {
-        logoutRef.current?.();
-      }
-      return res;
-    };
-    return () => {
-      if (window._baseFetch) window.fetch = window._baseFetch;
-    };
-  }, [user?.token]);
+    const handler = () => { clearUser(); setUser(null); };
+    window.addEventListener("candid:unauthorized", handler);
+    return () => window.removeEventListener("candid:unauthorized", handler);
+  }, []);
+
+  // Load org pipeline stages from API; broadcast to all screens via custom event
+  useEffect(() => {
+    if (!user || !user.org_id) return;
+    fetch(`${window.API_BASE}/config/stages`)
+      .then(r => r.ok ? r.json() : null)
+      .then(stages => {
+        if (Array.isArray(stages) && stages.length > 0) {
+          window.CANDID_DATA.STATUS = stages;
+          window.dispatchEvent(new CustomEvent("candid:stages", { detail: stages }));
+        }
+      })
+      .catch(() => {});
+  }, [user?.org_id]);
 
   // Real sidebar counts
   useEffect(() => {
@@ -405,9 +851,52 @@ const App = () => {
     if (user && !user.token) { clearUser(); setUser(null); }
   }, []);
 
-  const handleLogin = (u) => setUser(u);
+  const handleLogin = (u) => { saveUser(u); setUser(u); };
   const handleLogout = () => { clearUser(); setUser(null); window.location.hash = ""; };
   const handleUserUpdate = (u) => { saveUser(u); setUser(u); };
+  const handleOrgSetupComplete = (u) => { saveUser(u); setUser(u); };
+
+  const handleSwitchOrg = async (orgId) => {
+    const res = await fetch(`${window.API_BASE}/auth/switch-org`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ org_id: orgId }),
+    }).catch(() => null);
+    if (!res?.ok) return;
+    const data = await res.json();
+    const updated = { ...user, token: data.token, org_id: data.org_id };
+    saveUser(updated);
+    setUser(updated);
+    navigate("pipeline");
+  };
+
+  const [createOrgOpen, setCreateOrgOpen] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [newOrgLoading, setNewOrgLoading] = useState(false);
+
+  const doCreateOrg = async () => {
+    if (!newOrgName.trim() || newOrgLoading) return;
+    setNewOrgLoading(true);
+    const res = await fetch(`${window.API_BASE}/auth/organizations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newOrgName.trim() }),
+    }).catch(() => null);
+    if (res?.ok) {
+      const data = await res.json();
+      const updated = {
+        ...user,
+        token: data.token,
+        org_id: data.org.id,
+        orgs: [...(user.orgs || []), { id: data.org.id, name: data.org.name, role: "owner" }],
+      };
+      saveUser(updated);
+      setUser(updated);
+      setCreateOrgOpen(false);
+      navigate("pipeline");
+    }
+    setNewOrgLoading(false);
+  };
 
   if (!user) {
     return (
@@ -417,7 +906,15 @@ const App = () => {
     );
   }
 
-  const counts = t_tweaks.showCounts ? { inbox: 6, ...liveCounts } : {};
+  if (user.needs_org_setup) {
+    return (
+      <LocaleContext.Provider value={{ locale, setLocale }}>
+        <OrgSetupWizard user={user} onComplete={handleOrgSetupComplete} />
+      </LocaleContext.Provider>
+    );
+  }
+
+  const counts = t_tweaks.showCounts ? liveCounts : {};
 
   const openCandidate = (id) => { setCandidateId(id); navigate("candidate"); };
 
@@ -427,12 +924,11 @@ const App = () => {
       case "candidates":   return ["Workspace", "Candidates"];
       case "jobs":         return ["Workspace", "Positions"];
       case "roles":        return ["Workspace", "Roles"];
-      case "employees":    return ["Workspace", "People"];
+      case "employees":    return ["Workspace", "Employees"];
       case "interviews":   return ["Workspace", "Interviews"];
       case "inbox":        return ["Workspace", "Inbox"];
       case "reports":      return ["Workspace", "Reports"];
-      case "preinterview": return ["AI Co-pilot", "Pre-Interview Analysis"];
-      case "liveroom":     return ["AI Co-pilot", "Live Room"];
+      case "liveroom":     return ["Interviews", "Recording"];
       case "candidate":
         return ["Candidates", "—"];
       case "settings":     return ["Settings"];
@@ -454,12 +950,14 @@ const App = () => {
     <LocaleContext.Provider value={{ locale, setLocale }}>
       <div className="app">
         <Sidebar
-          route={route === "candidate" ? "candidates" : route}
+          route={route === "candidate" ? "candidates" : route === "liveroom" ? "interviews" : route}
           onRoute={navigate}
           counts={counts}
           onQuickAdd={() => setQuickOpen(true)}
           user={user}
           onLogout={handleLogout}
+          onSwitchOrg={handleSwitchOrg}
+          onCreateOrg={() => { setNewOrgName(""); setCreateOrgOpen(true); }}
         />
         <div className="main">
           <Topbar crumbs={crumbs} actions={topActions} />
@@ -472,9 +970,8 @@ const App = () => {
             {route === "interviews"   && <window.InterviewsScreen onRoute={navigate} />}
             {route === "inbox"        && <window.InboxScreen onRoute={navigate} />}
             {route === "reports"      && <window.ReportsScreen />}
-            {route === "preinterview" && <window.PreInterviewScreen tweaks={t_tweaks} onCreatedCandidate={openCandidate} />}
-            {route === "liveroom"     && <window.LiveRoomScreen tweaks={t_tweaks} interview={liveInterview} />}
-            {route === "candidate"    && <window.CandidateScreen id={candidateId} onRoute={navigate} />}
+            {route === "liveroom"     && <window.LiveRoomScreen interview={liveInterview} onDone={() => navigate("interviews")} />}
+            {route === "candidate" && candidateId && <window.CandidateScreen id={candidateId} onRoute={navigate} />}
             {route === "settings"     && <window.SettingsScreen user={user} onLocaleChange={setLocale} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />}
           </div>
         </div>
@@ -482,6 +979,23 @@ const App = () => {
         <window.QuickAdd open={quickOpen} onClose={() => setQuickOpen(false)} onCreate={(id) => openCandidate(id)} tweaks={t_tweaks} />
         {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
         {planOpen && <HiringPlanModal onClose={() => setPlanOpen(false)} onNavigate={navigate} />}
+        {createOrgOpen && (
+          <Modal open title="New organization" onClose={() => setCreateOrgOpen(false)} width={400}
+            footer={
+              <>
+                <Btn onClick={() => setCreateOrgOpen(false)}>Cancel</Btn>
+                <Btn kind="primary" disabled={!newOrgName.trim() || newOrgLoading} onClick={doCreateOrg}>
+                  {newOrgLoading ? "Creating…" : "Create"}
+                </Btn>
+              </>
+            }>
+            <div>
+              <label className="label">Organization name</label>
+              <input className="input" value={newOrgName} onChange={e => setNewOrgName(e.target.value)}
+                placeholder="Acme Corp" autoFocus onKeyDown={e => e.key === "Enter" && doCreateOrg()} />
+            </div>
+          </Modal>
+        )}
 
         <window.TweaksPanel>
           <window.TweakSection label="AI behavior">

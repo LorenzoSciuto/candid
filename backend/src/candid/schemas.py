@@ -75,6 +75,10 @@ class InterviewProcess(BaseModel):
     raw_content: str
 
 
+class InterviewSummarize(BaseModel):
+    text: str
+
+
 # ── Evaluations ─────────────────────────────────────────────────────────────────
 
 class EvaluationUpsert(BaseModel):
@@ -90,16 +94,31 @@ class EvaluationUpsert(BaseModel):
 class ConfigUpdate(BaseModel):
     provider: str
     model_name: str
-    api_key: Optional[str] = None  # plaintext — backend encrypts before storing
+    api_key: Optional[str] = None
 
 
 class ApiKeyUpsert(BaseModel):
-    provider: str   # openai | anthropic | gemini | groq
-    api_key: str    # plaintext; backend encrypts
+    provider: str                           # openai | anthropic | gemini | groq
+    api_key: str                            # plaintext; backend encrypts
 
 
 class GoogleAuthRequest(BaseModel):
-    token: str      # Google ID token from GIS
+    token: str                              # Google ID token from GIS
+
+
+class SwitchOrgRequest(BaseModel):
+    org_id: str
+
+
+# ── Organizations ────────────────────────────────────────────────────────────────
+
+class OrgCreate(BaseModel):
+    name: str
+
+
+class InviteRequest(BaseModel):
+    email: str
+    role: str = "member"                    # "admin" | "member"
 
 
 # ── Roles ───────────────────────────────────────────────────────────────────────

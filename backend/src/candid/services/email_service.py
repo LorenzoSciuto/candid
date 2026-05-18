@@ -15,6 +15,25 @@ class EmailService:
         self._from = smtp_from
         self._app_url = app_url
 
+    def send_email(self, to_email: str, subject: str, body: str) -> None:
+        if not self._host:
+            raise RuntimeError("SMTP not configured — set SMTP_HOST in .env")
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = self._from
+        msg["To"] = to_email
+        msg.attach(MIMEText(body, "plain"))
+        with smtplib.SMTP(self._host, self._port) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            if self._user and self._password:
+                smtp.login(self._user, self._password)
+            smtp.send_message(msg)
+        logger.info("Email sent to %s", to_email)
+
+    def is_configured(self) -> bool:
+        return bool(self._host)
+
     def send_invitation(self, to_email: str, org_name: str, inviter_name: str, token: str) -> None:
         accept_url = f"{self._app_url}/index.html#accept-invite?token={token}"
         subject = f"You've been invited to join {org_name} on Candid"

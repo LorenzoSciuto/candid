@@ -8,7 +8,7 @@ from sqlmodel.pool import StaticPool
 
 from candid.config import Settings
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org, require_user
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.ai_engine import AIEngineFactory
@@ -96,6 +96,7 @@ def client(
 
     # Bypass auth — return fixed test user with org_id
     app.dependency_overrides[require_user] = lambda: _TEST_USER
+    app.dependency_overrides[require_org] = lambda: _TEST_USER
 
     for router in [
         CandidatesRouter(db).router,

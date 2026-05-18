@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import Candidate, JobDescription
 from candid.schemas import AnalyzeRequest
 from candid.services.ai_engine import AIEngineFactory
@@ -28,7 +28,7 @@ class AnalysisRouter:
             file: UploadFile = File(...),
             candidate_id: Optional[str] = Form(None),
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return await self._upload_cv(file, candidate_id, user.org_id, session)
 
@@ -36,7 +36,7 @@ class AnalysisRouter:
         def analyze(
             body: AnalyzeRequest,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._analyze(session, user.org_id, body)
 

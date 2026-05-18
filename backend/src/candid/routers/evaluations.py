@@ -1,10 +1,11 @@
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import Evaluation
 from candid.schemas import EvaluationUpsert
 
@@ -22,15 +23,15 @@ class EvaluationsRouter:
         def get_evaluation(
             candidate_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._get(session, user.org_id, candidate_id)
 
-        @self.router.post("/")
+        @self.router.post("")
         def upsert_evaluation(
             body: EvaluationUpsert,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._upsert(session, user.org_id, body)
 
@@ -55,6 +56,7 @@ class EvaluationsRouter:
         ev.technical_skills = json.dumps(body.technical_skills or {})
         ev.final_recommendation = body.final_recommendation
         ev.notes = body.notes
+        ev.updated_at = datetime.now(timezone.utc).isoformat()
         session.add(ev)
         session.commit()
         session.refresh(ev)
@@ -69,4 +71,5 @@ class EvaluationsRouter:
             "technical_skills": json.loads(ev.technical_skills) if ev.technical_skills else {},
             "final_recommendation": ev.final_recommendation,
             "notes": ev.notes,
+            "updated_at": ev.updated_at,
         }

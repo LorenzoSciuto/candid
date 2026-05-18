@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from candid.config import Settings
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org, require_user
 from candid.models import (
     Candidate,
     Employee,
@@ -44,7 +44,7 @@ class OrganizationsRouter:
     def _register(self) -> None:
         db = self._db
 
-        @self.router.get("/")
+        @self.router.get("")
         def list_orgs(
             session: Session = Depends(db.get_session),
             ctx: UserCtx = Depends(require_user),
@@ -54,7 +54,7 @@ class OrganizationsRouter:
         @self.router.get("/current")
         def get_current(
             session: Session = Depends(db.get_session),
-            ctx: UserCtx = Depends(require_user),
+            ctx: UserCtx = Depends(require_org),
         ):
             return self._get_current(session, ctx)
 
@@ -62,7 +62,7 @@ class OrganizationsRouter:
         def invite(
             body: InviteRequest,
             session: Session = Depends(db.get_session),
-            ctx: UserCtx = Depends(require_user),
+            ctx: UserCtx = Depends(require_org),
         ):
             return self._invite(session, ctx, body)
 
@@ -71,7 +71,7 @@ class OrganizationsRouter:
             user_id: str,
             body: MemberRoleUpdate,
             session: Session = Depends(db.get_session),
-            ctx: UserCtx = Depends(require_user),
+            ctx: UserCtx = Depends(require_org),
         ):
             return self._update_member_role(session, ctx, user_id, body.role)
 
@@ -79,14 +79,14 @@ class OrganizationsRouter:
         def remove_member(
             user_id: str,
             session: Session = Depends(db.get_session),
-            ctx: UserCtx = Depends(require_user),
+            ctx: UserCtx = Depends(require_org),
         ):
             self._remove_member(session, ctx, user_id)
 
         @self.router.delete("/current", status_code=204)
         def delete_org(
             session: Session = Depends(db.get_session),
-            ctx: UserCtx = Depends(require_user),
+            ctx: UserCtx = Depends(require_org),
         ):
             self._delete_org(session, ctx)
 

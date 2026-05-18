@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import JobDescription
 from candid.schemas import ImproveJDRequest, JobDescriptionCreate, JobDescriptionUpdate
 from candid.services.ai_engine import AIEngineFactory
@@ -18,10 +18,10 @@ class JobDescriptionsRouter:
     def _register(self) -> None:
         db = self._db
 
-        @self.router.get("/")
+        @self.router.get("")
         def list_jds(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return session.exec(select(JobDescription).where(JobDescription.org_id == user.org_id)).all()
 
@@ -29,15 +29,15 @@ class JobDescriptionsRouter:
         def get_jd(
             jd_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return self._fetch(session, user.org_id, jd_id)
 
-        @self.router.post("/", status_code=201)
+        @self.router.post("", status_code=201)
         def create_jd(
             body: JobDescriptionCreate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             jd = JobDescription(org_id=user.org_id, **body.model_dump())
             session.add(jd)
@@ -50,7 +50,7 @@ class JobDescriptionsRouter:
             jd_id: str,
             body: JobDescriptionUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             jd = self._fetch(session, user.org_id, jd_id)
             for k, v in body.model_dump(exclude_none=True).items():
@@ -64,7 +64,7 @@ class JobDescriptionsRouter:
         def delete_jd(
             jd_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             jd = self._fetch(session, user.org_id, jd_id)
             session.delete(jd)
@@ -74,7 +74,7 @@ class JobDescriptionsRouter:
         def improve_jd(
             body: ImproveJDRequest,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             try:
                 engine = self._ai_factory.from_session(session, user.org_id)

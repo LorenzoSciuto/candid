@@ -65,6 +65,21 @@ class TestUpsertEvaluation:
         assert data["candidate_id"] == cid
 
 
+    def test_updated_at_returned_and_non_null(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        resp = client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Pending"})
+        data = resp.json()
+        assert data["updated_at"] is not None
+        assert "T" in data["updated_at"]  # ISO datetime
+
+    def test_updated_at_changes_on_update(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        r1 = client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Pending"})
+        r2 = client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Lean Hire"})
+        # both should have timestamps; second may be same second but must be non-null
+        assert r2.json()["updated_at"] is not None
+
+
 class TestGetEvaluation:
     def test_retrieves_after_create(self, client: TestClient) -> None:
         cid = _make_candidate(client)

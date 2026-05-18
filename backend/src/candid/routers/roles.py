@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import Role
 from candid.schemas import ImproveJDRequest, RoleCreate, RoleUpdate
 from candid.services.ai_engine import AIEngineFactory
@@ -18,10 +18,10 @@ class RolesRouter:
     def _register(self) -> None:
         db = self._db
 
-        @self.router.get("/")
+        @self.router.get("")
         def list_roles(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return session.exec(select(Role).where(Role.org_id == user.org_id)).all()
 
@@ -29,7 +29,7 @@ class RolesRouter:
         def improve_description(
             body: ImproveJDRequest,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             try:
                 engine = self._ai_factory.from_session(session, user.org_id)
@@ -37,11 +37,11 @@ class RolesRouter:
             except Exception as exc:
                 raise HTTPException(500, str(exc)) from exc
 
-        @self.router.post("/", status_code=201)
+        @self.router.post("", status_code=201)
         def create_role(
             body: RoleCreate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             role = Role(org_id=user.org_id, **body.model_dump())
             session.add(role)
@@ -54,7 +54,7 @@ class RolesRouter:
             role_id: str,
             body: RoleUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             role = self._fetch(session, user.org_id, role_id)
             for k, v in body.model_dump(exclude_none=True).items():
@@ -68,7 +68,7 @@ class RolesRouter:
         def delete_role(
             role_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             role = self._fetch(session, user.org_id, role_id)
             session.delete(role)

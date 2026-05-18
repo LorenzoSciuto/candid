@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from candid.database import Database
-from candid.dependencies import UserCtx, require_user
+from candid.dependencies import UserCtx, require_org
 from candid.models import Employee
 from candid.schemas import EmployeeCreate, EmployeeUpdate
 
@@ -16,18 +16,18 @@ class EmployeesRouter:
     def _register(self) -> None:
         db = self._db
 
-        @self.router.get("/")
+        @self.router.get("")
         def list_employees(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             return session.exec(select(Employee).where(Employee.org_id == user.org_id)).all()
 
-        @self.router.post("/", status_code=201)
+        @self.router.post("", status_code=201)
         def create_employee(
             body: EmployeeCreate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             emp = Employee(org_id=user.org_id, **body.model_dump())
             session.add(emp)
@@ -40,7 +40,7 @@ class EmployeesRouter:
             employee_id: str,
             body: EmployeeUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             emp = self._fetch(session, user.org_id, employee_id)
             for k, v in body.model_dump(exclude_none=True).items():
@@ -54,7 +54,7 @@ class EmployeesRouter:
         def delete_employee(
             employee_id: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_user),
+            user: UserCtx = Depends(require_org),
         ):
             emp = self._fetch(session, user.org_id, employee_id)
             session.delete(emp)

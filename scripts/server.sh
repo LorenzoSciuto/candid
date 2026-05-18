@@ -11,6 +11,9 @@ PORT="${PORT:-8000}"
 
 cd "${BACKEND_DIR}"
 
+# ── Ensure Postgres is running ────────────────────────────────────────────────
+"${SCRIPT_DIR}/postgres.sh"
+
 SSL_ARGS=()
 SCHEME="http"
 if [[ -f "${CERT_DIR}/localhost.pem" && -f "${CERT_DIR}/localhost-key.pem" ]]; then

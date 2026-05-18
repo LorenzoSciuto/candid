@@ -30,6 +30,7 @@ const mapCandidate = (c) => ({
     duration: iv.duration,
     interviewer: iv.interviewer,
     summary: iv.ai_summary,
+    raw_content: iv.raw_content,
     cleaned_transcript: iv.cleaned_transcript,
   })),
   evaluation: c.evaluation || null,
@@ -44,6 +45,8 @@ const EmailModal = ({ candidate, onClose }) => {
   const [body, setBody] = useState(`Hi ${candidate.first},\n\n`);
   const [rewriting, setRewriting] = useState(false);
   const [rewriteError, setRewriteError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
 
   const rewriteWithAI = async () => {
     if (!body.trim()) return;
@@ -69,9 +72,32 @@ const EmailModal = ({ candidate, onClose }) => {
     setRewriting(false);
   };
 
-  const sendEmail = () => {
-    const mailto = `mailto:${candidate.email || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailto);
+  const sendEmail = async () => {
+    if (!candidate.email) return;
+    setSending(true);
+    setSendError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/ai/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: candidate.email, subject, body }),
+      });
+      if (res.status === 503) {
+        window.open(`mailto:${candidate.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+        onClose();
+        return;
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        setSendError(err?.detail || "Send failed");
+        setSending(false);
+        return;
+      }
+    } catch {
+      setSendError("Backend unreachable");
+      setSending(false);
+      return;
+    }
     onClose();
   };
 
@@ -80,8 +106,11 @@ const EmailModal = ({ candidate, onClose }) => {
       width={560}
       footer={
         <>
+          {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
-          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={sendEmail} disabled={!candidate.email}>Send</Btn>
+          <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={sendEmail} disabled={!candidate.email || sending}>
+            {sending ? "Sending…" : "Send"}
+          </Btn>
         </>
       }>
       <div className="col gap-12">
@@ -188,7 +217,7 @@ const EditCandidateModal = ({ candidate, onClose, onSaved }) => {
 
 const CandidateScreen = ({ id, onRoute }) => {
   const t = window.useT();
-  const [c, setC] = useState({ first: "", last: "", email: null, phone: null, role: null, experience: null, location: null, status: "new", source: null, pre: null, interviews: [], evaluation: null, score: null, cvText: null, jobDescription: null });
+  const [c, setC] = useState({ id: null, first: "", last: "", email: null, phone: null, role: null, experience: null, location: null, status: "new", source: null, pre: null, interviews: [], evaluation: null, score: null, cvText: null, jobDescription: null });
   const [tab, setTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [hiring, setHiring] = useState(false);
@@ -292,10 +321,10 @@ const CandidateScreen = ({ id, onRoute }) => {
           )}
           {(c.status === "offer" || c.status === "hired") && !hired && (
             <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={convertToEmployee} disabled={hiring || c.status === "hired"}>
-              {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → People"}
+              {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → Employees"}
             </Btn>
           )}
-          {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to People</Badge>}
+          {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to Employees</Badge>}
           {c.status !== "offer" && c.status !== "hired" && (
             <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { candidateName: `${c.first} ${c.last}`, candidateId: c.id, title: "Interview", type: "Live" })}>{t('candidate.startInterview')}</Btn>
           )}
@@ -390,6 +419,38 @@ const OverviewTab = ({ c, onTab, t }) => (
               </div>
             </div>
           )}
+
+          {/* Pipeline tracker */}
+          <div className="card card-pad">
+            <div className="weight-500" style={{ marginBottom: 12 }}>{t('candidate.overview.pipeline')}</div>
+            <div className="col gap-8">
+              {window.CANDID_DATA.STATUS.map((s, i) => {
+                const myIdx = window.CANDID_DATA.STATUS.findIndex(x => x.id === c.status);
+                const done = i < myIdx, here = i === myIdx;
+                return (
+                  <div key={s.id} className="row gap-8" style={{ alignItems: "center" }}>
+                    <span style={{ width: 18, height: 18, borderRadius: 999, background: done || here ? s.dot : "var(--bg-sunken)", display: "grid", placeItems: "center", color: "white" }}>
+                      {done && <Icons.Check size={10} />}
+                      {here && <span style={{ width: 6, height: 6, borderRadius: 999, background: "white" }} />}
+                    </span>
+                    <span className={here ? "weight-600" : (done ? "text-secondary" : "text-muted")} style={{ fontSize: 13 }}>{s.label}</span>
+                    {here && <span className="text-12 text-muted" style={{ marginLeft: "auto" }}>now</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {c.pre?.questions?.length > 0 && (
+            <div className="card card-pad col gap-8">
+              <div className="weight-500">{t('candidate.overview.suggestedQ')}</div>
+              <ul className="ai-list questions" style={{ padding: "0 0 0 4px", margin: 0 }}>
+                {c.pre.questions.slice(0, 2).map((q, i) => (
+                  <li key={i} style={{ paddingLeft: 8 }}><span className="marker">{i + 1}</span><span className="text-13" style={{ lineHeight: 1.5 }}>{q}</span></li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       ) : (
         <div className="card card-pad" style={{ textAlign: "center", padding: 40 }}>
@@ -404,50 +465,38 @@ const OverviewTab = ({ c, onTab, t }) => (
     <div className="col gap-16">
       {/* Career history */}
       {c.careerHistory?.length > 0 && (
-        <div className="card card-pad col gap-10">
-          <div className="weight-500" style={{ marginBottom: 4 }}>Career history</div>
-          {c.careerHistory.map((role, i) => (
-            <div key={i} className="row gap-10" style={{ alignItems: "flex-start" }}>
-              <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ai)", marginTop: 5, flexShrink: 0 }} />
-              <div className="col" style={{ minWidth: 0 }}>
-                <span className="text-13 weight-500">{role.title}</span>
-                <span className="text-12 text-muted">{[role.company, role.period].filter(Boolean).join(" · ")}</span>
-                {role.description && <span className="text-12 text-secondary" style={{ marginTop: 2 }}>{role.description}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Pipeline tracker */}
-      <div className="card card-pad">
-        <div className="weight-500" style={{ marginBottom: 12 }}>{t('candidate.overview.pipeline')}</div>
-        <div className="col gap-8">
-          {window.CANDID_DATA.STATUS.map((s, i) => {
-            const myIdx = window.CANDID_DATA.STATUS.findIndex(x => x.id === c.status);
-            const done = i < myIdx, here = i === myIdx;
-            return (
-              <div key={s.id} className="row gap-8" style={{ alignItems: "center" }}>
-                <span style={{ width: 18, height: 18, borderRadius: 999, background: done || here ? s.dot : "var(--bg-sunken)", display: "grid", placeItems: "center", color: "white" }}>
-                  {done && <Icons.Check size={10} />}
-                  {here && <span style={{ width: 6, height: 6, borderRadius: 999, background: "white" }} />}
-                </span>
-                <span className={here ? "weight-600" : (done ? "text-secondary" : "text-muted")} style={{ fontSize: 13 }}>{s.label}</span>
-                {here && <span className="text-12 text-muted" style={{ marginLeft: "auto" }}>now</span>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {c.pre?.questions?.length > 0 && (
-        <div className="card card-pad col gap-8">
-          <div className="weight-500">{t('candidate.overview.suggestedQ')}</div>
-          <ul className="ai-list questions" style={{ padding: "0 0 0 4px", margin: 0 }}>
-            {c.pre.questions.slice(0, 2).map((q, i) => (
-              <li key={i} style={{ paddingLeft: 8 }}><span className="marker">{i + 1}</span><span className="text-13" style={{ lineHeight: 1.5 }}>{q}</span></li>
-            ))}
-          </ul>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Career history</span>
+            <span className="text-12 text-muted">{c.careerHistory.length} position{c.careerHistory.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="col" style={{ padding: "4px 0 8px" }}>
+            {c.careerHistory.map((role, i) => {
+              const isLast = i === c.careerHistory.length - 1;
+              return (
+                <div key={i} className="row gap-0" style={{ alignItems: "stretch" }}>
+                  <div className="col" style={{ alignItems: "center", width: 40, flexShrink: 0, paddingTop: 16 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ai)", flexShrink: 0, zIndex: 1 }} />
+                    {!isLast && <div style={{ width: 1, flex: 1, background: "var(--border-soft)", marginTop: 4 }} />}
+                  </div>
+                  <div className="col" style={{ flex: 1, minWidth: 0, padding: `14px 20px 14px 0`, borderBottom: isLast ? "none" : "1px solid var(--border-soft)" }}>
+                    <div className="row gap-8" style={{ alignItems: "baseline", flexWrap: "wrap", marginBottom: 2 }}>
+                      <span className="weight-600" style={{ fontSize: 13.5 }}>{role.title}</span>
+                      {role.company && (
+                        <span className="text-12" style={{ color: "var(--ink-secondary)" }}>{role.company}</span>
+                      )}
+                    </div>
+                    {role.period && (
+                      <span className="text-11 text-mono text-muted" style={{ letterSpacing: "0.02em", marginBottom: role.description ? 6 : 0 }}>{role.period}</span>
+                    )}
+                    {role.description && (
+                      <span className="text-12 text-secondary" style={{ lineHeight: 1.55, marginTop: 4 }}>{role.description}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -495,6 +544,7 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setLocalCvText(data.text);
+      onRefresh && onRefresh(); // update hasCvFile immediately
       await runAnalysis(data.text);
     } catch (err) {
       setError(`Upload failed: ${err.message}`);
@@ -648,6 +698,7 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
   const [title, setTitle] = useState("");
   const [interviewer, setInterviewer] = useState("");
   const [saving, setSaving] = useState(false);
+  const [transcriptIv, setTranscriptIv] = useState(null);
 
   const addInterview = async () => {
     setSaving(true);
@@ -678,7 +729,7 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
               {iv.summary && <span className="text-13 text-secondary" style={{ marginTop: 4, lineHeight: 1.5 }}>{iv.summary}</span>}
             </div>
           </div>
-          <Btn>{t('common.open')}</Btn>
+          <Btn onClick={() => setTranscriptIv(iv)}>{t('common.open')}</Btn>
         </div>
       ))}
 
@@ -707,6 +758,22 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
           </div>
         </div>
       )}
+
+      {transcriptIv && (
+        <Modal open title={transcriptIv.title || transcriptIv.type || t('candidate.iv.transcript')} onClose={() => setTranscriptIv(null)} width={720}
+          footer={<Btn onClick={() => setTranscriptIv(null)}>{t('common.close')}</Btn>}>
+          {(() => {
+            const text = transcriptIv.raw_content || transcriptIv.cleaned_transcript || "";
+            return text ? (
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.75, whiteSpace: "pre-wrap", color: "var(--ink-secondary)", maxHeight: 520, overflowY: "auto" }}>
+                {text}
+              </div>
+            ) : (
+              <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('candidate.iv.noTranscript')}</div>
+            );
+          })()}
+        </Modal>
+      )}
     </div>
   );
 };
@@ -723,6 +790,7 @@ const EvaluationTab = ({ c, onSaved, t }) => {
   const [saved, setSaved] = useState(false);
 
   const save = async () => {
+    if (!c.id) return;
     setSaving(true);
     try {
       await fetch(`${window.API_BASE}/evaluations`, {
@@ -743,11 +811,29 @@ const EvaluationTab = ({ c, onSaved, t }) => {
     setSaving(false);
   };
 
+  const avgOf = (map, keys) => {
+    const rated = keys.filter(k => (map[k] || 0) > 0);
+    if (!rated.length) return 0;
+    return rated.reduce((s, k) => s + (map[k] || 0), 0) / rated.length;
+  };
+  const humanAvg   = avgOf(human, HUMAN_SKILLS);
+  const techAvg    = avgOf(technical, TECH_SKILLS);
+  const overallAvg = (humanAvg + techAvg) / (humanAvg && techAvg ? 2 : humanAvg ? 1 : techAvg ? 1 : 1) || 0;
+  const overallPct = Math.round((overallAvg / 5) * 100);
+
+  const recColor = { "No Hire": "var(--danger)", "Lean No": "var(--warn)", "Lean Hire": "var(--ai)", "Strong Hire": "var(--positive)" };
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
       <div className="col gap-12">
         <div className="card">
-          <div className="card-header"><span className="card-title">{t('candidate.eval.human')}</span><span className="card-sub">{t('candidate.eval.scale')}</span></div>
+          <div className="card-header">
+            <span className="card-title">{t('candidate.eval.human')}</span>
+            <div className="row gap-6" style={{ alignItems: "center" }}>
+              <span className="card-sub">{t('candidate.eval.scale')}</span>
+              {humanAvg > 0 && <span className="text-12 text-mono weight-600" style={{ color: "var(--ai)" }}>{humanAvg.toFixed(1)}</span>}
+            </div>
+          </div>
           <div style={{ padding: "8px 18px" }}>
             {HUMAN_SKILLS.map(s => (
               <SkillRow key={s} label={s} value={human[s] || 0} onChange={v => setHuman(prev => ({ ...prev, [s]: v }))} />
@@ -755,7 +841,13 @@ const EvaluationTab = ({ c, onSaved, t }) => {
           </div>
         </div>
         <div className="card">
-          <div className="card-header"><span className="card-title">{t('candidate.eval.technical')}</span><span className="card-sub">{t('candidate.eval.scale')}</span></div>
+          <div className="card-header">
+            <span className="card-title">{t('candidate.eval.technical')}</span>
+            <div className="row gap-6" style={{ alignItems: "center" }}>
+              <span className="card-sub">{t('candidate.eval.scale')}</span>
+              {techAvg > 0 && <span className="text-12 text-mono weight-600" style={{ color: "var(--ai)" }}>{techAvg.toFixed(1)}</span>}
+            </div>
+          </div>
           <div style={{ padding: "8px 18px" }}>
             {TECH_SKILLS.map(s => (
               <SkillRow key={s} label={s} value={technical[s] || 0} onChange={v => setTechnical(prev => ({ ...prev, [s]: v }))} />
@@ -764,17 +856,59 @@ const EvaluationTab = ({ c, onSaved, t }) => {
         </div>
       </div>
       <div className="col gap-12">
+        {/* Score summary */}
+        {overallAvg > 0 && (
+          <div className="card card-pad col gap-12">
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+              <div className="col gap-1">
+                <span className="weight-600" style={{ fontSize: 13 }}>Overall score</span>
+                <span className="text-12 text-secondary">Based on rated dimensions</span>
+              </div>
+              <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", color: overallPct >= 70 ? "var(--positive)" : overallPct >= 45 ? "var(--warn)" : "var(--danger)" }}>
+                {overallAvg.toFixed(1)}<span className="text-14 text-muted weight-400">/5</span>
+              </span>
+            </div>
+            <div style={{ height: 6, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${overallPct}%`, borderRadius: 999, background: overallPct >= 70 ? "var(--positive)" : overallPct >= 45 ? "var(--warn)" : "var(--danger)", transition: "width 0.4s ease" }} />
+            </div>
+            <div className="row gap-16">
+              {humanAvg > 0 && (
+                <div className="col gap-1">
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Soft</span>
+                  <span className="text-13 weight-600 text-mono">{humanAvg.toFixed(1)}</span>
+                </div>
+              )}
+              {techAvg > 0 && (
+                <div className="col gap-1">
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Technical</span>
+                  <span className="text-13 weight-600 text-mono">{techAvg.toFixed(1)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="card card-pad col gap-12">
           <span className="weight-500">{t('candidate.eval.recommendation')}</span>
-          <div className="seg" style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
-            {["No Hire", "Lean No", "Lean Hire", "Strong Hire"].map(opt => (
-              <button key={opt} className={recommendation === opt ? "on" : ""} onClick={() => setRecommendation(opt)}>{opt}</button>
+          <div className="col gap-6">
+            {["Strong Hire", "Lean Hire", "Lean No", "No Hire"].map(opt => (
+              <button key={opt} onClick={() => setRecommendation(opt)}
+                style={{
+                  padding: "10px 14px", borderRadius: 8, textAlign: "left", cursor: "pointer", fontSize: 13, fontWeight: recommendation === opt ? 600 : 400,
+                  border: `1.5px solid ${recommendation === opt ? recColor[opt] : "var(--border)"}`,
+                  background: recommendation === opt ? `color-mix(in oklch, ${recColor[opt]} 8%, var(--surface))` : "var(--bg-sunken)",
+                  color: recommendation === opt ? recColor[opt] : "var(--ink-secondary)",
+                  transition: "all 0.15s",
+                }}>
+                {opt}
+              </button>
             ))}
           </div>
         </div>
+
         <div className="card card-pad col gap-8">
           <span className="weight-500">{t('candidate.eval.notes')}</span>
-          <textarea className="textarea" rows={6} placeholder={t('candidate.eval.notesPh')} value={notes} onChange={e => setNotes(e.target.value)} />
+          <textarea className="textarea" rows={5} placeholder={t('candidate.eval.notesPh')} value={notes} onChange={e => setNotes(e.target.value)} />
           <Btn kind="primary" icon={<Icons.Save size={14} />} style={{ alignSelf: "flex-start" }} onClick={save} disabled={saving}>
             {saving ? t('common.saving') : saved ? t('common.saved') + ' ✓' : t('candidate.eval.save')}
           </Btn>
@@ -784,19 +918,23 @@ const EvaluationTab = ({ c, onSaved, t }) => {
   );
 };
 
-const SkillRow = ({ label, value, onChange }) => (
-  <div className="skill-row">
-    <span className="text-13">{label}</span>
-    <div className="skill-bar"><div className="fill" style={{ width: `${(value / 5) * 100}%` }} /></div>
-    <Rating value={value} onChange={onChange} />
-  </div>
-);
+const SkillRow = ({ label, value, onChange }) => {
+  const t = window.useT();
+  const key = window.CANDID_DATA.SKILL_KEYS?.[label];
+  const displayLabel = key ? t(key) : label;
+  const descKey = key ? `${key}.desc` : null;
+  const desc = descKey ? t(descKey) : null;
+  const labelEl = <span className="text-13">{displayLabel}</span>;
+  return (
+    <div className="skill-row">
+      {desc ? <Tooltip text={desc}>{labelEl}</Tooltip> : labelEl}
+      <div className="skill-bar"><div className="fill" style={{ width: `${(value / 5) * 100}%` }} /></div>
+      <Rating value={value} onChange={onChange} />
+    </div>
+  );
+};
 
 // ── Activity Tab ──────────────────────────────────────────────────────────────
-
-const STATUS_LABELS = Object.fromEntries(
-  (window.CANDID_DATA.STATUS || []).map(s => [s.id, s.label])
-);
 
 const fmtDate = (iso) => {
   if (!iso) return "—";
@@ -806,17 +944,31 @@ const fmtDate = (iso) => {
   } catch { return iso.slice(0, 10); }
 };
 
+const fmtDateTime = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    const hasTime = iso.includes("T") || iso.includes(" ");
+    if (!hasTime) return date;
+    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return `${date} · ${time}`;
+  } catch { return iso.slice(0, 16).replace("T", " "); }
+};
+
 const ActivityTab = ({ c }) => {
+  const statusLabels = Object.fromEntries((window.CANDID_DATA.STATUS || []).map(s => [s.id, s.label]));
   const raw = [
     { type: "system", when: c.appliedAt, what: "Candidate added to pipeline", sort: c.appliedAt || "0000" },
     ...(c.statusHistory || []).map(h => ({
       type: "status",
       when: h.at,
-      what: `Stage moved to ${STATUS_LABELS[h.status] || h.status}`,
+      what: `Stage moved to ${statusLabels[h.status] || h.status}`,
+      who: h.by || null,
       sort: h.at,
     })),
     ...(c.pre ? [{ type: "ai", when: c.appliedAt, what: "CV analysis generated", sort: c.appliedAt || "0001" }] : []),
-    ...(c.evaluation ? [{ type: "eval", when: c.appliedAt, what: "Evaluation saved", sort: c.appliedAt || "0002" }] : []),
+    ...(c.evaluation ? [{ type: "eval", when: c.evaluation.updated_at || c.appliedAt, what: "Evaluation saved", sort: c.evaluation.updated_at || c.appliedAt || "0002" }] : []),
     ...(c.interviews || []).map(iv => ({
       type: "interview",
       who: iv.interviewer,
@@ -839,7 +991,7 @@ const ActivityTab = ({ c }) => {
             <div className="col" style={{ flex: 1 }}>
               <span className="text-13">{a.what}</span>
               <span className="text-12 text-muted">
-                {a.who ? `${a.who} · ` : ""}{fmtDate(a.when)}
+                {a.who ? `${a.who} · ` : ""}{fmtDateTime(a.when)}
               </span>
             </div>
           </div>

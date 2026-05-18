@@ -1,8 +1,8 @@
-// Live Interview Room — real Chrome/Edge Web Speech API
+// Live Interview Room — real Chrome/Edge Web Speech API, saves transcript to backend
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-const LiveRoomScreen = ({ tweaks, interview }) => {
+const LiveRoomScreen = ({ interview, onDone }) => {
   const [recording, setRecording] = useState(false);
   const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -10,13 +10,14 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
   const [liveText, setLiveText] = useState("");
   const [activeSpeaker, setActiveSpeaker] = useState("Candidate");
   const [sttError, setSttError] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const recognitionRef = useRef(null);
   const shouldRunRef = useRef(false);
   const activeSpeakerRef = useRef("Candidate");
   const transcriptEndRef = useRef(null);
 
-  // Keep ref in sync with state for use inside STT callbacks
   useEffect(() => { activeSpeakerRef.current = activeSpeaker; }, [activeSpeaker]);
 
   // Timer
@@ -26,7 +27,7 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
     return () => clearInterval(id);
   }, [recording, paused]);
 
-  // Auto-scroll transcript
+  // Auto-scroll
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles, liveText]);
@@ -53,8 +54,8 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
           if (!text) continue;
           const speaker = activeSpeakerRef.current;
           const who = speaker === "Interviewer"
-            ? (window.getTeamMembers?.()[0]?.name || "Interviewer")
-            : "Candidate";
+            ? (interview?.interviewer || "Interviewer")
+            : (interview?.candidateName || "Candidate");
           setBubbles(prev => [...prev, {
             speaker, who,
             t: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -68,7 +69,6 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
       if (interim) setLiveText(interim);
     };
 
-    // Auto-restart to support recordings longer than Chrome's internal timeout
     r.onend = () => {
       setLiveText("");
       if (shouldRunRef.current) {
@@ -81,8 +81,7 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
     };
 
     r.onerror = (event) => {
-      if (event.error === "no-speech" || event.error === "aborted") return;
-      if (event.error === "network") return; // onend will retry
+      if (event.error === "no-speech" || event.error === "aborted" || event.error === "network") return;
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         setSttError("Microphone access denied. Enable it in browser settings and reload.");
         shouldRunRef.current = false;
@@ -100,6 +99,7 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
       return;
     }
     setSttError(null);
+    setSaved(false);
     const r = buildRecognition();
     recognitionRef.current = r;
     shouldRunRef.current = true;
@@ -114,7 +114,6 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
       setPaused(false);
       try { recognitionRef.current?.start(); } catch {}
     } else {
-      // Set shouldRunRef false BEFORE stop() so onend doesn't restart
       shouldRunRef.current = false;
       setPaused(true);
       setLiveText("");
@@ -122,12 +121,30 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
     }
   };
 
-  const stop = () => {
+  const buildTranscriptText = (lines) =>
+    lines.map(b => `[${b.t}] ${b.who}: ${b.text}`).join("\n");
+
+  const stopAndSave = async () => {
     shouldRunRef.current = false;
     setRecording(false);
     setPaused(false);
     setLiveText("");
     try { recognitionRef.current?.stop(); } catch {}
+
+    if (!interview?.id || bubbles.length === 0) return;
+    setSaving(true);
+    const rawContent = buildTranscriptText(bubbles);
+    try {
+      await fetch(`${window.API_BASE}/interviews/${interview.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_content: rawContent }),
+      });
+      setSaved(true);
+    } catch {
+      setSttError("Failed to save transcript to server.");
+    }
+    setSaving(false);
   };
 
   const reset = () => {
@@ -139,54 +156,48 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
     setBubbles([]);
     setLiveText("");
     setSttError(null);
+    setSaved(false);
   };
 
-  const toggleSpeaker = () => setActiveSpeaker(s => s === "Candidate" ? "Interviewer" : "Candidate");
-
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  const team = window.getTeamMembers?.() || [];
-  const interviewerName = interview?.interviewer || team[0]?.name || "Interviewer";
-  const candidateName = interview?.candidateName || "Unknown Candidate";
+
+  const candidateName = interview?.candidateName || "Candidate";
+  const interviewerName = interview?.interviewer || "Interviewer";
   const interviewTitle = interview?.title || interview?.type || "Interview";
 
   return (
-    <div className="page" style={{ maxWidth: 1100 }}>
-      <div className="row" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <div className="row gap-8">
-          <span className="ai-tag"><span className="ai-spark" /> Live Room</span>
-          {recording && <Badge kind="danger"><span className="rec-dot" />REC {fmt(elapsed)}</Badge>}
-        </div>
-        <div className="row gap-8">
-          <Avatar name={candidateName} />
-          <div className="col">
-            <span className="text-13 weight-500">{candidateName} · {interviewTitle}</span>
-            <span className="text-12 text-muted">
-              {interview?.type || "Interview"}{interview?.duration ? ` · ${interview.duration}` : ""} · with {interviewerName}
-            </span>
+    <div className="page" style={{ maxWidth: 960 }}>
+      {/* Header */}
+      <div className="row" style={{ alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+        <div className="col gap-4">
+          <div className="row gap-8" style={{ alignItems: "center" }}>
+            <Icons.Mic size={16} />
+            <span style={{ fontWeight: 600, fontSize: 18 }}>{interviewTitle}</span>
+            {recording && <Badge kind="danger"><span className="rec-dot" /> REC {fmt(elapsed)}</Badge>}
+            {saved && <Badge kind="positive">Transcript saved</Badge>}
           </div>
+          <span className="text-13 text-secondary">{candidateName} · with {interviewerName}</span>
         </div>
+        <Btn onClick={onDone}>← Back to Interviews</Btn>
       </div>
-      <h1 className="page-h1" style={{ marginTop: 12 }}>{interviewTitle}</h1>
-      <div className="page-sub">Live speech-to-text via Web Speech API · Chrome &amp; Edge only · AI diarisation post-call.</div>
 
       {!SpeechRecognition && (
         <div style={{ padding: "10px 14px", borderRadius: 6, background: "oklch(0.97 0.04 85)", border: "1px solid oklch(0.82 0.12 85)", marginBottom: 16, fontSize: 13 }}>
-          Web Speech API requires Chrome or Edge. Other browsers are not supported.
+          Web Speech API requires Chrome or Edge.
         </div>
       )}
-
       {sttError && (
-        <div style={{ padding: "10px 14px", borderRadius: 6, background: "var(--danger-soft, oklch(0.97 0.02 15))", border: "1px solid var(--danger, oklch(0.65 0.15 15))", marginBottom: 16, fontSize: 13, color: "var(--danger, oklch(0.55 0.18 15))" }}>
+        <div style={{ padding: "10px 14px", borderRadius: 6, background: "var(--danger-soft)", border: "1px solid var(--danger)", marginBottom: 16, fontSize: 13, color: "var(--danger)" }}>
           {sttError}
         </div>
       )}
 
       <div className="card" style={{ overflow: "hidden", marginBottom: 16 }}>
-        {/* Controls bar */}
+        {/* Controls */}
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <div className="row gap-8">
             {!recording ? (
-              <Btn kind="primary" onClick={start} icon={<span className="rec-dot" style={{ animation: "none" }} />} disabled={!SpeechRecognition}>
+              <Btn kind="primary" onClick={start} icon={<Icons.Mic size={14} />} disabled={!SpeechRecognition || saving}>
                 Start recording
               </Btn>
             ) : (
@@ -194,28 +205,31 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
                 <Btn kind="secondary" onClick={pause} icon={paused ? <Icons.Play size={12} /> : <Icons.Pause size={12} />}>
                   {paused ? "Resume" : "Pause"}
                 </Btn>
-                <Btn kind="danger" onClick={stop} icon={<Icons.Square size={12} />}>Stop & save</Btn>
+                <Btn kind="danger" onClick={stopAndSave} icon={<Icons.Square size={12} />} disabled={saving}>
+                  {saving ? "Saving…" : "Stop & save"}
+                </Btn>
               </>
             )}
-            <button className="icon-btn" onClick={reset} title="Reset"><Icons.X size={14} /></button>
+            {!recording && bubbles.length > 0 && (
+              <button className="btn btn-ghost btn-sm" onClick={reset}>Reset</button>
+            )}
           </div>
 
-          {/* Speaker toggle — visible while actively recording */}
+          {/* Speaker toggle */}
           {recording && !paused && (
             <div className="row gap-8" style={{ alignItems: "center" }}>
               <span className="text-12 text-muted">Now speaking:</span>
               <button
-                onClick={toggleSpeaker}
+                onClick={() => setActiveSpeaker(s => s === "Candidate" ? "Interviewer" : "Candidate")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 14px", borderRadius: 20,
                   border: "2px solid var(--accent)", background: "var(--accent-subtle)",
-                  cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
-                  transition: "background 0.15s",
+                  cursor: "pointer", fontSize: 12.5, fontWeight: 600,
                 }}
               >
                 <span className="rec-dot" style={{ width: 6, height: 6 }} />
-                {activeSpeaker === "Candidate" ? "Candidate" : interviewerName}
+                {activeSpeaker === "Candidate" ? candidateName : interviewerName}
               </button>
               <span className="text-11 text-muted">click to switch</span>
             </div>
@@ -229,19 +243,19 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
         </div>
 
         {/* Transcript */}
-        <div className="scroll" style={{ padding: "20px 24px", maxHeight: 460 }}>
+        <div className="scroll" style={{ padding: "20px 24px", maxHeight: 520 }}>
           {bubbles.length === 0 && !liveText && (
-            <div style={{ textAlign: "center", padding: 40, color: "var(--ink-muted)" }}>
+            <div style={{ textAlign: "center", padding: 48, color: "var(--ink-muted)" }}>
               <Icons.Mic size={24} style={{ marginBottom: 8 }} />
               <div className="weight-500" style={{ color: "var(--ink-secondary)" }}>Press start when ready.</div>
-              <div className="text-12 mt-4">Words appear here in real time. Tap the speaker button to switch between candidate and interviewer.</div>
+              <div className="text-12" style={{ marginTop: 6 }}>Words appear here in real time. Tap the speaker button to switch between candidate and interviewer.</div>
             </div>
           )}
-          {bubbles.map((b, i) => <Bubble key={i} {...b} />)}
+          {bubbles.map((b, i) => <TranscriptBubble key={i} {...b} />)}
           {liveText && (
-            <Bubble
+            <TranscriptBubble
               speaker={activeSpeaker}
-              who={activeSpeaker === "Candidate" ? "Candidate" : interviewerName}
+              who={activeSpeaker === "Candidate" ? candidateName : interviewerName}
               t={new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               text={liveText}
               live
@@ -251,23 +265,21 @@ const LiveRoomScreen = ({ tweaks, interview }) => {
         </div>
       </div>
 
-      {/* AI co-pilot panel */}
-      <div className="ai-panel card-pad" style={{ padding: 18 }}>
-        <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-          <span className="ai-tag"><Icons.Sparkles size={11} /> Co-pilot suggestions · live</span>
-          <span className="text-12 text-muted">Updated as you record</span>
+      {saved && (
+        <div className="card card-pad row gap-12" style={{ alignItems: "center" }}>
+          <Icons.Check size={16} style={{ color: "var(--positive)" }} />
+          <div className="col">
+            <span className="weight-500">Transcript saved</span>
+            <span className="text-12 text-muted">{bubbles.length} lines · {fmt(elapsed)} recorded. Open the interview to view or summarize.</span>
+          </div>
+          <Btn kind="primary" onClick={onDone}>Back to Interviews</Btn>
         </div>
-        <div className="col gap-8">
-          <CopilotItem text="They mentioned 'islands architecture' — ask which framework they shipped it with." done={bubbles.length >= 6} />
-          <CopilotItem text="Probe the team-size signal: JD asks for 5+ ICs, CV shows 3." done={bubbles.length >= 4} />
-          <CopilotItem text="Time check: hiring manager round usually wraps at 45m." done={false} />
-        </div>
-      </div>
+      )}
     </div>
   );
 };
 
-const Bubble = ({ speaker, who, t, text, live }) => (
+const TranscriptBubble = ({ speaker, who, t, text, live }) => (
   <div className={`bubble ${speaker.toLowerCase()} ${live ? "live" : ""}`}>
     {speaker === "Interviewer" && <Avatar name={who} />}
     <div className="col" style={{ maxWidth: "70%" }}>
@@ -280,15 +292,6 @@ const Bubble = ({ speaker, who, t, text, live }) => (
       <div className="body">{text}{live && <span className="caret"></span>}</div>
     </div>
     {speaker === "Candidate" && <Avatar name={who} />}
-  </div>
-);
-
-const CopilotItem = ({ text, done }) => (
-  <div className="row gap-8" style={{ padding: "8px 12px", background: "var(--surface)", border: "1px solid var(--ai-border)", borderRadius: 6, opacity: done ? 0.5 : 1 }}>
-    <span style={{ width: 18, height: 18, borderRadius: 999, background: done ? "var(--positive-soft)" : "var(--ai-soft)", color: done ? "var(--positive)" : "var(--ai)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-      {done ? <Icons.Check size={11} /> : <Icons.Sparkles size={11} />}
-    </span>
-    <span className="text-13" style={{ textDecoration: done ? "line-through" : "none" }}>{text}</span>
   </div>
 );
 

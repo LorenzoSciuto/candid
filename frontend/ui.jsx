@@ -133,18 +133,13 @@ const SIDE_NAV = [
   { id: "candidates", key: "nav.candidates", icon: Icons.Users },
   { id: "jobs", key: "nav.positions", icon: Icons.Briefcase },
   { id: "roles", key: "nav.roles", icon: Icons.Award },
-  { id: "employees", key: "nav.people", icon: Icons.UserCheck },
+  { id: "employees", key: "nav.employees", icon: Icons.UserCheck },
   { id: "interviews", key: "nav.interviews", icon: Icons.Calendar },
   { id: "inbox", key: "nav.inbox", icon: Icons.Inbox },
   { id: "reports", key: "nav.reports", icon: Icons.BarChart },
 ];
 
-const SIDE_AI = [
-  { id: "preinterview", key: "nav.preinterview", icon: Icons.Sparkles },
-  { id: "liveroom", key: "nav.liveroom", icon: Icons.Mic },
-];
-
-const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout }) => {
+const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout, onSwitchOrg, onCreateOrg }) => {
   const t = window.useT ? window.useT() : (k) => k;
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -162,12 +157,6 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout }) => {
         <span className="brand-mark">C</span>
         Candid
       </div>
-      <button className="side-search" onClick={onQuickAdd}>
-        <Icons.Search size={14} />
-        <span>{t('nav.search')}</span>
-        <span className="kbd">⌘K</span>
-      </button>
-
       {SIDE_NAV.map((it) => {
         const I = it.icon;
         return (
@@ -175,18 +164,6 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout }) => {
             <I size={15} />
             <span>{t(it.key)}</span>
             {counts && counts[it.id] != null && <span className="count">{counts[it.id]}</span>}
-          </div>
-        );
-      })}
-
-      <div className="side-section">{t('nav.aiCopilot')}</div>
-      {SIDE_AI.map((it) => {
-        const I = it.icon;
-        return (
-          <div key={it.id} className={`side-item ${route === it.id ? "active" : ""}`} onClick={() => onRoute(it.id)}>
-            <I size={15} />
-            <span>{t(it.key)}</span>
-            {it.id === "liveroom" && <span className="badge ai" style={{ marginLeft: "auto" }}><span className="dot" />Live</span>}
           </div>
         );
       })}
@@ -201,16 +178,39 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout }) => {
             background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
             boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200, overflow: "hidden",
           }}>
-            <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border-soft)" }}>
-              <div className="row gap-10" style={{ alignItems: "center", marginBottom: 10 }}>
+            {/* User info */}
+            <div style={{ padding: "14px 16px 12px", borderBottom: "1px solid var(--border-soft)" }}>
+              <div className="row gap-10" style={{ alignItems: "center" }}>
                 <Avatar name={user?.name || "User"} src={user?.picture} size="lg" />
                 <div className="col" style={{ minWidth: 0 }}>
                   <span className="text-13 weight-600" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || "Guest"}</span>
                   <span className="text-12 text-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email || "—"}</span>
-                  {user?.role && <span className="text-11 text-muted" style={{ marginTop: 2 }}>{user.role}</span>}
+                  {(user?.title || user?.role) && <span className="text-11 text-muted" style={{ marginTop: 1 }}>{user.title || user.role}</span>}
                 </div>
               </div>
             </div>
+            {/* Org section */}
+            {(user?.orgs?.length > 0) && (
+              <div style={{ padding: "8px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                <div className="text-11 text-muted" style={{ padding: "2px 16px 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Organization</div>
+                {user.orgs.map(org => (
+                  <button key={org.id} className="btn btn-ghost" style={{ width: "100%", justifyContent: "space-between", padding: "6px 16px", borderRadius: 0, fontSize: 13 }}
+                    onClick={() => { setUserMenuOpen(false); org.id !== user.org_id && onSwitchOrg && onSwitchOrg(org.id); }}>
+                    <span className="row gap-8">
+                      <span style={{ width: 18, height: 18, borderRadius: 4, background: "var(--ink)", display: "grid", placeItems: "center", color: "white", fontSize: 9, fontWeight: 700 }}>
+                        {org.name[0].toUpperCase()}
+                      </span>
+                      {org.name}
+                    </span>
+                    {org.id === user.org_id && <Icons.Check size={12} />}
+                  </button>
+                ))}
+                <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "flex-start", padding: "6px 16px", borderRadius: 0, fontSize: 13, color: "var(--ink-secondary)" }}
+                  onClick={() => { setUserMenuOpen(false); onCreateOrg && onCreateOrg(); }}>
+                  <Icons.Plus size={12} style={{ marginRight: 8 }} /> New organization
+                </button>
+              </div>
+            )}
             <div style={{ padding: "6px 0" }}>
               <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "flex-start", padding: "8px 16px", borderRadius: 0, fontSize: 13, color: "var(--danger)" }}
                 onClick={() => { setUserMenuOpen(false); onLogout && onLogout(); }}>
@@ -292,4 +292,36 @@ const JDSelect = ({ value, onChange, roleId, placeholder = "Select position…",
   );
 };
 
-Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, useContext, useApiData });
+const Tooltip = ({ text, children }) => {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const show = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, left: r.left });
+    }
+    setVisible(true);
+  };
+
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={show} onMouseLeave={() => setVisible(false)}>
+      {children}
+      {visible && (
+        <div style={{
+          position: "fixed", top: pos.top, left: pos.left, zIndex: 9999,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 8, padding: "8px 12px", maxWidth: 260,
+          fontSize: 12, lineHeight: 1.55, color: "var(--ink-secondary)",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.18)", pointerEvents: "none",
+        }}>
+          {text}
+        </div>
+      )}
+    </span>
+  );
+};
+
+Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, Tooltip, useContext, useApiData });

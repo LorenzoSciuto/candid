@@ -35,7 +35,8 @@ const ScheduleModal = ({ onClose, onSaved }) => {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const candidates = window.useApiData ? window.useApiData("/candidates", []) : [];
+  const allCandidates = window.useApiData ? window.useApiData("/candidates", []) : [];
+  const candidates = allCandidates.filter(c => c.status !== "hired" && c.status !== "archived");
   const team = window.getTeamMembers ? window.getTeamMembers() : [];
 
   const save = async () => {
@@ -203,6 +204,82 @@ const WeekView = ({ interviews, candidates, onRoute }) => {
   );
 };
 
+// ── Transcript Modal ──────────────────────────────────────────────────────────
+
+const TranscriptModal = ({ interview, onClose }) => {
+  const t = window.useT();
+  const [summarizing, setSummarizing] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [summaryError, setSummaryError] = useState("");
+
+  const text = interview.raw_content || interview.cleaned_transcript || "";
+
+  const summarize = async () => {
+    if (!text.trim()) return;
+    setSummarizing(true);
+    setSummaryError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/interviews/${interview.id}/summarize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setSummary(data);
+    } catch {
+      setSummaryError("AI summarize failed — check provider settings.");
+    }
+    setSummarizing(false);
+  };
+
+  return (
+    <Modal open title={interview.title || interview.type || "Transcript"} onClose={onClose} width={720}
+      footer={
+        <div className="row gap-8" style={{ flex: 1, justifyContent: "space-between", alignItems: "center" }}>
+          <div className="row gap-8">
+            {!summary && (
+              <Btn kind="ai" icon={<Icons.Sparkles size={14} />} onClick={summarize} disabled={summarizing || !text.trim()}>
+                {summarizing ? "Summarizing…" : "AI Summarize"}
+              </Btn>
+            )}
+            {summaryError && <span className="text-12" style={{ color: "var(--danger)" }}>{summaryError}</span>}
+          </div>
+          <Btn onClick={onClose}>{t('common.close')}</Btn>
+        </div>
+      }>
+      <div className="col gap-16">
+        {summary && (
+          <div className="col gap-10">
+            <div className="col gap-6">
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Key Points</span>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {(summary.bullets || []).map((b, i) => (
+                  <li key={i} className="text-13" style={{ marginBottom: 4 }}>{b}</li>
+                ))}
+              </ul>
+            </div>
+            {summary.summary && (
+              <div className="col gap-4">
+                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Summary</span>
+                <p className="text-13" style={{ margin: 0, lineHeight: 1.65 }}>{summary.summary}</p>
+              </div>
+            )}
+            <div style={{ height: 1, background: "var(--border)" }} />
+          </div>
+        )}
+        {text ? (
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.75, whiteSpace: "pre-wrap", color: "var(--ink-secondary)", maxHeight: 480, overflowY: "auto" }}>
+            {text}
+          </div>
+        ) : (
+          <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>No transcript recorded for this interview.</div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 const InterviewsScreen = ({ onRoute }) => {
@@ -212,16 +289,16 @@ const InterviewsScreen = ({ onRoute }) => {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("list");
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [transcriptIv, setTranscriptIv] = useState(null);
 
   const reload = () => {
-    const today = new Date().toISOString().slice(0, 10);
     Promise.all([
       fetch(`${window.API_BASE}/interviews`).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch(`${window.API_BASE}/candidates`).then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([ivs, cands]) => {
       setInterviews(Array.isArray(ivs) ? ivs : []);
       const map = {};
-      if (Array.isArray(cands)) cands.forEach(c => { map[c.id] = `${c.first_name} ${c.last_name}`; });
+      if (Array.isArray(cands)) cands.forEach(candidate => { map[candidate.id] = `${candidate.first_name} ${candidate.last_name}`; });
       setCandidates(map);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -230,20 +307,8 @@ const InterviewsScreen = ({ onRoute }) => {
   useEffect(reload, []);
 
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = interviews.filter(iv => iv.date && iv.date >= today);
-  const past = interviews.filter(iv => !iv.date || iv.date < today);
-
-  const mockUpcoming = [
-    { id: "iv-1", date: today, title: "Tech Deep Dive", candidate_id: null, candidateName: "Maya Chen", interviewer: "Priya Iyer", type: "Video", duration: "60m", live: true },
-    { id: "iv-2", date: today, title: "Recruiter Screen", candidate_id: null, candidateName: "Kenji Watanabe", interviewer: "Devon Park", type: "Phone", duration: "45m" },
-  ];
-  const mockPast = [
-    { id: "iv-p1", date: "Yesterday", title: "Hiring Manager", candidate_id: null, candidateName: "Maya Chen", interviewer: "Sasha Rivera", ai_summary: "Strong systems thinking. Asked sharp questions about DS governance.", duration: "62m" },
-    { id: "iv-p2", date: "May 5", title: "Recruiter Screen", candidate_id: null, candidateName: "Maya Chen", interviewer: "Devon Park", ai_summary: "Comp aligned. 4-week notice.", duration: "47m" },
-  ];
-
-  const displayUpcoming = upcoming.length > 0 ? upcoming : (!loading ? mockUpcoming : []);
-  const displayPast = past.length > 0 ? past : (!loading ? mockPast : []);
+  const displayUpcoming = interviews.filter(iv => iv.date && iv.date >= today);
+  const displayPast = interviews.filter(iv => !iv.date || iv.date < today);
   const allDisplay = [...displayUpcoming, ...displayPast];
 
   const candName = (iv) => iv.candidateName || candidates[iv.candidate_id] || iv.candidate_id || "Unknown";
@@ -289,7 +354,6 @@ const InterviewsScreen = ({ onRoute }) => {
                         <div className="row gap-8">
                           <span className="weight-500">{iv.title || iv.type}</span>
                           <Badge>{iv.type || "Interview"}</Badge>
-                          {iv.live && <Badge kind="ai"><span className="dot" /> Live in 2h</Badge>}
                         </div>
                         <div className="text-12 text-secondary">
                           {candName(iv)}{iv.interviewer ? ` · with ${iv.interviewer}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
@@ -297,12 +361,10 @@ const InterviewsScreen = ({ onRoute }) => {
                       </div>
                     </div>
                     <div className="row gap-8">
-                      <Btn>{t('interviews.reschedule')}</Btn>
-                      {iv.live ? (
-                        <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>{t('interviews.openLive')}</Btn>
-                      ) : (
-                        <Btn icon={<Icons.Calendar size={14} />}>{t('common.details')}</Btn>
-                      )}
+                      <Btn kind="primary" icon={<Icons.Mic size={14} />}
+                        onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>
+                        Record
+                      </Btn>
                     </div>
                   </div>
                 ))}
@@ -330,7 +392,7 @@ const InterviewsScreen = ({ onRoute }) => {
                     </div>
                     <div className="row gap-12" style={{ maxWidth: 480, alignItems: "center" }}>
                       {iv.ai_summary && <span className="text-12 text-secondary" style={{ flex: 1, textAlign: "right" }}>{iv.ai_summary}</span>}
-                      <Btn>{t('interviews.transcript')}</Btn>
+                      <Btn onClick={() => setTranscriptIv(iv)}>{t('interviews.transcript')}</Btn>
                     </div>
                   </div>
                 ))}
@@ -350,6 +412,12 @@ const InterviewsScreen = ({ onRoute }) => {
         <ScheduleModal
           onClose={() => setScheduleOpen(false)}
           onSaved={() => { setScheduleOpen(false); reload(); }}
+        />
+      )}
+      {transcriptIv && (
+        <TranscriptModal
+          interview={transcriptIv}
+          onClose={() => setTranscriptIv(null)}
         />
       )}
     </div>

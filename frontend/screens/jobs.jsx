@@ -5,7 +5,7 @@ const getLocations = () => {
     const stored = localStorage.getItem("candid_locations");
     if (stored) return JSON.parse(stored);
   } catch {}
-  return ["Remote", "SF / Remote", "SF", "NYC", "London", "Berlin", "Austin", "Toronto"];
+  return ["Milano", "Remote", "Milano / Remote", "Roma", "Torino", "Bergamo", "Brescia", "Monza"];
 };
 
 // ── Multi-owner select ────────────────────────────────────────────────────────
@@ -79,6 +79,7 @@ const JobsScreen = ({ onRoute }) => {
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editJd, setEditJd] = useState(null);
+  const [viewJd, setViewJd] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const menuRef = useRef(null);
@@ -202,8 +203,8 @@ const JobsScreen = ({ onRoute }) => {
               return (
                 <tr key={j.id} style={{ borderBottom: "1px solid var(--border-soft)" }}>
                   <JdTd>
-                    <div className="col">
-                      <span className="weight-500">{j.title}</span>
+                    <div className="col" style={{ cursor: "pointer" }} onClick={() => setViewJd(j)}>
+                      <span className="weight-500" style={{ color: "var(--ink)" }}>{j.title}</span>
                       <span className="text-12 text-muted">{j.id}</span>
                     </div>
                   </JdTd>
@@ -252,6 +253,10 @@ const JobsScreen = ({ onRoute }) => {
             minWidth: 160,
           }}>
             <button className="btn btn-ghost btn-sm row gap-6" style={{ width: "100%", justifyContent: "flex-start" }}
+              onClick={() => { setMenuOpen(null); setViewJd(j); }}>
+              <Icons.Eye size={13} /> {t('common.details')}
+            </button>
+            <button className="btn btn-ghost btn-sm row gap-6" style={{ width: "100%", justifyContent: "flex-start" }}
               onClick={() => { setMenuOpen(null); setEditJd(j); }}>
               <Icons.Edit size={13} /> {t('common.edit')}
             </button>
@@ -288,6 +293,10 @@ const JobsScreen = ({ onRoute }) => {
       )}
       {editJd && (
         <JdModal jd={editJd} onClose={() => setEditJd(null)} onSaved={() => { setEditJd(null); reload(); }} />
+      )}
+      {viewJd && (
+        <JdViewModal jd={viewJd} roles={roles} onClose={() => setViewJd(null)}
+          onEdit={() => { setEditJd(viewJd); setViewJd(null); }} t={t} />
       )}
     </div>
   );
@@ -424,6 +433,68 @@ const JdModal = ({ jd, onClose, onSaved }) => {
           </div>
           <textarea className="textarea" rows={8} value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this role about? Include responsibilities, requirements, and what success looks like." />
         </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ── JD View Modal (read-only) ─────────────────────────────────────────────────
+
+const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
+  const statusKind = jd.status === "Active" ? "positive" : jd.status === "Draft" ? undefined : "warn";
+  const owners = jd.owner ? jd.owner.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const roleName = roles[jd.role_id]?.name;
+
+  return (
+    <Modal open title={jd.title} onClose={onClose} width={640}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.close')}</Btn>
+          <Btn kind="primary" icon={<Icons.Edit size={13} />} onClick={onEdit}>{t('common.edit')}</Btn>
+        </>
+      }>
+      <div className="col gap-16">
+        {/* Meta row */}
+        <div className="row gap-8" style={{ flexWrap: "wrap", alignItems: "center" }}>
+          <Badge kind={statusKind}>{jd.status}</Badge>
+          {roleName && <span className="text-13 text-secondary">{roleName}</span>}
+          {jd.location && (
+            <span className="row gap-4 text-13 text-secondary">
+              <Icons.MapPin size={12} style={{ color: "var(--ink-muted)" }} />
+              {jd.location}{jd.remote_ok ? " · Remote OK" : ""}
+            </span>
+          )}
+          <span className="row gap-4 text-13 text-secondary">
+            <Icons.Users size={12} style={{ color: "var(--ink-muted)" }} />
+            {jd.openings || 1} opening{(jd.openings || 1) !== 1 ? "s" : ""}
+          </span>
+          {owners.length > 0 && (
+            <div className="row gap-4">
+              {owners.slice(0, 3).map(n => <Avatar key={n} name={n} />)}
+              <span className="text-12 text-muted" style={{ marginLeft: 2 }}>{owners.join(", ")}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Description */}
+        {jd.description ? (
+          <div style={{ background: "var(--bg-sunken)", borderRadius: 8, padding: "16px 18px" }}>
+            <div className="text-13 text-secondary" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>{jd.description}</div>
+          </div>
+        ) : (
+          <div className="text-13 text-muted" style={{ fontStyle: "italic" }}>No description added yet.</div>
+        )}
+
+        {/* Requirements */}
+        {jd.requirements && (
+          <>
+            <div style={{ height: 1, background: "var(--border-soft)" }} />
+            <div>
+              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Requirements</div>
+              <div className="text-13 text-secondary" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>{jd.requirements}</div>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );

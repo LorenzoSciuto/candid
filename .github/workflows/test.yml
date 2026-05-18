@@ -30,4 +30,11 @@ jobs:
 
       - name: Run tests
         working-directory: backend
-        run: uv run pytest -q --tb=short
+        run: uv run pytest -v --tb=short --junit-xml=test-results.xml
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: backend/test-results.xml
+          check_name: "Backend test results"

@@ -34,18 +34,8 @@ docker exec -e PGPASSWORD="$PGPASSWORD" "$CONTAINER" psql -h "$PGHOST" -p "$PGPO
   END \$\$;
 "
 
-echo "Recreating tables via SQLModel…"
+echo "Running Alembic migrations…"
 cd "$(dirname "$0")/../backend"
-uv run python -c "
-from sqlmodel import SQLModel
-from candid.database import Database
-from candid.config import Settings
-import candid.models  # noqa: F401 — register all models
-
-settings = Settings()
-db = Database(settings.database_url)
-SQLModel.metadata.create_all(db._engine)
-print('All tables created.')
-"
+uv run alembic upgrade head
 
 echo "Done. DB is clean and ready."

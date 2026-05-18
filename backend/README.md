@@ -87,19 +87,26 @@ New users receive a "wizard token" (no `org_id`) and see the org setup wizard. A
 
 ## Database migrations
 
-No Alembic. `Database.create_tables()` calls `SQLModel.metadata.create_all()` (creates new tables) then `_migrate()` (applies additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements). Migrations are idempotent and run at startup.
+Managed with [Alembic](https://alembic.sqlalchemy.org/). Migration files live in `alembic/versions/`. The app calls `alembic upgrade head` automatically at startup (`Database.migrate()`).
 
-To add a column:
+**To add a new migration after changing `models.py`:**
 
-```python
-# database.py — _migrate()
-migrations = [
-    "ALTER TABLE evaluation ADD COLUMN IF NOT EXISTS updated_at VARCHAR",
-    # append new ones here
-]
+```bash
+cd backend
+uv run alembic revision --autogenerate -m "describe_the_change"
+# review the generated file in alembic/versions/
+uv run alembic upgrade head
 ```
 
-This approach is intentionally simple. If schema changes become complex (renames, drops, data transforms), consider adopting Alembic.
+**Other useful commands:**
+
+```bash
+uv run alembic current          # current DB revision
+uv run alembic history          # migration history
+uv run alembic downgrade -1     # roll back one step
+```
+
+`DATABASE_URL` is read from the `DATABASE_URL` env var (falls back to `alembic.ini`). Tests use in-memory SQLite with `SQLModel.metadata.create_all()` — Alembic is not involved in tests.
 
 ---
 

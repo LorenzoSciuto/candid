@@ -7,14 +7,14 @@ React 18 app served as static files. **No build step, no bundler, no npm.** All 
 ## Running
 
 ```bash
-../scripts/client.sh     # serves . on https://localhost:8080
+../scripts/client.sh     # serves . on http://localhost:8080 (https if certs present)
 # or any static file server:
 python -m http.server 8080
 ```
 
-Open `https://localhost:8080/index.html`.
+Open `http://localhost:8080/index.html`.
 
-Set `window.API_BASE` in `index.html` to point at the backend (default: `https://localhost:8000`).
+`window.API_BASE` is set dynamically in `index.html` — it matches the page protocol (`http` or `https`) and points at `localhost:8000`.
 
 ---
 
@@ -94,6 +94,10 @@ window.refreshCounts()   // call from any screen after mutating data
 | Interviews | `screens/interviews.jsx` | List + week calendar + schedule modal |
 | Settings | `screens/settings.jsx` | AI config · team · pipeline stages · danger zone |
 | Quick Add | `screens/quickadd.jsx` | Paste text → AI parse → candidate create |
+| Live Room | `screens/liveroom.jsx` | Real-time interview with Web Speech API transcription |
+| Pre-interview | `screens/preinterview.jsx` | AI-generated briefing before a scheduled interview |
+| Inbox | `screens/inbox.jsx` | Notifications and activity feed |
+| Reports | `screens/reports.jsx` | Hiring analytics and pipeline reports |
 
 ---
 

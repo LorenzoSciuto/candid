@@ -365,6 +365,233 @@ const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
   );
 };
 
+const RATING_OPTIONS = [
+  "Exceeds Expectations",
+  "Meets Expectations",
+  "Partially Meets Expectations",
+  "Below Expectations",
+];
+
+const ReviewCard = ({ review, onEdit, onDelete }) => {
+  const t = window.useT();
+  const ratingColors = {
+    "Exceeds Expectations": "var(--success, #22c55e)",
+    "Meets Expectations": "var(--ink-secondary)",
+    "Partially Meets Expectations": "var(--warning, #f59e0b)",
+    "Below Expectations": "var(--danger)",
+  };
+  const ratingColor = review.rating ? (ratingColors[review.rating] || "var(--ink-secondary)") : "var(--ink-muted)";
+
+  return (
+    <div className="card" style={{ padding: "14px 16px", marginBottom: 10 }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+        <div className="col gap-2">
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{review.period}</span>
+          {review.rating && (
+            <span style={{ fontSize: 12, color: ratingColor, fontWeight: 500 }}>{review.rating}</span>
+          )}
+        </div>
+        <div className="row gap-6">
+          <button className="icon-btn" onClick={() => onEdit(review)} title={t('common.edit')}>
+            <Icons.Edit size={13} />
+          </button>
+          <button className="icon-btn" onClick={() => onDelete(review)} title={t('common.delete')}
+            style={{ color: "var(--danger)" }}>
+            <Icons.X size={13} />
+          </button>
+        </div>
+      </div>
+      {review.manager_feedback && (
+        <p style={{ margin: "0 0 6px", fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.6 }}>
+          {review.manager_feedback}
+        </p>
+      )}
+      <span className="text-11 text-muted">{t('employees.reviews.created')}: {review.created_at}</span>
+    </div>
+  );
+};
+
+const ReviewFormModal = ({ t, employeeId, review, onClose, onSaved }) => {
+  const [period, setPeriod] = useState(review?.period || "");
+  const [rating, setRating] = useState(review?.rating || "");
+  const [selfEvaluation, setSelfEvaluation] = useState(review?.self_evaluation || "");
+  const [managerFeedback, setManagerFeedback] = useState(review?.manager_feedback || "");
+  const [nextReviewDate, setNextReviewDate] = useState(review?.next_review_date || "");
+  const [saving, setSaving] = useState(false);
+  const [improving, setImproving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const body = {
+      period: period || undefined,
+      rating: rating || null,
+      self_evaluation: selfEvaluation || null,
+      manager_feedback: managerFeedback || null,
+      next_review_date: nextReviewDate || null,
+    };
+    try {
+      if (review) {
+        await fetch(`${window.API_BASE}/employees/${employeeId}/reviews/${review.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+      } else {
+        await fetch(`${window.API_BASE}/employees/${employeeId}/reviews`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+      }
+    } catch {}
+    setSaving(false);
+    onSaved();
+  };
+
+  const improveFeedback = async () => {
+    if (!review || !managerFeedback) return;
+    setImproving(true);
+    try {
+      const res = await fetch(
+        `${window.API_BASE}/employees/${employeeId}/reviews/${review.id}/improve-feedback`,
+        { method: "POST" },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setManagerFeedback(data.manager_feedback || managerFeedback);
+      }
+    } catch {}
+    setImproving(false);
+  };
+
+  const title = review ? t('employees.reviews.edit') : t('employees.reviews.add');
+  return (
+    <Modal open title={title} onClose={onClose}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn kind="primary" onClick={save} disabled={!period || saving}>
+            {saving ? t('common.saving') : t('common.save')}
+          </Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        <div className="row gap-12">
+          <div style={{ flex: 1 }}>
+            <label className="label">{t('employees.reviews.period')}</label>
+            <input className="input" value={period} onChange={e => setPeriod(e.target.value)} placeholder="e.g. Q1-2026" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label className="label">{t('employees.reviews.rating')}</label>
+            <select className="select" value={rating} onChange={e => setRating(e.target.value)}>
+              <option value="">— {t('employees.reviews.noRating')} —</option>
+              {RATING_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="label">{t('employees.reviews.selfEvaluation')}</label>
+          <textarea className="input" rows={3} style={{ resize: "vertical" }}
+            value={selfEvaluation} onChange={e => setSelfEvaluation(e.target.value)} />
+        </div>
+        <div>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <label className="label" style={{ marginBottom: 0 }}>{t('employees.reviews.managerFeedback')}</label>
+            {review && (
+              <Btn icon={<Icons.Sparkle size={12} />} onClick={improveFeedback}
+                disabled={improving || !managerFeedback} style={{ fontSize: 11 }}>
+                {improving ? t('common.improving') : t('employees.reviews.improveWithAi')}
+              </Btn>
+            )}
+          </div>
+          <textarea className="input" rows={4} style={{ resize: "vertical" }}
+            value={managerFeedback} onChange={e => setManagerFeedback(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">{t('employees.reviews.nextReviewDate')}</label>
+          <input className="input" type="date" value={nextReviewDate} onChange={e => setNextReviewDate(e.target.value)} />
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const ReviewsPanel = ({ employeeId, onClose }) => {
+  const t = window.useT();
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editReview, setEditReview] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const loadReviews = () => {
+    setLoading(true);
+    fetch(`${window.API_BASE}/employees/${employeeId}/reviews`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setReviews(Array.isArray(data) ? data : []))
+      .catch(() => setReviews([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(loadReviews, [employeeId]);
+
+  const handleDelete = async (review) => {
+    setDeleteTarget(null);
+    await fetch(`${window.API_BASE}/employees/${employeeId}/reviews/${review.id}`, { method: "DELETE" })
+      .catch(() => {});
+    loadReviews();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 650 }}
+      onClick={onClose}>
+      <div className="card col" style={{ width: 560, maxHeight: "85vh", overflow: "hidden", padding: 0 }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <span style={{ fontWeight: 600, fontSize: 15 }}>{t('employees.reviews.title')}</span>
+          <div className="row gap-8">
+            <Btn kind="primary" icon={<Icons.Plus size={13} />} onClick={() => setAddOpen(true)}>
+              {t('employees.reviews.add')}
+            </Btn>
+            <button className="icon-btn" onClick={onClose}><Icons.X size={14} /></button>
+          </div>
+        </div>
+        <div style={{ overflowY: "auto", padding: "16px 20px", flex: 1 }}>
+          {loading && <div style={{ textAlign: "center", color: "var(--ink-muted)", padding: 32 }}>{t('common.loading')}</div>}
+          {!loading && reviews.length === 0 && (
+            <div style={{ textAlign: "center", color: "var(--ink-muted)", padding: 40 }}>{t('employees.reviews.empty')}</div>
+          )}
+          {!loading && reviews.map(review => (
+            <ReviewCard key={review.id} review={review}
+              onEdit={r => setEditReview(r)}
+              onDelete={r => setDeleteTarget(r)} />
+          ))}
+        </div>
+      </div>
+
+      {addOpen && (
+        <ReviewFormModal t={t} employeeId={employeeId} review={null}
+          onClose={() => setAddOpen(false)}
+          onSaved={() => { setAddOpen(false); loadReviews(); }} />
+      )}
+      {editReview && (
+        <ReviewFormModal t={t} employeeId={employeeId} review={editReview}
+          onClose={() => setEditReview(null)}
+          onSaved={() => { setEditReview(null); loadReviews(); }} />
+      )}
+      {deleteTarget && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 700 }}
+          onClick={() => setDeleteTarget(null)}>
+          <div className="card col" style={{ width: 380, padding: 24, gap: 18 }} onClick={e => e.stopPropagation()}>
+            <span style={{ fontWeight: 600 }}>{t('employees.reviews.deleteTitle')}</span>
+            <span className="text-13 text-secondary">{deleteTarget.period}</span>
+            <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+              <Btn onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</Btn>
+              <Btn kind="danger" onClick={() => handleDelete(deleteTarget)}>{t('common.delete')}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClose }) => {
   const t = window.useT();
   const [cvText, setCvText] = useState(null);
@@ -372,6 +599,7 @@ const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClos
   const [hasCvFile, setHasCvFile] = useState(false);
   const [loadingCv, setLoadingCv] = useState(false);
   const [cvModal, setCvModal] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(false);
 
   useEffect(() => {
     if (!emp.candidate_id) return;
@@ -422,16 +650,21 @@ const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClos
             </div>
             <button className="icon-btn" onClick={onClose}><Icons.X size={14} /></button>
           </div>
-          {(cvText || loadingCv) && (
-            <div className="row gap-8">
-              <Btn icon={<Icons.Eye size={13} />} onClick={() => setCvModal(true)} disabled={!cvText}>
-                {t('employees.profile.viewCv')}
-              </Btn>
-              <Btn icon={<Icons.Download size={13} />} onClick={download} disabled={!cvText}>
-                {t('employees.profile.downloadCv')}
-              </Btn>
-            </div>
-          )}
+          <div className="row gap-8">
+            {(cvText || loadingCv) && (
+              <>
+                <Btn icon={<Icons.Eye size={13} />} onClick={() => setCvModal(true)} disabled={!cvText}>
+                  {t('employees.profile.viewCv')}
+                </Btn>
+                <Btn icon={<Icons.Download size={13} />} onClick={download} disabled={!cvText}>
+                  {t('employees.profile.downloadCv')}
+                </Btn>
+              </>
+            )}
+            <Btn icon={<Icons.Star size={13} />} onClick={() => setReviewsOpen(true)}>
+              {t('employees.reviews.title')}
+            </Btn>
+          </div>
         </div>
 
         {/* Details grid */}
@@ -466,6 +699,10 @@ const EmployeeProfile = ({ emp, showSalary, fmtSalary, currencyCode, sym, onClos
             </div>
           </div>
         </div>
+      )}
+
+      {reviewsOpen && (
+        <ReviewsPanel employeeId={emp.id} onClose={() => setReviewsOpen(false)} />
       )}
     </div>
   );

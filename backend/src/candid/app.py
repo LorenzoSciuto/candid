@@ -16,6 +16,7 @@ from candid.routers.auth import AuthRouter
 from candid.routers.candidates import CandidatesRouter
 from candid.routers.config import ConfigRouter
 from candid.routers.employees import EmployeesRouter
+from candid.routers.performance_reviews import PerformanceReviewsRouter
 from candid.routers.evaluations import EvaluationsRouter
 from candid.routers.interviews import InterviewsRouter
 from candid.routers.job_descriptions import JobDescriptionsRouter
@@ -144,6 +145,7 @@ class Application:
             RolesRouter(self._db, self._ai_factory).router,
             JobDescriptionsRouter(self._db, self._ai_factory).router,
             EmployeesRouter(self._db).router,
+            PerformanceReviewsRouter(self._db, self._ai_factory).router,
         ]:
             fastapi_app.include_router(router, dependencies=auth_dep)
 

@@ -143,6 +143,21 @@ use plain section titles followed by newline)
 
 Return only valid JSON. No markdown fences."""
 
+    IMPROVE_PERFORMANCE_FEEDBACK = """\
+You are an experienced HR professional and people manager. Rewrite the following raw manager \
+notes into a structured, professional performance review feedback section. Keep all factual \
+content, specific examples, and observations intact but improve clarity, structure, and tone. \
+The result should be constructive, balanced, and suitable for a formal performance record.
+
+Raw manager notes:
+{raw_feedback}
+
+Return a JSON object with exactly one key:
+- "improved_feedback" — the rewritten feedback as a plain string (no markdown, use plain \
+paragraph breaks)
+
+Return only valid JSON. No markdown fences."""
+
     INTERVIEW_SUMMARY = """\
 You are a professional recruiting analyst. Summarize the following interview transcript or notes \
 into a clear, concise debrief.

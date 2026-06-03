@@ -194,3 +194,23 @@ class EmployeeUpdate(BaseModel):
     salary: Optional[float] = None
     location: Optional[str] = None
     manager: Optional[str] = None
+
+
+# ── Performance Reviews ──────────────────────────────────────────────────────────
+
+class PerformanceReviewCreate(BaseModel):
+    period: str
+    self_evaluation: Optional[str] = None
+    manager_feedback: Optional[str] = None
+    rating: Optional[str] = None
+    action_goals: Optional[str] = None
+    next_review_date: Optional[str] = None
+
+
+class PerformanceReviewUpdate(BaseModel):
+    period: Optional[str] = None
+    self_evaluation: Optional[str] = None
+    manager_feedback: Optional[str] = None
+    rating: Optional[str] = None
+    action_goals: Optional[str] = None
+    next_review_date: Optional[str] = None

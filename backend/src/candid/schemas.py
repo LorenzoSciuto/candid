@@ -110,6 +110,22 @@ class SwitchOrgRequest(BaseModel):
     org_id: str
 
 
+# ── Branding ─────────────────────────────────────────────────────────────────────
+
+class BrandingConfig(BaseModel):
+    primary_color: Optional[str] = None
+    background_color: Optional[str] = None
+    font_family: Optional[str] = None
+    logo_url: Optional[str] = None
+
+
+class BrandingUpdate(BaseModel):
+    primary_color: Optional[str] = None
+    background_color: Optional[str] = None
+    font_family: Optional[str] = None
+    logo_url: Optional[str] = None
+
+
 # ── Organizations ────────────────────────────────────────────────────────────────
 
 class OrgCreate(BaseModel):

@@ -64,6 +64,32 @@ class AIEngine:
         parsed_response = self._parse_json(raw_response)
         return parsed_response.get(result_key, "")
 
+    def generate_rejection_email(
+        self,
+        candidate_name: str,
+        job_title: str,
+        weaknesses: list[str],
+        additional_context: str = "",
+    ) -> dict:
+        prompt = self._build_rejection_prompt(candidate_name, job_title, weaknesses, additional_context)
+        result = self._parse_json(self._call(prompt))
+        return {"subject": result.get("subject", ""), "body": result.get("body", "")}
+
+    def _build_rejection_prompt(
+        self,
+        candidate_name: str,
+        job_title: str,
+        weaknesses: list[str],
+        additional_context: str,
+    ) -> str:
+        weaknesses_text = "; ".join(weaknesses) if weaknesses else "Not specified"
+        return Prompts.REJECTION_EMAIL.format(
+            candidate_name=candidate_name,
+            job_title=job_title,
+            weaknesses=weaknesses_text,
+            additional_context=additional_context or "None",
+        )
+
     def improve_role_description(self, desc_text: str, role_name: str = "") -> str:
         prompt = Prompts.IMPROVE_ROLE_DESC.format(
             desc_text=desc_text,

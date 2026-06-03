@@ -1012,4 +1012,12 @@ const App = () => {
   );
 };
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+const rootElement = document.getElementById("root");
+const initialHash = window.location.hash;
+
+if (initialHash.startsWith("#video/")) {
+  const videoToken = initialHash.slice("#video/".length);
+  ReactDOM.createRoot(rootElement).render(<window.VideoPortalScreen token={videoToken} />);
+} else {
+  ReactDOM.createRoot(rootElement).render(<App />);
+}

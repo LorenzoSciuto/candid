@@ -22,10 +22,12 @@ from candid.routers.job_descriptions import JobDescriptionsRouter
 from candid.routers.organizations import OrganizationsRouter
 from candid.routers.quick_add import QuickAddRouter
 from candid.routers.roles import RolesRouter
+from candid.routers.video_interviews import PublicVideoRouter, VideoInterviewsRouter
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailService
+from candid.services.video_interview_service import VideoInterviewService
 
 
 class Application:
@@ -35,6 +37,7 @@ class Application:
         self._crypto = CryptoService(self._settings.fernet_key)
         self._extractor = CVExtractor()
         self._ai_factory = AIEngineFactory(self._crypto)
+        self._video_interview_service = VideoInterviewService()
         self._email = EmailService(
             smtp_host=self._settings.smtp_host,
             smtp_port=self._settings.smtp_port,
@@ -131,6 +134,9 @@ class Application:
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
         fastapi_app.include_router(OrganizationsRouter(self._db, self._email, self._settings).router)
+        fastapi_app.include_router(
+            PublicVideoRouter(self._db, self._video_interview_service).router
+        )
 
         auth_dep = [Depends(require_user)]
         for router in [
@@ -144,6 +150,7 @@ class Application:
             RolesRouter(self._db, self._ai_factory).router,
             JobDescriptionsRouter(self._db, self._ai_factory).router,
             EmployeesRouter(self._db).router,
+            VideoInterviewsRouter(self._db, self._video_interview_service).router,
         ]:
             fastapi_app.include_router(router, dependencies=auth_dep)
 

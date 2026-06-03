@@ -49,7 +49,7 @@ class Application:
         @asynccontextmanager
         async def lifespan(_: FastAPI):
             self._wait_for_db()
-            self._db.create_tables()
+            self._db.migrate()
             yield
 
         fastapi_app = FastAPI(

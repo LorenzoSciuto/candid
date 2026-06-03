@@ -170,12 +170,17 @@ class Employee(SQLModel, table=True):
     reminder_created_at: Optional[str] = None
 
 
+# ── Notifications ─────────────────────────────────────────────────────────────
+
 class Notification(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: _uid("notif"), primary_key=True)
-    org_id: str = Field(default="", index=True)
-    notification_type: str = "info"
-    message: str = ""
-    reference_id: Optional[str] = None
+    id: str = Field(default_factory=lambda: _uid("ntf"), primary_key=True)
+    org_id: str = Field(index=True)
+    user_id: str = Field(index=True)
+    category: str                   # "candidate" | "analysis" | "interview" | "invitation" | "reminder"
+    title: str
+    body: str
+    entity_id: str                  # ID of the related entity
+    entity_type: str                # "candidate" | "interview" | "invitation" | "employee"
     is_read: bool = Field(default=False)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

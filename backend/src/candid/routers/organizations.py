@@ -25,6 +25,7 @@ from candid.models import (
     User,
 )
 from candid.schemas import InviteRequest
+from candid.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,17 @@ class MemberRoleUpdate(BaseModel):
 
 
 class OrganizationsRouter:
-    def __init__(self, db: Database, email_service, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        db: Database,
+        email_service,
+        settings: Settings | None = None,
+        notification_service: NotificationService | None = None,
+    ) -> None:
         self._db = db
         self._email = email_service
         self._settings = settings or Settings()
+        self._notification_service = notification_service or NotificationService()
         self.router = APIRouter(prefix="/organizations", tags=["organizations"])
         self._register()
 
@@ -245,25 +253,41 @@ class OrganizationsRouter:
         if inv.expires_at < date.today().isoformat():
             raise HTTPException(410, "Invitation has expired")
 
-        # Find user by email
-        user = session.exec(select(User).where(User.email == inv.email)).first()
-        if user:
-            existing_mbr = session.exec(
-                select(Membership).where(
-                    Membership.org_id == inv.org_id,
-                    Membership.user_id == user.id,
-                )
-            ).first()
-            if not existing_mbr:
-                mbr = Membership(org_id=inv.org_id, user_id=user.id, role=inv.role)
-                session.add(mbr)
+        self._apply_membership(session, inv)
 
         inv.accepted_at = date.today().isoformat()
         session.add(inv)
         session.commit()
 
+        self._notify_invitation_accepted(session, inv)
+
         redirect_url = f"{self._settings.app_url}/index.html#?invite_accepted=1&org_id={inv.org_id}"
         return RedirectResponse(url=redirect_url, status_code=302)
+
+    def _apply_membership(self, session: Session, inv: Invitation) -> None:
+        invitee = session.exec(select(User).where(User.email == inv.email)).first()
+        if not invitee:
+            return
+        existing_membership = session.exec(
+            select(Membership).where(
+                Membership.org_id == inv.org_id,
+                Membership.user_id == invitee.id,
+            )
+        ).first()
+        if not existing_membership:
+            session.add(Membership(org_id=inv.org_id, user_id=invitee.id, role=inv.role))
+
+    def _notify_invitation_accepted(self, session: Session, inv: Invitation) -> None:
+        org = session.get(Organization, inv.org_id)
+        if not org:
+            return
+        self._notification_service.create_invitation_accepted_notification(
+            session=session,
+            org_id=inv.org_id,
+            user_id=inv.invited_by,
+            invitee_email=inv.email,
+            org_name=org.name,
+        )
 
     def _delete_org(self, session: Session, ctx: UserCtx) -> None:
         org = session.get(Organization, ctx.org_id)

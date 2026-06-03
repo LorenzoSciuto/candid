@@ -18,6 +18,7 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
         {[
           { id: "ai",           label: t('settings.tab.ai') },
           { id: "pipeline",     label: "Pipeline" },
+          { id: "branding",     label: "Branding" },
           { id: "locale",       label: t('settings.tab.locale') },
           { id: "profile",      label: t('settings.tab.profile') },
           { id: "locations",    label: t('settings.tab.locations') },
@@ -30,11 +31,150 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
 
       {tab === "ai"           && <AISettings t={t} />}
       {tab === "pipeline"     && <PipelineSettings t={t} />}
+      {tab === "branding"     && <BrandingSettings t={t} />}
       {tab === "locale"       && <LocaleSettings t={t} locale={locale} onChange={handleLocale} />}
       {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />}
       {tab === "locations"    && <LocationsSettings t={t} />}
       {tab === "team"         && <TeamSettings t={t} user={user} onLogout={onLogout} />}
       {tab === "integrations" && <IntegrationsSettings t={t} />}
+    </div>
+  );
+};
+
+// ── Branding ──────────────────────────────────────────────────────────────────
+
+const BrandingSettings = ({ t }) => {
+  const [primaryColor, setPrimaryColor] = useState("#4F46E5");
+  const [backgroundColor, setBackgroundColor] = useState("#F3F4F6");
+  const [fontFamily, setFontFamily] = useState("Inter");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/organizations/current/branding`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        if (data.primary_color)    setPrimaryColor(data.primary_color);
+        if (data.background_color) setBackgroundColor(data.background_color);
+        if (data.font_family)      setFontFamily(data.font_family);
+        if (data.logo_url)         setLogoUrl(data.logo_url || "");
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveBranding = async () => {
+    setSaving(true);
+    setSaved(false);
+    setError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/organizations/current/branding`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          primary_color: primaryColor,
+          background_color: backgroundColor,
+          font_family: fontFamily,
+          logo_url: logoUrl || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to save");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err.message);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="col gap-16">
+      <div className="card card-pad col gap-16">
+        <div className="col">
+          <span className="weight-600">Branding</span>
+          <span className="text-12 text-secondary">Customize colors and typography for your organization.</span>
+        </div>
+
+        <div className="row gap-16" style={{ flexWrap: "wrap" }}>
+          <div className="col gap-6" style={{ flex: "1 1 180px" }}>
+            <label className="label">Primary color</label>
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)}
+                style={{ width: 36, height: 32, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none" }} />
+              <input className="input" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)}
+                style={{ fontFamily: "var(--font-mono)", fontSize: 12, flex: 1 }} placeholder="#4F46E5" />
+            </div>
+          </div>
+
+          <div className="col gap-6" style={{ flex: "1 1 180px" }}>
+            <label className="label">Background color</label>
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <input type="color" value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)}
+                style={{ width: 36, height: 32, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none" }} />
+              <input className="input" value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)}
+                style={{ fontFamily: "var(--font-mono)", fontSize: 12, flex: 1 }} placeholder="#F3F4F6" />
+            </div>
+          </div>
+        </div>
+
+        <div className="col gap-6">
+          <label className="label">Font family</label>
+          <input className="input" value={fontFamily} onChange={e => setFontFamily(e.target.value)}
+            placeholder="Inter" style={{ maxWidth: 320 }} />
+        </div>
+
+        <div className="col gap-6">
+          <label className="label">Logo URL</label>
+          <input className="input" type="url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)}
+            placeholder="https://example.com/logo.png" />
+        </div>
+
+        {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
+
+        <div className="row gap-8">
+          <Btn kind="primary" onClick={saveBranding} disabled={saving}>
+            {saving ? "Saving…" : saved ? "Saved" : "Save branding"}
+          </Btn>
+        </div>
+      </div>
+
+      {/* Live preview */}
+      <div className="card card-pad col gap-10">
+        <span className="weight-600 text-13">Preview</span>
+        <div style={{
+          background: backgroundColor,
+          borderRadius: 10,
+          padding: "20px 24px",
+          fontFamily: fontFamily || "Inter",
+          border: "1px solid var(--border)",
+        }}>
+          {logoUrl && (
+            <img src={logoUrl} alt="Logo preview" style={{ maxHeight: 40, maxWidth: 160, marginBottom: 12, display: "block" }}
+              onError={e => { e.target.style.display = "none"; }} />
+          )}
+          <div style={{ fontWeight: 700, fontSize: 18, color: primaryColor, marginBottom: 6 }}>
+            Your Organization
+          </div>
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 14 }}>
+            This is how your branded interface will look.
+          </div>
+          <button style={{
+            background: primaryColor,
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            padding: "8px 18px",
+            fontFamily: fontFamily || "Inter",
+            fontSize: 13,
+            cursor: "default",
+            fontWeight: 600,
+          }}>
+            Sample button
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -581,6 +581,7 @@ const EmployeeProfilePage = ({ employeeId, employees, showSalary, fmtSalary, cur
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px 24px" }}>
           {[
             [t('employees.form.email'), employee.email || "—"],
+            [t('employees.form.dept'), employee.department || "—"],
             [t('employees.col.location'), employee.location || "—"],
             [t('employees.col.hireDate'), employee.hire_date || "—"],
             [t('employees.col.salary'), employee.salary ? (showSalary ? fmtSalary(employee.salary) + ` ${currencyCode}` : "••••") : "—"],

@@ -372,15 +372,23 @@ const RATING_OPTIONS = [
   "Below Expectations",
 ];
 
+const RATING_TRANSLATION_KEYS = {
+  "Exceeds Expectations": "employees.reviews.rating.exceeds",
+  "Meets Expectations": "employees.reviews.rating.meets",
+  "Partially Meets Expectations": "employees.reviews.rating.partiallyMeets",
+  "Below Expectations": "employees.reviews.rating.below",
+};
+
+const RATING_COLORS = {
+  "Exceeds Expectations": "var(--success, #22c55e)",
+  "Meets Expectations": "var(--ink-secondary)",
+  "Partially Meets Expectations": "var(--warning, #f59e0b)",
+  "Below Expectations": "var(--danger)",
+};
+
 const ReviewCard = ({ review, onEdit, onDelete }) => {
   const t = window.useT();
-  const ratingColors = {
-    "Exceeds Expectations": "var(--success, #22c55e)",
-    "Meets Expectations": "var(--ink-secondary)",
-    "Partially Meets Expectations": "var(--warning, #f59e0b)",
-    "Below Expectations": "var(--danger)",
-  };
-  const ratingColor = review.rating ? (ratingColors[review.rating] || "var(--ink-secondary)") : "var(--ink-muted)";
+  const ratingColor = review.rating ? (RATING_COLORS[review.rating] || "var(--ink-secondary)") : "var(--ink-muted)";
 
   return (
     <div className="card" style={{ padding: "14px 16px", marginBottom: 10 }}>
@@ -388,7 +396,9 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
         <div className="col gap-2">
           <span style={{ fontWeight: 600, fontSize: 14 }}>{review.period}</span>
           {review.rating && (
-            <span style={{ fontSize: 12, color: ratingColor, fontWeight: 500 }}>{review.rating}</span>
+            <span style={{ fontSize: 12, color: ratingColor, fontWeight: 500 }}>
+              {t(RATING_TRANSLATION_KEYS[review.rating] || review.rating)}
+            </span>
           )}
         </div>
         <div className="row gap-6">
@@ -481,7 +491,9 @@ const ReviewFormModal = ({ t, employeeId, review, onClose, onSaved }) => {
             <label className="label">{t('employees.reviews.rating')}</label>
             <select className="select" value={rating} onChange={e => setRating(e.target.value)}>
               <option value="">— {t('employees.reviews.noRating')} —</option>
-              {RATING_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {RATING_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>{t(RATING_TRANSLATION_KEYS[opt])}</option>
+              ))}
             </select>
           </div>
         </div>

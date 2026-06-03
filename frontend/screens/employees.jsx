@@ -303,6 +303,126 @@ const EmployeeReminderSection = ({ employeeId, employee, onEmployeeChanged }) =>
   );
 };
 
+// ── Recruiting history (read-only, from candidate record) ────────────────────
+
+const RecruitingHistorySection = ({ candidateId }) => {
+  const t = window.useT();
+  const [candidate, setCandidate] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/candidates/${candidateId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setCandidate(data))
+      .catch(() => {});
+  }, [candidateId]);
+
+  if (!candidate) return null;
+
+  const preAnalysis = (() => { try { return JSON.parse(candidate.ai_pre_analysis || "null"); } catch { return null; } })();
+  const statusHistory = (() => { try { return JSON.parse(candidate.status_history || "[]"); } catch { return []; } })();
+  const interviews = candidate.interviews || [];
+  const evaluation = candidate.evaluation || null;
+  const statusLabels = Object.fromEntries((window.CANDID_DATA.STATUS || []).map(s => [s.id, s.label]));
+
+  return (
+    <div className="card" style={{ padding: "16px 20px", marginTop: 16, borderTop: "2px solid var(--border)" }}>
+      <button style={{ all: "unset", cursor: "pointer", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+        onClick={() => setExpanded(e => !e)}>
+        <div className="row gap-8" style={{ alignItems: "center" }}>
+          <Icons.FileText size={14} style={{ color: "var(--ink-muted)" }} />
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Recruiting History</span>
+          <span style={{ fontSize: 11, color: "var(--ink-muted)", background: "var(--bg-sunken)", padding: "2px 7px", borderRadius: 4 }}>read-only</span>
+        </div>
+        <Icons.ChevronDown size={14} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </button>
+
+      {expanded && (
+        <div className="col gap-16" style={{ marginTop: 16 }}>
+          {/* Score + overview */}
+          {preAnalysis && (
+            <div>
+              <div className="row gap-12" style={{ marginBottom: 8 }}>
+                {candidate.score != null && <span style={{ fontWeight: 600 }}>Score: {candidate.score?.toFixed(1)} / 5</span>}
+              </div>
+              {preAnalysis.overview && <p style={{ margin: 0, fontSize: 13, color: "var(--ink-secondary)", lineHeight: 1.6 }}>{preAnalysis.overview}</p>}
+              {preAnalysis.strengths?.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Strengths</span>
+                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, color: "var(--ink-secondary)" }}>
+                    {preAnalysis.strengths.map((strength, index) => <li key={index}>{strength}</li>)}
+                  </ul>
+                </div>
+              )}
+              {preAnalysis.weaknesses?.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Areas for development</span>
+                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, color: "var(--ink-secondary)" }}>
+                    {preAnalysis.weaknesses.map((weakness, index) => <li key={index}>{weakness}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Status timeline */}
+          {statusHistory.length > 0 && (
+            <div>
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>Pipeline timeline</span>
+              <div className="col gap-6">
+                {statusHistory.map((entry, index) => (
+                  <div key={index} className="row gap-10" style={{ alignItems: "center", fontSize: 12.5 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ink-muted)", flexShrink: 0 }} />
+                    <span style={{ color: "var(--ink-secondary)" }}>{statusLabels[entry.status] || entry.status}</span>
+                    <span className="text-muted">·</span>
+                    <span className="text-muted">{(entry.at || "").slice(0, 10)}</span>
+                    {entry.by && <><span className="text-muted">·</span><span className="text-muted">{entry.by}</span></>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Interviews */}
+          {interviews.length > 0 && (
+            <div>
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>Interviews ({interviews.length})</span>
+              <div className="col gap-8">
+                {interviews.map(interview => (
+                  <div key={interview.id} className="card" style={{ padding: "10px 14px", fontSize: 12.5 }}>
+                    <div className="row" style={{ justifyContent: "space-between" }}>
+                      <span style={{ fontWeight: 500 }}>{interview.title || interview.type || "Interview"}</span>
+                      <span className="text-muted">{(interview.date || "").slice(0, 10)}</span>
+                    </div>
+                    {interview.interviewer && <span className="text-muted" style={{ display: "block", marginTop: 2 }}>{interview.interviewer}</span>}
+                    {interview.ai_summary && <p style={{ margin: "6px 0 0", color: "var(--ink-secondary)", lineHeight: 1.5 }}>{interview.ai_summary}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Final evaluation */}
+          {evaluation && (
+            <div>
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>Final evaluation</span>
+              <div className="card" style={{ padding: "12px 16px", fontSize: 12.5 }}>
+                {evaluation.final_recommendation && (
+                  <div className="row gap-8" style={{ marginBottom: 8, alignItems: "center" }}>
+                    <span className="text-muted">Recommendation:</span>
+                    <span style={{ fontWeight: 600 }}>{evaluation.final_recommendation}</span>
+                  </div>
+                )}
+                {evaluation.summary && <p style={{ margin: 0, color: "var(--ink-secondary)", lineHeight: 1.5 }}>{evaluation.summary}</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Employee profile full page ────────────────────────────────────────────────
 
 const EmployeeProfilePage = ({ employeeId, employees, showSalary, fmtSalary, currencyCode, sym, onBack, onEmployeesUpdated }) => {
@@ -404,6 +524,9 @@ const EmployeeProfilePage = ({ employeeId, employees, showSalary, fmtSalary, cur
 
       {/* Reviews inline */}
       <EmployeeReviewsSection employeeId={employee.id} />
+
+      {/* Recruiting history — only when linked to original candidate */}
+      {employee.candidate_id && <RecruitingHistorySection candidateId={employee.candidate_id} />}
 
       {/* CV viewer */}
       {cvModalOpen && cvText && (

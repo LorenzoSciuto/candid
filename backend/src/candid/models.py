@@ -163,3 +163,18 @@ class Employee(SQLModel, table=True):
     location: Optional[str] = None
     manager: Optional[str] = None
     candidate_id: Optional[str] = None
+
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+
+class Notification(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: _uid("ntf"), primary_key=True)
+    org_id: str = Field(index=True)
+    user_id: str = Field(index=True)
+    category: str                   # "candidate" | "analysis" | "interview" | "invitation" | "system"
+    title: str
+    body: str
+    entity_id: str                  # ID of the related entity (candidate_id, interview_id, etc.)
+    entity_type: str                # "candidate" | "interview" | "invitation"
+    is_read: bool = Field(default=False)
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

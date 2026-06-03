@@ -10,6 +10,7 @@ from candid.database import Database
 from candid.dependencies import UserCtx, require_org
 from candid.models import Candidate, Evaluation, Interview
 from candid.schemas import CandidateCreate, CandidateUpdate
+from candid.services.notification_service import NotificationService
 
 _CV_MIME = {
     "pdf":  "application/pdf",
@@ -23,8 +24,9 @@ def _safe_dump(candidate: Candidate) -> dict:
 
 
 class CandidatesRouter:
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, notification_service: NotificationService | None = None) -> None:
         self._db = db
+        self._notification_service = notification_service or NotificationService()
         self.router = APIRouter(prefix="/candidates", tags=["candidates"])
         self._register()
 
@@ -53,7 +55,7 @@ class CandidatesRouter:
             session: Session = Depends(db.get_session),
             user: UserCtx = Depends(require_org),
         ):
-            return self._create(session, user.org_id, body)
+            return self._create(session, user, body)
 
         @self.router.get("/{candidate_id}/cv")
         def download_cv(
@@ -140,12 +142,24 @@ class CandidatesRouter:
             result.append(d)
         return result
 
-    def _create(self, session, org_id, body: CandidateCreate) -> dict:
-        candidate = Candidate(org_id=org_id, **body.model_dump())
+    def _create(self, session, user: UserCtx, body: CandidateCreate) -> dict:
+        candidate = Candidate(org_id=user.org_id, **body.model_dump())
         session.add(candidate)
         session.commit()
         session.refresh(candidate)
-        return _safe_dump(candidate)
+        result = _safe_dump(candidate)
+        self._notify_candidate_added(session, user, candidate)
+        return result
+
+    def _notify_candidate_added(self, session, user: UserCtx, candidate: Candidate) -> None:
+        self._notification_service.create_candidate_added_notification(
+            session=session,
+            org_id=user.org_id,
+            user_id=user.user_id,
+            candidate_first_name=candidate.first_name,
+            candidate_last_name=candidate.last_name,
+            candidate_id=candidate.id,
+        )
 
     def _download_cv(self, session, org_id, candidate_id) -> Response:
         candidate = self._fetch(session, org_id, candidate_id)

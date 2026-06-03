@@ -1,9 +1,12 @@
 import io
 import json
 import pytest
+from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel.pool import StaticPool
 
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
+from candid.services.notification_service import NotificationService
 
 
 class TestCryptoService:
@@ -78,3 +81,108 @@ class TestCVExtractor:
         with mock.patch("fitz.open", return_value=mock_doc):
             with pytest.raises(ValueError, match="image-only"):
                 self.extractor.extract("scan.pdf", b"fake-pdf-bytes")
+
+
+def _make_in_memory_session():
+    """Return a fresh SQLite in-memory session with all tables created."""
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    return Session(engine)
+
+
+class TestNotificationService:
+    def setup_method(self) -> None:
+        self.service = NotificationService()
+        self.session = _make_in_memory_session()
+
+    def teardown_method(self) -> None:
+        self.session.close()
+
+    def test_createNotification_shouldPersistRecord_whenCalledWithValidArgs(self) -> None:
+        notification = self.service.create_notification(
+            session=self.session,
+            org_id="org-1",
+            user_id="user-1",
+            category="system",
+            title="Test title",
+            body="Test body",
+            entity_id="ent-1",
+            entity_type="candidate",
+        )
+        assert notification.id.startswith("ntf-")
+        assert notification.org_id == "org-1"
+        assert notification.user_id == "user-1"
+        assert notification.category == "system"
+        assert notification.title == "Test title"
+        assert notification.body == "Test body"
+        assert notification.entity_id == "ent-1"
+        assert notification.entity_type == "candidate"
+        assert notification.is_read is False
+
+    def test_createCandidateAddedNotification_shouldSetCorrectCategoryAndTitle(self) -> None:
+        notification = self.service.create_candidate_added_notification(
+            session=self.session,
+            org_id="org-1",
+            user_id="user-1",
+            candidate_first_name="Jane",
+            candidate_last_name="Doe",
+            candidate_id="c-abc",
+        )
+        assert notification.category == "candidate"
+        assert "Jane Doe" in notification.title
+        assert notification.entity_id == "c-abc"
+        assert notification.entity_type == "candidate"
+        assert notification.is_read is False
+
+    def test_createAnalysisCompleteNotification_shouldSetCorrectCategoryAndTitle(self) -> None:
+        notification = self.service.create_analysis_complete_notification(
+            session=self.session,
+            org_id="org-1",
+            user_id="user-1",
+            candidate_first_name="Jane",
+            candidate_id="c-abc",
+        )
+        assert notification.category == "analysis"
+        assert "Jane" in notification.title
+        assert notification.entity_id == "c-abc"
+        assert notification.entity_type == "candidate"
+
+    def test_createInvitationAcceptedNotification_shouldSetCorrectCategoryAndTitle(self) -> None:
+        notification = self.service.create_invitation_accepted_notification(
+            session=self.session,
+            org_id="org-1",
+            user_id="user-1",
+            invitee_email="newmember@example.com",
+            org_name="Acme Corp",
+        )
+        assert notification.category == "invitation"
+        assert "newmember@example.com" in notification.title
+        assert "Acme Corp" in notification.title
+        assert notification.entity_type == "invitation"
+
+    def test_createNotification_shouldGenerateUniqueIds_whenCalledTwice(self) -> None:
+        notification_a = self.service.create_notification(
+            session=self.session,
+            org_id="org-1",
+            user_id="user-1",
+            category="system",
+            title="First",
+            body="Body",
+            entity_id="e-1",
+            entity_type="candidate",
+        )
+        notification_b = self.service.create_notification(
+            session=self.session,
+            org_id="org-1",
+            user_id="user-1",
+            category="system",
+            title="Second",
+            body="Body",
+            entity_id="e-2",
+            entity_type="candidate",
+        )
+        assert notification_a.id != notification_b.id

@@ -20,12 +20,14 @@ from candid.routers.evaluations import EvaluationsRouter
 from candid.routers.interviews import InterviewsRouter
 from candid.routers.job_descriptions import JobDescriptionsRouter
 from candid.routers.organizations import OrganizationsRouter
+from candid.routers.notifications import NotificationsRouter
 from candid.routers.quick_add import QuickAddRouter
 from candid.routers.roles import RolesRouter
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailService
+from candid.services.notification_service import NotificationService
 
 
 class Application:
@@ -35,6 +37,7 @@ class Application:
         self._crypto = CryptoService(self._settings.fernet_key)
         self._extractor = CVExtractor()
         self._ai_factory = AIEngineFactory(self._crypto)
+        self._notification_service = NotificationService()
         self._email = EmailService(
             smtp_host=self._settings.smtp_host,
             smtp_port=self._settings.smtp_port,
@@ -130,12 +133,15 @@ class Application:
         fastapi_app.include_router(AuthRouter(self._settings, self._db).router)
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
-        fastapi_app.include_router(OrganizationsRouter(self._db, self._email, self._settings).router)
+        fastapi_app.include_router(
+            OrganizationsRouter(self._db, self._email, self._settings, self._notification_service).router
+        )
 
         auth_dep = [Depends(require_user)]
         for router in [
             AIRouter(self._db, self._ai_factory, self._email).router,
-            CandidatesRouter(self._db).router,
+            CandidatesRouter(self._db, self._notification_service).router,
+            NotificationsRouter(self._db).router,
             AnalysisRouter(self._db, self._ai_factory, self._extractor).router,
             InterviewsRouter(self._db, self._ai_factory).router,
             EvaluationsRouter(self._db).router,

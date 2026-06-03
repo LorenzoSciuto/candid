@@ -207,6 +207,11 @@ class EmployeeReminderSet(BaseModel):
 
 # ── Performance Reviews ──────────────────────────────────────────────────────────
 
+class ImproveReviewTextRequest(BaseModel):
+    text: str
+    field: str = "manager_feedback"            # "manager_feedback" | "self_evaluation"
+
+
 class PerformanceReviewCreate(BaseModel):
     period: str
     self_evaluation: Optional[str] = None

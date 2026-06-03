@@ -5,7 +5,7 @@ from candid.database import Database
 from candid.dependencies import UserCtx, require_org
 from candid.models import Employee, PerformanceReview
 from candid.prompts import Prompts
-from candid.schemas import PerformanceReviewCreate, PerformanceReviewUpdate
+from candid.schemas import ImproveReviewTextRequest, PerformanceReviewCreate, PerformanceReviewUpdate
 from candid.services.ai_engine import AIEngineFactory
 
 
@@ -49,6 +49,17 @@ class PerformanceReviewsRouter:
             session.refresh(review_record)
             return review_record
 
+        @self.router.post("/improve-text")
+        def improve_text_stateless(
+            employee_id: str,
+            body: ImproveReviewTextRequest,
+            session: Session = Depends(database.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            self._fetch_employee(session, user.org_id, employee_id)
+            improved = self._improve_text(session, user.org_id, body.text, body.field)
+            return {"improved_text": improved}
+
         @self.router.get("/{review_id}")
         def get_review(
             employee_id: str,
@@ -88,36 +99,22 @@ class PerformanceReviewsRouter:
             session.delete(review_record)
             session.commit()
 
-        @self.router.post("/{review_id}/improve-feedback")
-        def improve_feedback(
-            employee_id: str,
-            review_id: str,
-            session: Session = Depends(database.get_session),
-            user: UserCtx = Depends(require_org),
-        ):
-            self._fetch_employee(session, user.org_id, employee_id)
-            review_record = self._fetch_review(session, user.org_id, employee_id, review_id)
-            improved_text = self._run_feedback_improvement(session, user.org_id, review_record)
-            review_record.manager_feedback = improved_text
-            session.add(review_record)
-            session.commit()
-            session.refresh(review_record)
-            return review_record
-
-    def _run_feedback_improvement(
+    def _improve_text(
         self,
         session: Session,
         org_id: str,
-        review_record: PerformanceReview,
+        text: str,
+        field: str,
     ) -> str:
-        if not review_record.manager_feedback:
-            raise HTTPException(422, "manager_feedback is empty — nothing to improve")
+        if not text or not text.strip():
+            raise HTTPException(422, "text is empty — nothing to improve")
         try:
             engine = self._ai_engine_factory.from_session(session, org_id)
-            prompt = Prompts.IMPROVE_PERFORMANCE_FEEDBACK.format(
-                raw_feedback=review_record.manager_feedback,
-            )
-            return engine.run_prompt(prompt, result_key="improved_feedback")
+            if field == "self_evaluation":
+                prompt = Prompts.IMPROVE_SELF_EVALUATION.format(raw_text=text)
+            else:
+                prompt = Prompts.IMPROVE_REVIEW_MANAGER_FEEDBACK.format(raw_text=text)
+            return engine.run_prompt(prompt, result_key="improved_text")
         except HTTPException:
             raise
         except Exception as exc:

@@ -145,48 +145,75 @@ class TestDeleteReview:
         assert response.status_code == 404
 
 
-class TestImproveManagerFeedback:
-    def test_improveManagerFeedback_shouldUpdateFeedback_whenAiResponds(
+class TestImproveReviewText:
+    def test_improveReviewText_shouldReturnImprovedText_whenManagerFeedbackField(
         self, client: TestClient, ai_factory: AIEngineFactory
     ) -> None:
         employee_id = _employee_id(client)
-        created = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD).json()
-
         mock_engine = MagicMock()
         mock_engine.run_prompt.return_value = "Structured professional feedback text."
         original_from_session = ai_factory.from_session
         ai_factory.from_session = MagicMock(return_value=mock_engine)
 
         try:
-            response = client.post(f"/employees/{employee_id}/reviews/{created['id']}/improve-feedback")
+            response = client.post(
+                f"/employees/{employee_id}/reviews/improve-text",
+                json={"text": REVIEW_PAYLOAD["manager_feedback"], "field": "manager_feedback"},
+            )
             assert response.status_code == 200
-            review_data = response.json()
-            assert review_data["manager_feedback"] == "Structured professional feedback text."
+            assert response.json()["improved_text"] == "Structured professional feedback text."
         finally:
             ai_factory.from_session = original_from_session
 
-    def test_improveManagerFeedback_shouldReturn502_whenAiEngineRaisesError(
+    def test_improveReviewText_shouldReturnImprovedText_whenSelfEvaluationField(
         self, client: TestClient, ai_factory: AIEngineFactory
     ) -> None:
         employee_id = _employee_id(client)
-        created = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD).json()
+        mock_engine = MagicMock()
+        mock_engine.run_prompt.return_value = "Polished self-assessment paragraph."
+        original_from_session = ai_factory.from_session
+        ai_factory.from_session = MagicMock(return_value=mock_engine)
 
+        try:
+            response = client.post(
+                f"/employees/{employee_id}/reviews/improve-text",
+                json={"text": REVIEW_PAYLOAD["self_evaluation"], "field": "self_evaluation"},
+            )
+            assert response.status_code == 200
+            assert response.json()["improved_text"] == "Polished self-assessment paragraph."
+        finally:
+            ai_factory.from_session = original_from_session
+
+    def test_improveReviewText_shouldReturn502_whenAiEngineRaisesError(
+        self, client: TestClient, ai_factory: AIEngineFactory
+    ) -> None:
+        employee_id = _employee_id(client)
         mock_engine = MagicMock()
         mock_engine.run_prompt.side_effect = RuntimeError("Provider unavailable")
         original_from_session = ai_factory.from_session
         ai_factory.from_session = MagicMock(return_value=mock_engine)
 
         try:
-            response = client.post(f"/employees/{employee_id}/reviews/{created['id']}/improve-feedback")
+            response = client.post(
+                f"/employees/{employee_id}/reviews/improve-text",
+                json={"text": "Some feedback text.", "field": "manager_feedback"},
+            )
             assert response.status_code == 502
         finally:
             ai_factory.from_session = original_from_session
 
-    def test_improveManagerFeedback_shouldReturn422_whenFeedbackIsEmpty(self, client: TestClient) -> None:
+    def test_improveReviewText_shouldReturn422_whenTextIsEmpty(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
-        created = client.post(
-            f"/employees/{employee_id}/reviews",
-            json={"period": "Q3-2026"},
-        ).json()
-        response = client.post(f"/employees/{employee_id}/reviews/{created['id']}/improve-feedback")
+        response = client.post(
+            f"/employees/{employee_id}/reviews/improve-text",
+            json={"text": "", "field": "manager_feedback"},
+        )
+        assert response.status_code == 422
+
+    def test_improveReviewText_shouldReturn422_whenTextIsWhitespaceOnly(self, client: TestClient) -> None:
+        employee_id = _employee_id(client)
+        response = client.post(
+            f"/employees/{employee_id}/reviews/improve-text",
+            json={"text": "   ", "field": "self_evaluation"},
+        )
         assert response.status_code == 422

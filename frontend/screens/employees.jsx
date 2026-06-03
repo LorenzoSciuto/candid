@@ -128,7 +128,8 @@ const ReviewFormModal = ({ t, employeeId, review, onClose, onSaved }) => {
   const [managerFeedback, setManagerFeedback] = useState(review?.manager_feedback || "");
   const [nextReviewDate, setNextReviewDate] = useState(review?.next_review_date || "");
   const [saving, setSaving] = useState(false);
-  const [improving, setImproving] = useState(false);
+  const [improvingManager, setImprovingManager] = useState(false);
+  const [improvingSelf, setImprovingSelf] = useState(false);
 
   const save = async () => {
     setSaving(true);
@@ -144,14 +145,18 @@ const ReviewFormModal = ({ t, employeeId, review, onClose, onSaved }) => {
     onSaved();
   };
 
-  const improveFeedback = async () => {
-    if (!review || !managerFeedback) return;
+  const improveField = async (fieldName, currentValue, setter, setImproving) => {
+    if (!currentValue.trim()) return;
     setImproving(true);
     try {
-      const response = await fetch(`${window.API_BASE}/employees/${employeeId}/reviews/${review.id}/improve-feedback`, { method: "POST" });
+      const response = await fetch(`${window.API_BASE}/employees/${employeeId}/reviews/improve-text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: currentValue, field: fieldName }),
+      });
       if (response.ok) {
         const data = await response.json();
-        setManagerFeedback(data.manager_feedback || managerFeedback);
+        setter(data.improved_text || currentValue);
       }
     } catch {}
     setImproving(false);
@@ -176,17 +181,24 @@ const ReviewFormModal = ({ t, employeeId, review, onClose, onSaved }) => {
           </div>
         </div>
         <div>
-          <label className="label">{t('employees.reviews.selfEvaluation')}</label>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <label className="label" style={{ marginBottom: 0 }}>{t('employees.reviews.selfEvaluation')}</label>
+            <Btn icon={<Icons.Sparkles size={12} />}
+              onClick={() => improveField("self_evaluation", selfEvaluation, setSelfEvaluation, setImprovingSelf)}
+              disabled={improvingSelf || !selfEvaluation.trim()} style={{ fontSize: 11 }}>
+              {improvingSelf ? t('common.improving') : t('employees.reviews.improveWithAi')}
+            </Btn>
+          </div>
           <textarea className="input" rows={3} style={{ resize: "vertical" }} value={selfEvaluation} onChange={e => setSelfEvaluation(e.target.value)} />
         </div>
         <div>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <label className="label" style={{ marginBottom: 0 }}>{t('employees.reviews.managerFeedback')}</label>
-            {review && (
-              <Btn icon={<Icons.Sparkles size={12} />} onClick={improveFeedback} disabled={improving || !managerFeedback} style={{ fontSize: 11 }}>
-                {improving ? t('common.improving') : t('employees.reviews.improveWithAi')}
-              </Btn>
-            )}
+            <Btn icon={<Icons.Sparkles size={12} />}
+              onClick={() => improveField("manager_feedback", managerFeedback, setManagerFeedback, setImprovingManager)}
+              disabled={improvingManager || !managerFeedback.trim()} style={{ fontSize: 11 }}>
+              {improvingManager ? t('common.improving') : t('employees.reviews.improveWithAi')}
+            </Btn>
           </div>
           <textarea className="input" rows={4} style={{ resize: "vertical" }} value={managerFeedback} onChange={e => setManagerFeedback(e.target.value)} />
         </div>

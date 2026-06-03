@@ -584,8 +584,8 @@ const EmployeeProfilePage = ({ employeeId, employees, showSalary, fmtSalary, cur
             [t('employees.form.dept'), employee.department || "—"],
             [t('employees.col.location'), employee.location || "—"],
             [t('employees.col.hireDate'), employee.hire_date || "—"],
-            [t('employees.col.salary'), employee.salary ? (showSalary ? fmtSalary(employee.salary) + ` ${currencyCode}` : "••••") : "—"],
             [t('employees.col.manager'), employee.manager || "—"],
+            [t('employees.col.salary'), employee.salary ? (showSalary ? fmtSalary(employee.salary) + ` ${currencyCode}` : "••••") : "—"],
           ].map(([label, value]) => (
             <div key={label} className="col gap-2">
               <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>

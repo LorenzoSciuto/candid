@@ -143,6 +143,19 @@ use plain section titles followed by newline)
 
 Return only valid JSON. No markdown fences."""
 
+    REJECTION_EMAIL = """
+You are an empathetic HR professional writing a rejection email.
+
+Candidate name: {candidate_name}
+Applied for: {job_title}
+Key weaknesses identified: {weaknesses}
+Additional context: {additional_context}
+
+Write a professional, respectful rejection email. Be specific about 1-2 skill gaps (from the weaknesses) but frame them constructively. Do NOT be generic.
+
+Return JSON: {{"subject": "string", "body": "string (plain text, 3-4 paragraphs)"}}
+"""
+
     INTERVIEW_SUMMARY = """\
 You are a professional recruiting analyst. Summarize the following interview transcript or notes \
 into a clear, concise debrief.

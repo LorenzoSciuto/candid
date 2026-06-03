@@ -215,6 +215,98 @@ const EditCandidateModal = ({ candidate, onClose, onSaved }) => {
   );
 };
 
+// ── Rejection Modal ───────────────────────────────────────────────────────────
+
+const RejectionModal = ({ candidate, onClose, onRejected }) => {
+  const t = window.useT();
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [drafted, setDrafted] = useState(false);
+
+  const draftRejection = async () => {
+    setDrafting(true);
+    setDraftError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/candidates/${candidate.id}/rejection-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_title: candidate.role || "", notes: "" }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setSubject(data.subject);
+      setBody(data.body);
+      setDrafted(true);
+    } catch {
+      setDraftError("AI unavailable — check provider settings.");
+    }
+    setDrafting(false);
+  };
+
+  const reject = async (sendEmail) => {
+    setSending(true);
+    setSendError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/candidates/${candidate.id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, body, send_email: sendEmail }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      onRejected();
+      onClose();
+    } catch {
+      setSendError("Rejection failed — please try again.");
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal open title={`Reject ${candidate.first} ${candidate.last}`} onClose={onClose} width={560}
+      footer={
+        <>
+          {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn onClick={() => reject(false)} disabled={sending || !drafted}>
+            Reject without email
+          </Btn>
+          <Btn kind="danger" icon={<Icons.Mail size={14} />} onClick={() => reject(true)} disabled={sending || !drafted || !candidate.email}>
+            {sending ? "Sending…" : "Send & Reject"}
+          </Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        {!drafted ? (
+          <div className="col gap-12" style={{ alignItems: "center", padding: "24px 0" }}>
+            {draftError && <div className="text-12" style={{ color: "var(--danger)" }}>{draftError}</div>}
+            <Btn kind="ai" icon={<Icons.Sparkles size={14} />} onClick={draftRejection} disabled={drafting}>
+              {drafting ? "Drafting…" : "Draft rejection email with AI"}
+            </Btn>
+          </div>
+        ) : (
+          <>
+            {!candidate.email && (
+              <div className="text-12" style={{ color: "var(--warn)" }}>No email address on file — email will not be sent.</div>
+            )}
+            <div>
+              <label className="label">Subject</label>
+              <input className="input" value={subject} onChange={e => setSubject(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Body</label>
+              <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} />
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 const CandidateScreen = ({ id, onRoute }) => {
   const t = window.useT();
   const [c, setC] = useState({ id: null, first: "", last: "", email: null, phone: null, role: null, experience: null, location: null, status: "new", source: null, pre: null, interviews: [], evaluation: null, score: null, cvText: null, jobDescription: null });
@@ -224,6 +316,7 @@ const CandidateScreen = ({ id, onRoute }) => {
   const [hired, setHired] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -297,6 +390,9 @@ const CandidateScreen = ({ id, onRoute }) => {
           <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
           <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
           <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
+          {c.status !== "Rejected" && c.status !== "hired" && (
+            <Btn icon={<Icons.X size={14} />} onClick={() => setRejectOpen(true)}>Reject</Btn>
+          )}
           {(c.hasCvFile || c.cvText) && (
             <Btn icon={<Icons.Download size={14} />} onClick={async () => {
               if (c.hasCvFile) {
@@ -360,6 +456,13 @@ const CandidateScreen = ({ id, onRoute }) => {
           candidate={c}
           onClose={() => setEditOpen(false)}
           onSaved={() => { setEditOpen(false); refreshCandidate(); }}
+        />
+      )}
+      {rejectOpen && (
+        <RejectionModal
+          candidate={c}
+          onClose={() => setRejectOpen(false)}
+          onRejected={() => { setC(prev => ({ ...prev, status: "Rejected" })); refreshCandidate(); }}
         />
       )}
     </div>

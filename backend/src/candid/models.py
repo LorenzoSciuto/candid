@@ -163,3 +163,32 @@ class Employee(SQLModel, table=True):
     location: Optional[str] = None
     manager: Optional[str] = None
     candidate_id: Optional[str] = None
+    notes: Optional[str] = None
+    reminder_note: Optional[str] = None
+    reminder_active: bool = Field(default=False)
+    reminder_created_at: Optional[str] = None
+
+
+class Notification(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: _uid("notif"), primary_key=True)
+    org_id: str = Field(default="", index=True)
+    notification_type: str = "info"
+    message: str = ""
+    reference_id: Optional[str] = None
+    is_read: bool = Field(default=False)
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class PerformanceReview(SQLModel, table=True):
+    __tablename__ = "performance_review"
+
+    id: str = Field(default_factory=lambda: _uid("pr"), primary_key=True)
+    org_id: str = Field(default="", index=True)
+    employee_id: str = Field(foreign_key="employee.id", index=True)
+    period: str
+    self_evaluation: Optional[str] = None
+    manager_feedback: Optional[str] = None
+    rating: Optional[str] = None
+    action_goals: Optional[str] = None        # JSON array of goal strings
+    next_review_date: Optional[str] = None    # ISO date
+    created_at: str = Field(default_factory=lambda: date.today().isoformat())

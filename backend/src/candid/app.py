@@ -14,6 +14,7 @@ from candid.dependencies import require_user
 from candid.routers.ai import AIRouter
 from candid.routers.analysis import AnalysisRouter
 from candid.routers.auth import AuthRouter
+from candid.routers.branding import BrandingRouter
 from candid.routers.candidates import CandidatesRouter
 from candid.routers.config import ConfigRouter
 from candid.routers.employees import EmployeesRouter
@@ -138,11 +139,14 @@ class Application:
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
         fastapi_app.include_router(OrganizationsRouter(self._db, self._email, self._settings).router)
+        # Branding: contains both public (/public/...) and auth-protected endpoints;
+        # mounted without a global dependency so the public GET remains unauthenticated
+        fastapi_app.include_router(BrandingRouter(self._db).router)
 
         auth_dep = [Depends(require_user)]
         for router in [
             AIRouter(self._db, self._ai_factory, self._email).router,
-            CandidatesRouter(self._db).router,
+            CandidatesRouter(self._db, self._ai_factory, self._email).router,
             AnalysisRouter(self._db, self._ai_factory, self._extractor).router,
             InterviewsRouter(self._db, self._ai_factory, self._transcription_service).router,
             EvaluationsRouter(self._db).router,

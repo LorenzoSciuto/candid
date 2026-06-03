@@ -110,7 +110,7 @@ def client(
     app.dependency_overrides[require_org] = lambda: _TEST_USER
 
     for router in [
-        CandidatesRouter(db).router,
+        CandidatesRouter(db, ai_factory, email_service).router,
         AnalysisRouter(db, ai_factory, extractor).router,
         InterviewsRouter(db, ai_factory, transcription_service).router,
         EvaluationsRouter(db).router,

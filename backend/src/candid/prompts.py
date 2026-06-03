@@ -162,6 +162,19 @@ Return JSON with:
 
 Return only valid JSON. No markdown fences."""
 
+    REJECTION_EMAIL = """
+You are an empathetic HR professional writing a rejection email.
+
+Candidate name: {candidate_name}
+Applied for: {job_title}
+Key weaknesses identified: {weaknesses}
+Additional context: {additional_context}
+
+Write a professional, respectful rejection email. Be specific about 1-2 skill gaps (from the weaknesses) but frame them constructively. Do NOT be generic.
+
+Return JSON: {{"subject": "string", "body": "string (plain text, 3-4 paragraphs)"}}
+"""
+
     IMPROVE_PERFORMANCE_FEEDBACK = """\
 You are an experienced HR professional and people manager. Rewrite the following raw manager \
 notes into a structured, professional performance review feedback section. Keep all factual \

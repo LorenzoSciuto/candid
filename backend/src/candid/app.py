@@ -140,7 +140,7 @@ class Application:
         auth_dep = [Depends(require_user)]
         for router in [
             AIRouter(self._db, self._ai_factory, self._email).router,
-            CandidatesRouter(self._db).router,
+            CandidatesRouter(self._db, self._ai_factory, self._email).router,
             AnalysisRouter(self._db, self._ai_factory, self._extractor).router,
             InterviewsRouter(self._db, self._ai_factory).router,
             EvaluationsRouter(self._db).router,

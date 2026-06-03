@@ -506,7 +506,7 @@ const ReviewFormModal = ({ t, employeeId, review, onClose, onSaved }) => {
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <label className="label" style={{ marginBottom: 0 }}>{t('employees.reviews.managerFeedback')}</label>
             {review && (
-              <Btn icon={<Icons.Sparkle size={12} />} onClick={improveFeedback}
+              <Btn icon={<Icons.Sparkles size={12} />} onClick={improveFeedback}
                 disabled={improving || !managerFeedback} style={{ fontSize: 11 }}>
                 {improving ? t('common.improving') : t('employees.reviews.improveWithAi')}
               </Btn>

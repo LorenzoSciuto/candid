@@ -27,6 +27,7 @@ class Organization(SQLModel, table=True):
     slug: str = Field(unique=True, index=True)
     owner_id: str
     created_at: str = Field(default_factory=lambda: date.today().isoformat())
+    branding_config: Optional[str] = None   # JSON: {primary_color, bg_color, logo_url, ...}
 
 
 class Membership(SQLModel, table=True):

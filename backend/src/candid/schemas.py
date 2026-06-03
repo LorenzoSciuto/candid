@@ -194,3 +194,35 @@ class EmployeeUpdate(BaseModel):
     salary: Optional[float] = None
     location: Optional[str] = None
     manager: Optional[str] = None
+
+
+# ── Public Job Portal ────────────────────────────────────────────────────────
+
+class PublicJobItem(BaseModel):
+    id: str
+    title: str
+    location: Optional[str] = None
+    remote_ok: bool
+    description: Optional[str] = None
+    requirements: Optional[str] = None
+    openings: int
+
+
+class PublicJobListResponse(BaseModel):
+    org_id: str
+    org_name: str
+    branding: Optional[dict] = None
+    jobs: list[PublicJobItem]
+
+
+class PortalApplicationRequest(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    phone: Optional[str] = None
+    cv_text: Optional[str] = None
+
+
+class PortalApplicationResponse(BaseModel):
+    ok: bool
+    candidate_id: str

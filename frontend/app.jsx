@@ -1012,4 +1012,15 @@ const App = () => {
   );
 };
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+// ── Portal entry-point ────────────────────────────────────────────────────────
+
+const PortalEntry = () => {
+  const hash = window.location.hash.replace("#", "");
+  if (hash.startsWith("portal/")) {
+    const portalSlug = hash.slice("portal/".length);
+    return <window.PortalScreen slug={portalSlug} />;
+  }
+  return <App />;
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<PortalEntry />);

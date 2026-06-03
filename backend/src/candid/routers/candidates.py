@@ -1,16 +1,22 @@
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org
 from candid.models import Candidate, Evaluation, Interview
 from candid.schemas import CandidateCreate, CandidateUpdate
+from candid.services.ai_engine import AIEngineFactory
+from candid.services.email_service import EmailService
 from candid.services.notification_service import NotificationService
+
+logger = logging.getLogger(__name__)
 
 _CV_MIME = {
     "pdf":  "application/pdf",
@@ -23,10 +29,29 @@ def _safe_dump(candidate: Candidate) -> dict:
     return candidate.model_dump(exclude={"cv_file"})
 
 
+class RejectionDraftRequest(BaseModel):
+    job_title: str = ""
+    notes: str = ""
+
+
+class RejectRequest(BaseModel):
+    subject: str = ""
+    body: str = ""
+    send_email: bool = False
+
+
 class CandidatesRouter:
-    def __init__(self, db: Database, notification_service: NotificationService | None = None) -> None:
+    def __init__(
+        self,
+        db: Database,
+        notification_service: NotificationService | None = None,
+        ai_engine_factory: Optional[AIEngineFactory] = None,
+        email_service: Optional[EmailService] = None,
+    ) -> None:
         self._db = db
         self._notification_service = notification_service or NotificationService()
+        self._ai_factory = ai_engine_factory
+        self._email = email_service
         self.router = APIRouter(prefix="/candidates", tags=["candidates"])
         self._register()
 
@@ -89,6 +114,24 @@ class CandidatesRouter:
             user: UserCtx = Depends(require_org),
         ):
             self._delete(session, user.org_id, candidate_id)
+
+        @self.router.post("/{candidate_id}/rejection-draft")
+        def rejection_draft(
+            candidate_id: str,
+            body: RejectionDraftRequest,
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._rejection_draft(session, user.org_id, candidate_id, body)
+
+        @self.router.post("/{candidate_id}/reject")
+        def reject_candidate(
+            candidate_id: str,
+            body: RejectRequest,
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._reject(session, user, candidate_id, body)
 
     # ── Implementations ────────────────────────────────────────────────────────
 
@@ -262,9 +305,80 @@ class CandidatesRouter:
             "avg_score": round(sum(scores) / len(scores), 2) if scores else None,
         }
 
+    def _rejection_draft(
+        self,
+        session: Session,
+        org_id: str,
+        candidate_id: str,
+        body: RejectionDraftRequest,
+    ) -> dict:
+        candidate = self._fetch(session, org_id, candidate_id)
+        if not self._ai_factory:
+            raise HTTPException(503, "AI engine not configured")
+        weaknesses = self._extract_weaknesses(candidate)
+        candidate_name = f"{candidate.first_name} {candidate.last_name}"
+        job_title = body.job_title or candidate.job_title or "the position"
+        engine = self._ai_factory.from_session(session, org_id)
+        return engine.generate_rejection_email(candidate_name, job_title, weaknesses, body.notes)
+
+    def _extract_weaknesses(self, candidate: Candidate) -> list[str]:
+        if not candidate.ai_pre_analysis:
+            return []
+        try:
+            analysis = json.loads(candidate.ai_pre_analysis)
+            return analysis.get("weaknesses", [])
+        except Exception:
+            return []
+
+    def _reject(
+        self,
+        session: Session,
+        user: UserCtx,
+        candidate_id: str,
+        body: RejectRequest,
+    ) -> dict:
+        candidate = self._fetch(session, user.org_id, candidate_id)
+        self._apply_rejection_status(session, candidate, user)
+        email_sent = self._maybe_send_rejection_email(candidate, body)
+        if body.send_email and not email_sent:
+            return {"ok": True, "email_sent": False, "reason": "SMTP not configured"}
+        return {"ok": True, "email_sent": email_sent}
+
+    def _apply_rejection_status(
+        self,
+        session: Session,
+        candidate: Candidate,
+        user: UserCtx,
+    ) -> None:
+        history = json.loads(candidate.status_history or "[]")
+        history.append({
+            "status": "Rejected",
+            "at": datetime.now(timezone.utc).isoformat(),
+            "by": user.name,
+        })
+        candidate.status = "Rejected"
+        candidate.status_history = json.dumps(history)
+        session.add(candidate)
+        session.commit()
+        session.refresh(candidate)
+
+    def _maybe_send_rejection_email(self, candidate: Candidate, body: RejectRequest) -> bool:
+        if not body.send_email:
+            return False
+        if not self._email or not self._email.is_configured():
+            return False
+        if not candidate.email:
+            return False
+        try:
+            self._email.send_email(candidate.email, body.subject, body.body)
+            return True
+        except Exception:
+            logger.exception("Failed to send rejection email to %s", candidate.email)
+            return False
+
     @staticmethod
     def _fetch(session, org_id, candidate_id) -> Candidate:
-        c = session.get(Candidate, candidate_id)
-        if not c or c.org_id != org_id:
+        candidate_record = session.get(Candidate, candidate_id)
+        if not candidate_record or candidate_record.org_id != org_id:
             raise HTTPException(404, "Candidate not found")
-        return c
+        return candidate_record

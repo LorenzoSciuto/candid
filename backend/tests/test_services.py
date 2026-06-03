@@ -1,9 +1,11 @@
 import io
-import json
 import pytest
+from unittest.mock import MagicMock, patch
 
+from candid.services.auth_service import create_token, verify_token
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
+from candid.services.email_service import EmailService
 
 
 class TestCryptoService:
@@ -78,3 +80,67 @@ class TestCVExtractor:
         with mock.patch("fitz.open", return_value=mock_doc):
             with pytest.raises(ValueError, match="image-only"):
                 self.extractor.extract("scan.pdf", b"fake-pdf-bytes")
+
+
+class TestAuthService:
+    _SECRET = "test-secret-at-least-32-bytes-long!!"
+
+    def test_create_and_verify_roundtrip(self) -> None:
+        token = create_token({"sub": "user-1", "email": "a@b.com"}, self._SECRET)
+        payload = verify_token(token, self._SECRET)
+        assert payload["sub"] == "user-1"
+        assert payload["email"] == "a@b.com"
+
+    def test_verify_wrong_secret_raises(self) -> None:
+        import jwt
+        token = create_token({"sub": "x"}, self._SECRET)
+        with pytest.raises(jwt.PyJWTError):
+            verify_token(token, "wrong-secret-but-still-32-bytes!!!")
+
+    def test_expired_token_raises(self) -> None:
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        payload = {
+            "sub": "user-exp",
+            "exp": datetime.now(timezone.utc) - timedelta(seconds=1),
+            "iat": datetime.now(timezone.utc) - timedelta(hours=1),
+        }
+        token = jwt.encode(payload, self._SECRET, algorithm="HS256")
+        with pytest.raises(jwt.ExpiredSignatureError):
+            verify_token(token, self._SECRET)
+
+
+class TestEmailService:
+    def _make_svc(self, host=None) -> EmailService:
+        return EmailService(host, 587, None, None, "noreply@test.com", "http://localhost:8080")
+
+    def test_is_configured_false_when_no_host(self) -> None:
+        assert self._make_svc().is_configured() is False
+
+    def test_is_configured_true_when_host_set(self) -> None:
+        assert self._make_svc("smtp.example.com").is_configured() is True
+
+    def test_send_email_raises_when_not_configured(self) -> None:
+        with pytest.raises(RuntimeError, match="SMTP not configured"):
+            self._make_svc().send_email("a@b.com", "Subject", "Body")
+
+    def test_send_invitation_no_host_does_not_raise(self) -> None:
+        self._make_svc().send_invitation("a@b.com", "Acme", "Alice", "tok-abc")
+
+    def test_send_invitation_sends_via_smtp(self) -> None:
+        svc = self._make_svc("smtp.example.com")
+        mock_smtp = MagicMock()
+        with patch("candid.services.email_service.smtplib.SMTP", return_value=mock_smtp) as mock_cls:
+            mock_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp)
+            mock_cls.return_value.__exit__ = MagicMock(return_value=False)
+            svc.send_invitation("a@b.com", "Acme", "Alice", "tok-abc")
+        mock_smtp.send_message.assert_called_once()
+
+    def test_send_email_sends_via_smtp(self) -> None:
+        svc = self._make_svc("smtp.example.com")
+        mock_smtp = MagicMock()
+        with patch("candid.services.email_service.smtplib.SMTP", return_value=mock_smtp) as mock_cls:
+            mock_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp)
+            mock_cls.return_value.__exit__ = MagicMock(return_value=False)
+            svc.send_email("a@b.com", "Hello", "World")
+        mock_smtp.send_message.assert_called_once()

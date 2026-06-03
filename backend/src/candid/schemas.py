@@ -194,6 +194,15 @@ class EmployeeUpdate(BaseModel):
     salary: Optional[float] = None
     location: Optional[str] = None
     manager: Optional[str] = None
+    hire_date: Optional[str] = None
+
+
+class EmployeeNotesUpdate(BaseModel):
+    notes: str
+
+
+class EmployeeReminderSet(BaseModel):
+    note: str
 
 
 # ── Public Job Portal ────────────────────────────────────────────────────────
@@ -226,3 +235,28 @@ class PortalApplicationRequest(BaseModel):
 class PortalApplicationResponse(BaseModel):
     ok: bool
     candidate_id: str
+
+
+# ── Performance Reviews ──────────────────────────────────────────────────────────
+
+class ImproveReviewTextRequest(BaseModel):
+    text: str
+    field: str = "manager_feedback"            # "manager_feedback" | "self_evaluation"
+
+
+class PerformanceReviewCreate(BaseModel):
+    period: str
+    self_evaluation: Optional[str] = None
+    manager_feedback: Optional[str] = None
+    rating: Optional[str] = None
+    action_goals: Optional[str] = None
+    next_review_date: Optional[str] = None
+
+
+class PerformanceReviewUpdate(BaseModel):
+    period: Optional[str] = None
+    self_evaluation: Optional[str] = None
+    manager_feedback: Optional[str] = None
+    rating: Optional[str] = None
+    action_goals: Optional[str] = None
+    next_review_date: Optional[str] = None

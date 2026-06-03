@@ -194,3 +194,14 @@ class EmployeeUpdate(BaseModel):
     salary: Optional[float] = None
     location: Optional[str] = None
     manager: Optional[str] = None
+
+
+# ── Video Interviews ─────────────────────────────────────────────────────────
+
+class VideoInterviewCreate(BaseModel):
+    candidate_id: str
+    questions: list[str]
+
+
+class CompleteResponseRequest(BaseModel):
+    total_chunks: int

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlmodel import Session, select
 
 from candid.database import Database
@@ -8,12 +8,19 @@ from candid.dependencies import UserCtx, require_org
 from candid.models import Interview
 from candid.schemas import InterviewCreate, InterviewProcess, InterviewSummarize, InterviewUpdate
 from candid.services.ai_engine import AIEngineFactory
+from candid.services.transcription_service import TranscriptionService
 
 
 class InterviewsRouter:
-    def __init__(self, db: Database, ai_factory: AIEngineFactory) -> None:
+    def __init__(
+        self,
+        db: Database,
+        ai_factory: AIEngineFactory,
+        transcription_service: Optional[TranscriptionService] = None,
+    ) -> None:
         self._db = db
         self._ai_factory = ai_factory
+        self._transcription_service = transcription_service
         self.router = APIRouter(prefix="/interviews", tags=["interviews"])
         self._register()
 
@@ -63,6 +70,23 @@ class InterviewsRouter:
         ):
             return self._summarize(session, user.org_id, interview_id, body)
 
+        @self.router.post("/{interview_id}/upload-audio")
+        def upload_audio(
+            interview_id: str,
+            file: UploadFile,
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._upload_audio(session, user.org_id, interview_id, file)
+
+        @self.router.get("/{interview_id}/transcript")
+        def get_transcript(
+            interview_id: str,
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._get_transcript(session, user.org_id, interview_id)
+
     def _list(self, session, org_id, candidate_id) -> list:
         stmt = select(Interview).where(Interview.org_id == org_id)
         if candidate_id:
@@ -110,9 +134,32 @@ class InterviewsRouter:
             raise HTTPException(502, f"AI error: {exc}") from exc
         return {"bullets": result.get("bullets", []), "summary": result.get("summary", "")}
 
+    def _upload_audio(self, session, org_id, interview_id, file: UploadFile) -> dict:
+        interview = self._fetch(session, org_id, interview_id)
+        if self._transcription_service is None:
+            raise HTTPException(503, "Transcription service not configured")
+        file_data = file.file.read()
+        saved_path = self._transcription_service.save_audio_file(interview_id, file_data, file.filename or "audio")
+        interview.audio_file_path = str(saved_path)
+        interview.transcript_status = "pending"
+        session.add(interview)
+        session.commit()
+        session.refresh(interview)
+        self._transcription_service.process_interview_audio(session, interview)
+        return {"status": "processing"}
+
+    def _get_transcript(self, session, org_id, interview_id) -> dict:
+        interview = self._fetch(session, org_id, interview_id)
+        return {
+            "transcript_raw": interview.transcript_raw,
+            "transcript_status": interview.transcript_status,
+            "transcript_language": interview.transcript_language,
+            "ai_evaluation": interview.ai_evaluation,
+        }
+
     @staticmethod
     def _fetch(session, org_id, interview_id) -> Interview:
-        iv = session.get(Interview, interview_id)
-        if not iv or iv.org_id != org_id:
+        interview = session.get(Interview, interview_id)
+        if not interview or interview.org_id != org_id:
             raise HTTPException(404, "Interview not found")
-        return iv
+        return interview

@@ -110,6 +110,11 @@ class Interview(SQLModel, table=True):
     cleaned_transcript: Optional[str] = None
     ai_summary: Optional[str] = None
     extra_info: Optional[str] = None
+    audio_file_path: Optional[str] = None
+    transcript_raw: Optional[str] = None
+    transcript_status: Optional[str] = None
+    transcript_language: Optional[str] = None
+    ai_evaluation: Optional[str] = None
 
 
 class Evaluation(SQLModel, table=True):

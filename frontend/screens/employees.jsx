@@ -624,7 +624,7 @@ const EmployeeProfilePage = ({ employeeId, employees, showSalary, fmtSalary, cur
       )}
 
       {editOpen && (
-        <EmployeeEditModal t={t} employee={employee} onClose={() => setEditOpen(false)}
+        <EmployeeEditModal t={t} employee={employee} employees={employees} onClose={() => setEditOpen(false)}
           onSaved={(updated) => {
             setEditOpen(false);
             if (updated) onEmployeesUpdated(prev => prev.map(e => e.id === updated.id ? updated : e));
@@ -683,7 +683,7 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
   );
 };
 
-const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
+const EmployeeEditModal = ({ t, employee, employees = [], onClose, onSaved }) => {
   const [first, setFirst] = useState(employee.first_name || "");
   const [last, setLast] = useState(employee.last_name || "");
   const [email, setEmail] = useState(employee.email || "");
@@ -731,7 +731,16 @@ const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
             {locations.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
-        <div><label className="label">{t('employees.col.manager')}</label><input className="input" value={manager} onChange={e => setManager(e.target.value)} /></div>
+        <div>
+          <label className="label">{t('employees.col.manager')}</label>
+          <select className="select" value={manager} onChange={e => setManager(e.target.value)}>
+            <option value="">—</option>
+            {employees.filter(emp => emp.id !== employee.id).map(emp => {
+              const fullName = `${emp.first_name} ${emp.last_name}`;
+              return <option key={emp.id} value={fullName}>{fullName}</option>;
+            })}
+          </select>
+        </div>
         <div><label className="label">{t('employees.col.hireDate')}</label><input className="input" type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} /></div>
         <div style={{ gridColumn: "1 / -1" }}>
           <label className="label">{t('employees.form.salary')} <span className="text-11 text-muted">({currencyCode})</span></label>
@@ -955,7 +964,7 @@ const EmployeesScreen = () => {
       })()}
 
       {createOpen && <EmployeeModal t={t} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); reload(); }} />}
-      {editTarget && <EmployeeEditModal t={t} employee={editTarget} onClose={() => setEditTarget(null)} onSaved={(updated) => { setEditTarget(null); if (updated) setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e)); else reload(); }} />}
+      {editTarget && <EmployeeEditModal t={t} employee={editTarget} employees={employees} onClose={() => setEditTarget(null)} onSaved={(updated) => { setEditTarget(null); if (updated) setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e)); else reload(); }} />}
       {deleteTarget && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
           onClick={() => setDeleteTarget(null)}>

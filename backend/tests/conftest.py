@@ -93,6 +93,7 @@ def client(
     from candid.routers.notifications import NotificationsRouter
     from candid.routers.organizations import OrganizationsRouter
     from candid.routers.quick_add import QuickAddRouter
+    from candid.routers.performance_reviews import PerformanceReviewsRouter
     from candid.routers.roles import RolesRouter
 
     @asynccontextmanager
@@ -115,6 +116,7 @@ def client(
         QuickAddRouter(db, ai_factory).router,
         RolesRouter(db, ai_factory).router,
         EmployeesRouter(db).router,
+        PerformanceReviewsRouter(db, ai_factory).router,
         JobDescriptionsRouter(db, ai_factory).router,
         AIRouter(db, ai_factory).router,
         OrganizationsRouter(db, email_service, settings, notification_service).router,
@@ -129,7 +131,8 @@ def client(
 def clean_tables(db: Database) -> None:
     from candid.models import (
         Candidate, Employee, Evaluation, Interview, JobDescription,
-        Membership, Notification, OrgApiKey, OrgConfig, Organization, Role, User, Invitation,
+        Membership, Notification, OrgApiKey, OrgConfig, Organization, PerformanceReview,
+        Role, User, Invitation,
     )
     from sqlmodel import select
 
@@ -137,7 +140,7 @@ def clean_tables(db: Database) -> None:
         for model in (
             Notification,
             Invitation, Membership,
-            Evaluation, Interview, JobDescription, Employee, Candidate,
+            Evaluation, Interview, PerformanceReview, JobDescription, Employee, Candidate,
             OrgApiKey, OrgConfig, Role, Organization, User,
         ):
             for row in session.exec(select(model)).all():

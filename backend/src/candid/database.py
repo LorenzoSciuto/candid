@@ -6,7 +6,7 @@ from sqlmodel import Session, create_engine
 
 logger = logging.getLogger(__name__)
 
-_ALEMBIC_DIR = Path(__file__).parent.parent.parent.parent / "alembic.ini"
+_ALEMBIC_DIR = Path(__file__).parent.parent.parent / "alembic.ini"
 
 
 class Database:

@@ -162,6 +162,51 @@ Return JSON with:
 
 Return only valid JSON. No markdown fences."""
 
+    IMPROVE_PERFORMANCE_FEEDBACK = """\
+You are an experienced HR professional and people manager. Rewrite the following raw manager \
+notes into a structured, professional performance review feedback section. Keep all factual \
+content, specific examples, and observations intact but improve clarity, structure, and tone. \
+The result should be constructive, balanced, and suitable for a formal performance record.
+
+Raw manager notes:
+{raw_feedback}
+
+Return a JSON object with exactly one key:
+- "improved_feedback" — the rewritten feedback as a plain string (no markdown, use plain \
+paragraph breaks)
+
+Return only valid JSON. No markdown fences."""
+
+    IMPROVE_SELF_EVALUATION = """\
+You are an experienced HR professional. Rewrite the following raw self-evaluation notes into a \
+structured, professional self-assessment section. Keep all factual content, achievements, and \
+reflections intact but improve clarity, structure, and tone. The result should be honest, \
+constructive, and suitable for a formal performance record.
+
+Raw self-evaluation notes:
+{raw_text}
+
+Return a JSON object with exactly one key:
+- "improved_text" — the rewritten self-evaluation as a plain string (no markdown, use plain \
+paragraph breaks)
+
+Return only valid JSON. No markdown fences."""
+
+    IMPROVE_REVIEW_MANAGER_FEEDBACK = """\
+You are an experienced HR professional and people manager. Rewrite the following raw manager \
+feedback notes into a structured, professional performance review feedback section. Keep all \
+factual content, specific examples, and observations intact but improve clarity, structure, and \
+tone. The result should be constructive, balanced, and suitable for a formal performance record.
+
+Raw manager feedback:
+{raw_text}
+
+Return a JSON object with exactly one key:
+- "improved_text" — the rewritten feedback as a plain string (no markdown, use plain paragraph \
+breaks)
+
+Return only valid JSON. No markdown fences."""
+
     INTERVIEW_SUMMARY = """\
 You are a professional recruiting analyst. Summarize the following interview transcript or notes \
 into a clear, concise debrief.

@@ -226,6 +226,7 @@ const CandidateScreen = ({ id, onRoute }) => {
   const [loading, setLoading] = useState(true);
   const [hiring, setHiring] = useState(false);
   const [hired, setHired] = useState(false);
+  const [hireConfirmOpen, setHireConfirmOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -258,6 +259,7 @@ const CandidateScreen = ({ id, onRoute }) => {
         body: JSON.stringify({
           first_name: c.first, last_name: c.last, email: c.email || null,
           role_name: c.role || null, location: c.location || null,
+          candidate_id: id,
         }),
       });
       await fetch(`${window.API_BASE}/candidates/${id}`, {
@@ -298,7 +300,7 @@ const CandidateScreen = ({ id, onRoute }) => {
           </div>
         </div>
         <div className="row gap-8">
-          <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
+          {c.status !== "hired" && <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>}
           <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
           <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
           {(c.hasCvFile || c.cvText) && (
@@ -324,7 +326,7 @@ const CandidateScreen = ({ id, onRoute }) => {
             }}>CV</Btn>
           )}
           {(c.status === "offer" || c.status === "hired") && !hired && (
-            <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={convertToEmployee} disabled={hiring || c.status === "hired"}>
+            <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={() => setHireConfirmOpen(true)} disabled={hiring || c.status === "hired"}>
               {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → Employees"}
             </Btn>
           )}
@@ -334,6 +336,35 @@ const CandidateScreen = ({ id, onRoute }) => {
           )}
         </div>
       </div>
+
+      {hireConfirmOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 800 }}
+          onClick={() => setHireConfirmOpen(false)}>
+          <div className="card col" style={{ width: 420, padding: 28, gap: 16 }} onClick={e => e.stopPropagation()}>
+            <div className="col gap-6">
+              <span style={{ fontWeight: 600, fontSize: 16 }}>Confirm hire</span>
+              <span className="text-13 text-secondary">
+                Move <strong>{fullName}</strong> to the employee directory?
+                The recruiting record will be preserved as read-only history on their employee profile.
+              </span>
+            </div>
+            <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+              <Btn onClick={() => setHireConfirmOpen(false)}>{t('common.cancel')}</Btn>
+              <Btn kind="primary" icon={<Icons.UserCheck size={14} />} disabled={hiring}
+                onClick={() => { setHireConfirmOpen(false); convertToEmployee(); }}>
+                {hiring ? t('common.saving') : "Hire → Employees"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {c.status === "hired" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--success-soft, #f0fdf4)", border: "1px solid var(--success, #22c55e)", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "var(--success-dark, #15803d)", fontSize: 13 }}>
+          <Icons.Check size={15} />
+          <span>This candidate has been hired and moved to the employee directory. This record is preserved as recruiting history and <strong>cannot be edited</strong>.</span>
+        </div>
+      )}
 
       {c.score != null && (
         <div className="card" style={{ padding: 0, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>

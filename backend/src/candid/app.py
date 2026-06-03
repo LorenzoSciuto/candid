@@ -20,12 +20,14 @@ from candid.routers.evaluations import EvaluationsRouter
 from candid.routers.interviews import InterviewsRouter
 from candid.routers.job_descriptions import JobDescriptionsRouter
 from candid.routers.organizations import OrganizationsRouter
+from candid.routers.public_applications import PublicApplicationsRouter
 from candid.routers.quick_add import QuickAddRouter
 from candid.routers.roles import RolesRouter
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailService
+from candid.services.otp_service import OtpService
 
 
 class Application:
@@ -35,6 +37,7 @@ class Application:
         self._crypto = CryptoService(self._settings.fernet_key)
         self._extractor = CVExtractor()
         self._ai_factory = AIEngineFactory(self._crypto)
+        self._otp = OtpService()
         self._email = EmailService(
             smtp_host=self._settings.smtp_host,
             smtp_port=self._settings.smtp_port,
@@ -131,6 +134,10 @@ class Application:
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
         fastapi_app.include_router(OrganizationsRouter(self._db, self._email, self._settings).router)
+        # Public candidate application OTP flow — unauthenticated
+        fastapi_app.include_router(
+            PublicApplicationsRouter(self._db, self._otp, self._email, self._settings).router
+        )
 
         auth_dep = [Depends(require_user)]
         for router in [

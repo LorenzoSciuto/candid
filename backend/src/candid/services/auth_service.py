@@ -4,13 +4,13 @@ from typing import Any
 import jwt
 
 _ALGORITHM = "HS256"
-_TTL_HOURS = 48
+_DEFAULT_TTL_HOURS = 48
 
 
-def create_token(payload: dict[str, Any], secret: str) -> str:
+def create_token(payload: dict[str, Any], secret: str, ttl_hours: int = _DEFAULT_TTL_HOURS) -> str:
     data = {
         **payload,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=_TTL_HOURS),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=ttl_hours),
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(data, secret, algorithm=_ALGORITHM)

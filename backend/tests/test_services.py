@@ -1,9 +1,11 @@
 import io
 import json
+from datetime import datetime, timedelta, timezone
 import pytest
 
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
+from candid.services.otp_service import OtpService
 
 
 class TestCryptoService:
@@ -78,3 +80,47 @@ class TestCVExtractor:
         with mock.patch("fitz.open", return_value=mock_doc):
             with pytest.raises(ValueError, match="image-only"):
                 self.extractor.extract("scan.pdf", b"fake-pdf-bytes")
+
+
+class TestOtpService:
+    def setup_method(self) -> None:
+        self.service = OtpService()
+
+    def test_generateOtp_shouldReturnSixDigitString(self) -> None:
+        otp_code = self.service.generate_otp()
+        assert len(otp_code) == 6
+        assert otp_code.isdigit()
+
+    def test_hashOtp_shouldReturnDifferentHashForDifferentCodes(self) -> None:
+        hash_a = self.service.hash_otp("123456")
+        hash_b = self.service.hash_otp("654321")
+        assert hash_a != hash_b
+
+    def test_hashOtp_shouldReturnSameHashForSameCode_whenCalledTwice(self) -> None:
+        otp_code = "999999"
+        assert self.service.hash_otp(otp_code) == self.service.hash_otp(otp_code)
+
+    def test_isExpired_shouldReturnTrue_whenExpiryIsInThePast(self) -> None:
+        past_expiry = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+        assert self.service.is_expired(past_expiry) is True
+
+    def test_isExpired_shouldReturnFalse_whenExpiryIsInTheFuture(self) -> None:
+        future_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        assert self.service.is_expired(future_expiry) is False
+
+    def test_verify_shouldReturnTrue_whenCodeCorrectAndNotExpired(self) -> None:
+        otp_code = "123456"
+        stored_hash = self.service.hash_otp(otp_code)
+        future_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        assert self.service.verify(otp_code, stored_hash, future_expiry) is True
+
+    def test_verify_shouldReturnFalse_whenCodeWrong(self) -> None:
+        stored_hash = self.service.hash_otp("123456")
+        future_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        assert self.service.verify("000000", stored_hash, future_expiry) is False
+
+    def test_verify_shouldReturnFalse_whenExpired(self) -> None:
+        otp_code = "123456"
+        stored_hash = self.service.hash_otp(otp_code)
+        past_expiry = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+        assert self.service.verify(otp_code, stored_hash, past_expiry) is False

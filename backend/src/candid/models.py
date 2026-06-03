@@ -95,6 +95,8 @@ class Candidate(SQLModel, table=True):
     status_history: Optional[str] = None
     extra_information: Optional[str] = None
     cv_file: Optional[bytes] = None
+    otp_hash: Optional[str] = None          # SHA-256 hex digest of the 6-digit OTP
+    otp_expires_at: Optional[str] = None    # ISO datetime string (UTC)
 
 
 class Interview(SQLModel, table=True):

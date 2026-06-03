@@ -18,6 +18,10 @@ class Database:
         from sqlalchemy import text
         migrations = [
             "ALTER TABLE evaluation ADD COLUMN IF NOT EXISTS updated_at VARCHAR",
+            "ALTER TABLE employee ADD COLUMN IF NOT EXISTS notes VARCHAR",
+            "ALTER TABLE employee ADD COLUMN IF NOT EXISTS reminder_note VARCHAR",
+            "ALTER TABLE employee ADD COLUMN IF NOT EXISTS reminder_active BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE employee ADD COLUMN IF NOT EXISTS reminder_created_at VARCHAR",
         ]
         with self._engine.connect() as conn:
             for sql in migrations:

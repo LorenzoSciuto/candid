@@ -864,20 +864,91 @@ const TeamSettings = ({ t, user, onLogout }) => {
 
 // ── Integrations ──────────────────────────────────────────────────────────────
 
-const IntegrationsSettings = ({ t }) => (
-  <div className="col gap-12">
-    {[
-      { name: "Google Calendar", desc: "Sync interviews to your team's calendars", on: true },
-      { name: "Slack", desc: "Post pipeline updates to #hiring", on: true },
-      { name: "Greenhouse", desc: "Two-way sync for candidates and stages", on: false },
-      { name: "Zoom", desc: "Auto-create meeting links for live interviews", on: true },
-    ].map((it, i) => (
-      <div key={i} className="card card-pad row" style={{ justifyContent: "space-between" }}>
-        <div className="col">
-          <span className="weight-500">{it.name}</span>
-          <span className="text-12 text-secondary">{it.desc}</span>
+const INTEGRATIONS = [
+  {
+    category: "Communication",
+    items: [
+      { name: "Slack",           desc: "Post pipeline updates and hiring notifications to any channel", icon: "💬" },
+      { name: "Microsoft Teams", desc: "Send interview reminders and candidate alerts to Teams channels", icon: "🟦" },
+      { name: "Google Chat",     desc: "Notify your team of stage changes via Google Chat spaces", icon: "💭" },
+    ],
+  },
+  {
+    category: "Calendar & Scheduling",
+    items: [
+      { name: "Google Calendar",  desc: "Auto-sync interviews to your team's calendars", icon: "📅" },
+      { name: "Outlook Calendar", desc: "Create calendar events for every scheduled interview", icon: "📆" },
+      { name: "Calendly",         desc: "Let candidates self-schedule via your Calendly links", icon: "🗓️" },
+    ],
+  },
+  {
+    category: "Video Conferencing",
+    items: [
+      { name: "Zoom",          desc: "Auto-generate Zoom links when an interview is scheduled", icon: "🎥" },
+      { name: "Google Meet",   desc: "Attach Meet links to interview calendar events", icon: "🟢" },
+      { name: "Microsoft Teams Meetings", desc: "Create Teams meeting links for remote interviews", icon: "📹" },
+    ],
+  },
+  {
+    category: "ATS & HR Systems",
+    items: [
+      { name: "Greenhouse",  desc: "Two-way sync for candidates, stages, and scorecards", icon: "🌿" },
+      { name: "BambooHR",    desc: "Push hired candidates directly into your HR system", icon: "🎋" },
+      { name: "Workday",     desc: "Sync employee records and onboarding data with Workday", icon: "☁️" },
+      { name: "Lever",       desc: "Import candidates and export offers to Lever", icon: "⚙️" },
+    ],
+  },
+  {
+    category: "Job Boards",
+    items: [
+      { name: "LinkedIn Jobs", desc: "Post open roles and import applicants automatically", icon: "🔗" },
+      { name: "Indeed",        desc: "Sync job listings and pull in applicants from Indeed", icon: "🔍" },
+      { name: "Glassdoor",     desc: "Publish openings and track applicant source data", icon: "🏢" },
+    ],
+  },
+  {
+    category: "Automation & Documents",
+    items: [
+      { name: "Zapier",    desc: "Connect Candid to 6,000+ apps with no-code workflows", icon: "⚡" },
+      { name: "Make",      desc: "Build advanced multi-step automations with Make scenarios", icon: "🔧" },
+      { name: "DocuSign",  desc: "Send and track offer letters and NDAs for e-signature", icon: "✍️" },
+    ],
+  },
+];
+
+const IntegrationsSettings = () => (
+  <div className="col gap-20">
+    <div style={{ background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 16px", display: "flex", gap: 10, alignItems: "center" }}>
+      <span style={{ fontSize: 18 }}>🚧</span>
+      <div className="col gap-1">
+        <span style={{ fontWeight: 600, fontSize: 13 }}>Integrations — Coming soon</span>
+        <span className="text-12 text-muted">These integrations are under development. You'll be notified when they become available.</span>
+      </div>
+    </div>
+
+    {INTEGRATIONS.map(group => (
+      <div key={group.category}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+          {group.category}
         </div>
-        <Btn kind={it.on ? "secondary" : "primary"}>{it.on ? "Connected" : "Connect"}</Btn>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
+          {group.items.map(integration => (
+            <div key={integration.name} className="card card-pad" style={{ opacity: 0.55, cursor: "not-allowed", userSelect: "none" }}>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div className="row gap-10" style={{ alignItems: "flex-start", flex: 1 }}>
+                  <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{integration.icon}</span>
+                  <div className="col gap-3">
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{integration.name}</span>
+                    <span className="text-12 text-muted" style={{ lineHeight: 1.4 }}>{integration.desc}</span>
+                  </div>
+                </div>
+                <span style={{ flexShrink: 0, marginLeft: 10, fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap" }}>
+                  Soon
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     ))}
   </div>

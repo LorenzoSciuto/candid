@@ -196,6 +196,14 @@ class EmployeeUpdate(BaseModel):
     manager: Optional[str] = None
 
 
+class EmployeeNotesUpdate(BaseModel):
+    notes: str
+
+
+class EmployeeReminderSet(BaseModel):
+    note: str
+
+
 # ── Performance Reviews ──────────────────────────────────────────────────────────
 
 class PerformanceReviewCreate(BaseModel):

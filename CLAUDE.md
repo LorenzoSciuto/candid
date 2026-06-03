@@ -29,7 +29,7 @@ First run: copy `backend/.env.example` → `backend/.env`, fill `FERNET_KEY` and
 backend/src/candid/
 ├── app.py            Application — DI root, mounts all routers
 ├── config.py         Settings (pydantic-settings, reads .env)
-├── database.py       Database — engine + get_session()
+├── database.py       Database — engine + get_session() + migrate() (Alembic)
 ├── dependencies.py   require_user / require_org FastAPI deps
 ├── models.py         SQLModel tables (all multi-tenant with org_id)
 ├── schemas.py        Pydantic I/O models
@@ -66,11 +66,22 @@ Every router is a class. `__init__` receives only the services it needs. `_regis
 
 New users complete an org setup wizard → get a full token with `org_id`.
 
+### DB migrations (Alembic)
+
+```bash
+cd backend
+uv run alembic revision --autogenerate -m "describe_change"
+uv run alembic upgrade head
+uv run alembic current / history / downgrade -1
+```
+
+`DATABASE_URL` env var overrides `alembic.ini`. `migrate()` in `Database` runs `upgrade head` at app startup.
+
 ### Running tests
 
 ```bash
 cd backend
-uv run pytest                              # all 139 tests
+uv run pytest                              # all 156 tests
 uv run pytest tests/test_candidates.py    # single file
 uv run pytest -k "TestCreate"             # filter
 ```

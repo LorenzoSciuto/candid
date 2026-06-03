@@ -194,6 +194,7 @@ class EmployeeUpdate(BaseModel):
     salary: Optional[float] = None
     location: Optional[str] = None
     manager: Optional[str] = None
+    hire_date: Optional[str] = None
 
 
 class EmployeeNotesUpdate(BaseModel):

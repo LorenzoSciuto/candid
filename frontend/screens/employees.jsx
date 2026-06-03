@@ -23,6 +23,14 @@ const RATING_COLORS = {
   "Below Expectations": "var(--danger)",
 };
 
+const RATING_VISUAL = {
+  "Exceeds Expectations":      { border: "#22c55e", bg: "rgba(34,197,94,0.05)",   badge: "rgba(34,197,94,0.13)",   text: "#15803d", dot: "#22c55e" },
+  "Meets Expectations":        { border: "#3b82f6", bg: "rgba(59,130,246,0.04)",  badge: "rgba(59,130,246,0.1)",   text: "#1d4ed8", dot: "#3b82f6" },
+  "Partially Meets Expectations":{ border: "#f59e0b", bg: "rgba(245,158,11,0.05)", badge: "rgba(245,158,11,0.12)", text: "#b45309", dot: "#f59e0b" },
+  "Below Expectations":        { border: "#ef4444", bg: "rgba(239,68,68,0.05)",   badge: "rgba(239,68,68,0.1)",    text: "#dc2626", dot: "#ef4444" },
+};
+const RATING_VISUAL_DEFAULT =  { border: "var(--border)", bg: "transparent", badge: "var(--bg-sunken)", text: "var(--ink-muted)", dot: "var(--ink-muted)" };
+
 const getEmpLocations = () => {
   try {
     const stored = localStorage.getItem("candid_locations");
@@ -52,27 +60,63 @@ const EmpTd = ({ children, align = "left" }) => (
 
 const ReviewCard = ({ review, onEdit, onDelete }) => {
   const t = window.useT();
-  const ratingColor = review.rating ? (RATING_COLORS[review.rating] || "var(--ink-secondary)") : "var(--ink-muted)";
+  const visual = review.rating ? (RATING_VISUAL[review.rating] || RATING_VISUAL_DEFAULT) : RATING_VISUAL_DEFAULT;
+  const ratingLabel = review.rating ? t(RATING_TRANSLATION_KEYS[review.rating] || review.rating) : null;
+
   return (
-    <div className="card" style={{ padding: "14px 16px", marginBottom: 10 }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <div className="col gap-2">
-          <span style={{ fontWeight: 600, fontSize: 14 }}>{review.period}</span>
-          {review.rating && (
-            <span style={{ fontSize: 12, color: ratingColor, fontWeight: 500 }}>
-              {t(RATING_TRANSLATION_KEYS[review.rating] || review.rating)}
-            </span>
-          )}
+    <div style={{
+      borderRadius: 8, marginBottom: 10, overflow: "hidden",
+      border: "1px solid var(--border)", borderLeft: `3px solid ${visual.border}`,
+      background: visual.bg,
+    }}>
+      <div style={{ padding: "12px 16px" }}>
+        {/* Header row */}
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+          <div className="col gap-6">
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: "-0.01em" }}>{review.period}</span>
+              {ratingLabel && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: visual.badge, color: visual.text, borderRadius: 5, padding: "2px 8px", fontSize: 11.5, fontWeight: 600 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: visual.dot, flexShrink: 0 }} />
+                  {ratingLabel}
+                </span>
+              )}
+            </div>
+            {review.next_review_date && (
+              <span style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>
+                Next: {review.next_review_date}
+              </span>
+            )}
+          </div>
+          <div className="row gap-4">
+            <button className="icon-btn" onClick={() => onEdit(review)} title={t('common.edit')} style={{ opacity: 0.6 }}><Icons.Edit size={13} /></button>
+            <button className="icon-btn" onClick={() => onDelete(review)} title={t('common.delete')} style={{ color: "var(--danger)", opacity: 0.7 }}><Icons.X size={13} /></button>
+          </div>
         </div>
-        <div className="row gap-6">
-          <button className="icon-btn" onClick={() => onEdit(review)} title={t('common.edit')}><Icons.Edit size={13} /></button>
-          <button className="icon-btn" onClick={() => onDelete(review)} title={t('common.delete')} style={{ color: "var(--danger)" }}><Icons.X size={13} /></button>
-        </div>
+
+        {/* Feedback body */}
+        {(review.manager_feedback || review.self_evaluation) && (
+          <div className="col gap-8" style={{ borderTop: "1px solid var(--border-soft, rgba(0,0,0,0.06))", paddingTop: 10 }}>
+            {review.manager_feedback && (
+              <div>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 3 }}>Manager</span>
+                <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.65 }}>{review.manager_feedback}</p>
+              </div>
+            )}
+            {review.self_evaluation && (
+              <div>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 3 }}>Self</span>
+                <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.65 }}>{review.self_evaluation}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      {review.manager_feedback && (
-        <p style={{ margin: "0 0 6px", fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.6 }}>{review.manager_feedback}</p>
-      )}
-      <span className="text-11 text-muted">{t('employees.reviews.created')}: {review.created_at}</span>
+
+      {/* Footer */}
+      <div style={{ background: "rgba(0,0,0,0.02)", padding: "6px 16px", borderTop: "1px solid var(--border-soft, rgba(0,0,0,0.06))" }}>
+        <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>{t('employees.reviews.created')}: {review.created_at}</span>
+      </div>
     </div>
   );
 };
@@ -182,12 +226,34 @@ const EmployeeReviewsSection = ({ employeeId }) => {
     loadReviews();
   };
 
+  const latestRating = reviews.length > 0 ? reviews[0]?.rating : null;
+  const latestVisual = latestRating ? (RATING_VISUAL[latestRating] || RATING_VISUAL_DEFAULT) : null;
+
   return (
     <div className="card" style={{ padding: "16px 20px" }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>{t('employees.reviews.title')}</span>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: latestVisual ? 12 : 16 }}>
+        <div className="row gap-10" style={{ alignItems: "center" }}>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{t('employees.reviews.title')}</span>
+          {reviews.length > 0 && <span style={{ fontSize: 12, color: "var(--ink-muted)", background: "var(--bg-sunken)", padding: "1px 7px", borderRadius: 4 }}>{reviews.length}</span>}
+        </div>
         <Btn kind="primary" icon={<Icons.Plus size={13} />} onClick={() => setAddOpen(true)}>{t('employees.reviews.add')}</Btn>
       </div>
+
+      {/* Latest rating summary bar */}
+      {latestVisual && (
+        <div style={{ display: "flex", gap: 3, marginBottom: 16, height: 4, borderRadius: 2, overflow: "hidden" }}>
+          {RATING_OPTIONS.map(option => {
+            const count = reviews.filter(r => r.rating === option).length;
+            return count > 0 ? (
+              <div key={option} style={{ flex: count, background: RATING_VISUAL[option]?.border || "var(--border)", borderRadius: 2, transition: "flex 0.3s" }} title={`${count} × ${option}`} />
+            ) : null;
+          })}
+          {reviews.filter(r => !r.rating).length > 0 && (
+            <div style={{ flex: reviews.filter(r => !r.rating).length, background: "var(--border)", borderRadius: 2 }} />
+          )}
+        </div>
+      )}
+
       {loading && <div style={{ textAlign: "center", color: "var(--ink-muted)", padding: 24 }}>{t('common.loading')}</div>}
       {!loading && reviews.length === 0 && <div style={{ textAlign: "center", color: "var(--ink-muted)", padding: 24 }}>{t('employees.reviews.empty')}</div>}
       {!loading && reviews.map(review => (
@@ -546,7 +612,11 @@ const EmployeeProfilePage = ({ employeeId, employees, showSalary, fmtSalary, cur
 
       {editOpen && (
         <EmployeeEditModal t={t} employee={employee} onClose={() => setEditOpen(false)}
-          onSaved={() => { setEditOpen(false); refreshEmployee(); }} />
+          onSaved={(updated) => {
+            setEditOpen(false);
+            if (updated) onEmployeesUpdated(prev => prev.map(e => e.id === updated.id ? updated : e));
+            else refreshEmployee();
+          }} />
       )}
     </div>
   );
@@ -608,6 +678,8 @@ const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
   const [dept, setDept] = useState(employee.department || "");
   const [salary, setSalary] = useState(employee.salary ? String(employee.salary) : "");
   const [location, setLocation] = useState(employee.location || "");
+  const [manager, setManager] = useState(employee.manager || "");
+  const [hireDate, setHireDate] = useState(employee.hire_date || "");
   const [saving, setSaving] = useState(false);
   const locations = useMemo(() => getEmpLocations(), []);
   const currencyCode = window.getCurrency ? window.getCurrency() : "EUR";
@@ -616,9 +688,18 @@ const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
     setSaving(true);
     const roles = window.CANDID_DATA?.ROLES || [];
     const role = roles.find(r => r.id === roleId);
-    const body = { first_name: first, last_name: last, email: email || null, role_id: roleId || null, role_name: role?.name || employee.role_name || null, department: dept || null, salary: salary ? parseFloat(salary) : null, currency: currencyCode, location: location || null };
-    try { await fetch(`${window.API_BASE}/employees/${employee.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); } catch {}
-    onSaved();
+    const body = {
+      first_name: first, last_name: last, email: email || null,
+      role_id: roleId || null, role_name: role?.name || employee.role_name || null,
+      department: dept || null, salary: salary ? parseFloat(salary) : null,
+      currency: currencyCode, location: location || null,
+      manager: manager || null, hire_date: hireDate || null,
+    };
+    try {
+      const response = await fetch(`${window.API_BASE}/employees/${employee.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const updated = response.ok ? await response.json() : null;
+      onSaved(updated);
+    } catch { onSaved(null); }
   };
 
   return (
@@ -637,7 +718,9 @@ const EmployeeEditModal = ({ t, employee, onClose, onSaved }) => {
             {locations.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
-        <div>
+        <div><label className="label">{t('employees.col.manager')}</label><input className="input" value={manager} onChange={e => setManager(e.target.value)} /></div>
+        <div><label className="label">{t('employees.col.hireDate')}</label><input className="input" type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} /></div>
+        <div style={{ gridColumn: "1 / -1" }}>
           <label className="label">{t('employees.form.salary')} <span className="text-11 text-muted">({currencyCode})</span></label>
           <input className="input" type="number" value={salary} onChange={e => setSalary(e.target.value)} />
         </div>
@@ -859,7 +942,7 @@ const EmployeesScreen = () => {
       })()}
 
       {createOpen && <EmployeeModal t={t} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); reload(); }} />}
-      {editTarget && <EmployeeEditModal t={t} employee={editTarget} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); reload(); }} />}
+      {editTarget && <EmployeeEditModal t={t} employee={editTarget} onClose={() => setEditTarget(null)} onSaved={(updated) => { setEditTarget(null); if (updated) setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e)); else reload(); }} />}
       {deleteTarget && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
           onClick={() => setDeleteTarget(null)}>

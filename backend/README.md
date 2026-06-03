@@ -8,12 +8,12 @@ FastAPI application. Python ≥ 3.11, managed with [uv](https://github.com/astra
 
 ```bash
 cd backend
-uv run uvicorn candid.app:create_app --factory --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn candid.app:app --host 0.0.0.0 --port 8000 --reload
 # or use the root script:
 ../scripts/server.sh
 ```
 
-Interactive API docs: `https://localhost:8000/docs`
+Interactive API docs: `http://localhost:8000/docs`
 
 ---
 
@@ -114,7 +114,7 @@ uv run alembic downgrade -1     # roll back one step
 
 ```bash
 cd backend
-uv run pytest                              # all tests (~154)
+uv run pytest                              # all tests
 uv run pytest tests/test_candidates.py    # single file
 uv run pytest -k "TestCreate"             # filter by class/name
 ```

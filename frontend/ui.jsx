@@ -58,6 +58,26 @@ const Icons = {
   ExternalLink: (p) => <Icon {...p} d={<><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></>} />,
 };
 
+// ---- ConfirmDialog ----
+const ConfirmDialog = ({ title, message, confirmLabel, onConfirm, onCancel }) => {
+  const t = window.useT ? window.useT() : (k) => k;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 700 }}
+      onClick={onCancel}>
+      <div className="card col" style={{ width: 420, padding: 28, gap: 20 }} onClick={e => e.stopPropagation()}>
+        <div className="col gap-6">
+          <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>{title}</span>
+          {message && <span className="text-13 text-secondary">{message}</span>}
+        </div>
+        <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
+          <Btn onClick={onCancel}>{t('common.cancel')}</Btn>
+          <Btn kind="danger" onClick={onConfirm}>{confirmLabel || t('common.delete')}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ---- Primitives ----
 const Btn = ({ kind = "secondary", size, icon, children, onClick, disabled, type, title, style }) => (
   <button
@@ -328,4 +348,4 @@ const Tooltip = ({ text, children }) => {
   );
 };
 
-Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, Tooltip, useContext, useApiData });
+Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, ConfirmDialog, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, Tooltip, useContext, useApiData });

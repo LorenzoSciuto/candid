@@ -43,11 +43,28 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
 
 // ── Branding ──────────────────────────────────────────────────────────────────
 
+const PORTAL_FONTS = [
+  { value: "Inter",             label: "Inter" },
+  { value: "Geist, sans-serif", label: "Geist" },
+  { value: "Roboto, sans-serif",          label: "Roboto" },
+  { value: "'Open Sans', sans-serif",     label: "Open Sans" },
+  { value: "Lato, sans-serif",            label: "Lato" },
+  { value: "Poppins, sans-serif",         label: "Poppins" },
+  { value: "Montserrat, sans-serif",      label: "Montserrat" },
+  { value: "'DM Sans', sans-serif",       label: "DM Sans" },
+  { value: "'Plus Jakarta Sans', sans-serif", label: "Plus Jakarta Sans" },
+  { value: "Nunito, sans-serif",          label: "Nunito" },
+  { value: "'Playfair Display', serif",   label: "Playfair Display" },
+  { value: "'Merriweather', serif",       label: "Merriweather" },
+  { value: "Georgia, serif",              label: "Georgia" },
+];
+
 const BrandingSettings = ({ t }) => {
   const [primaryColor, setPrimaryColor] = useState("#4F46E5");
   const [backgroundColor, setBackgroundColor] = useState("#F3F4F6");
   const [fontFamily, setFontFamily] = useState("Inter");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoUploading, setLogoUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -65,27 +82,28 @@ const BrandingSettings = ({ t }) => {
       .catch(() => {});
   }, []);
 
+  const handleLogoFile = (file) => {
+    if (!file) return;
+    if (file.size > 512 * 1024) { setError("Logo must be under 512 KB."); return; }
+    setLogoUploading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => { setLogoUrl(e.target.result); setLogoUploading(false); };
+    reader.onerror = () => { setError("Failed to read file."); setLogoUploading(false); };
+    reader.readAsDataURL(file);
+  };
+
   const saveBranding = async () => {
-    setSaving(true);
-    setSaved(false);
-    setError("");
+    setSaving(true); setSaved(false); setError("");
     try {
       const res = await fetch(`${window.API_BASE}/organizations/current/branding`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          primary_color: primaryColor,
-          background_color: backgroundColor,
-          font_family: fontFamily,
-          logo_url: logoUrl || null,
-        }),
+        body: JSON.stringify({ primary_color: primaryColor, background_color: backgroundColor, font_family: fontFamily, logo_url: logoUrl || null }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to save");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
-      setError(err.message);
-    }
+    } catch (err) { setError(err.message); }
     setSaving(false);
   };
 
@@ -93,13 +111,14 @@ const BrandingSettings = ({ t }) => {
     <div className="col gap-16">
       <div className="card card-pad col gap-16">
         <div className="col">
-          <span className="weight-600">Branding</span>
-          <span className="text-12 text-secondary">Customize colors and typography for your organization.</span>
+          <span className="weight-600">{t('branding.title')}</span>
+          <span className="text-12 text-secondary">{t('branding.sub')}</span>
         </div>
 
+        {/* Colors */}
         <div className="row gap-16" style={{ flexWrap: "wrap" }}>
           <div className="col gap-6" style={{ flex: "1 1 180px" }}>
-            <label className="label">Primary color</label>
+            <label className="label">{t('branding.primaryColor')}</label>
             <div className="row gap-8" style={{ alignItems: "center" }}>
               <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)}
                 style={{ width: 36, height: 32, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none" }} />
@@ -107,9 +126,8 @@ const BrandingSettings = ({ t }) => {
                 style={{ fontFamily: "var(--font-mono)", fontSize: 12, flex: 1 }} placeholder="#4F46E5" />
             </div>
           </div>
-
           <div className="col gap-6" style={{ flex: "1 1 180px" }}>
-            <label className="label">Background color</label>
+            <label className="label">{t('branding.bgColor')}</label>
             <div className="row gap-8" style={{ alignItems: "center" }}>
               <input type="color" value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)}
                 style={{ width: 36, height: 32, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none" }} />
@@ -119,60 +137,63 @@ const BrandingSettings = ({ t }) => {
           </div>
         </div>
 
-        <div className="col gap-6">
-          <label className="label">Font family</label>
-          <input className="input" value={fontFamily} onChange={e => setFontFamily(e.target.value)}
-            placeholder="Inter" style={{ maxWidth: 320 }} />
+        {/* Font select */}
+        <div className="col gap-6" style={{ maxWidth: 320 }}>
+          <label className="label">{t('branding.font')}</label>
+          <select className="select" value={fontFamily} onChange={e => setFontFamily(e.target.value)}>
+            {PORTAL_FONTS.map(f => (
+              <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>
+            ))}
+          </select>
         </div>
 
+        {/* Logo upload */}
         <div className="col gap-6">
-          <label className="label">Logo URL</label>
-          <input className="input" type="url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)}
-            placeholder="https://example.com/logo.png" />
+          <label className="label">{t('branding.logo')}</label>
+          <div className="row gap-10" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+            {logoUrl && (
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <img src={logoUrl} alt="Logo" style={{ maxHeight: 52, maxWidth: 160, borderRadius: 8, border: "1px solid var(--border)", padding: 6, background: "#fff", display: "block" }}
+                  onError={e => { e.target.style.display = "none"; }} />
+                <button onClick={() => setLogoUrl("")}
+                  style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "var(--danger)", color: "#fff", border: "none", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>×</button>
+              </div>
+            )}
+            <div className="col gap-6" style={{ flex: 1, minWidth: 200 }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8, border: "1.5px dashed var(--border)", cursor: "pointer", fontSize: 13, color: "var(--ink-secondary)", background: "var(--bg-sunken)", width: "fit-content" }}>
+                <Icons.Upload size={14} />
+                {logoUploading ? "Reading…" : t('branding.upload')}
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleLogoFile(e.target.files?.[0])} />
+              </label>
+              <span className="text-11 text-muted">{t('branding.uploadHint')}</span>
+            </div>
+          </div>
         </div>
 
         {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
-
         <div className="row gap-8">
-          <Btn kind="primary" onClick={saveBranding} disabled={saving}>
-            {saving ? "Saving…" : saved ? "Saved" : "Save branding"}
+          <Btn kind="primary" onClick={saveBranding} disabled={saving || logoUploading}>
+            {saving ? "Saving…" : saved ? t('branding.saved') : t('branding.save')}
           </Btn>
         </div>
       </div>
 
       {/* Live preview */}
       <div className="card card-pad col gap-10">
-        <span className="weight-600 text-13">Preview</span>
-        <div style={{
-          background: backgroundColor,
-          borderRadius: 10,
-          padding: "20px 24px",
-          fontFamily: fontFamily || "Inter",
-          border: "1px solid var(--border)",
-        }}>
-          {logoUrl && (
-            <img src={logoUrl} alt="Logo preview" style={{ maxHeight: 40, maxWidth: 160, marginBottom: 12, display: "block" }}
-              onError={e => { e.target.style.display = "none"; }} />
-          )}
-          <div style={{ fontWeight: 700, fontSize: 18, color: primaryColor, marginBottom: 6 }}>
-            Your Organization
+        <span className="weight-600 text-13">{t('branding.preview')}</span>
+        <div style={{ background: backgroundColor, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
+          <div style={{ background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}cc)`, padding: "24px 20px", textAlign: "center" }}>
+            {logoUrl && <img src={logoUrl} alt="Logo" style={{ maxHeight: 36, maxWidth: 120, marginBottom: 10, display: "block", margin: "0 auto 10px", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />}
+            <div style={{ fontWeight: 800, fontSize: 20, color: "#fff", fontFamily: fontFamily, letterSpacing: "-.02em" }}>Your Organization</div>
+            <div style={{ fontSize: 13, color: "#fff", opacity: .75, marginTop: 4, fontFamily: fontFamily }}>{t('branding.previewSub')}</div>
           </div>
-          <div style={{ fontSize: 13, color: "#555", marginBottom: 14 }}>
-            This is how your branded interface will look.
+          <div style={{ padding: "16px 20px" }}>
+            <div style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", border: "1.5px solid #e5e7eb", fontFamily: fontFamily }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Senior Engineer</div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>📍 Milano · Remote</div>
+              <button style={{ background: primaryColor, color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "default", fontFamily: fontFamily }}>Apply →</button>
+            </div>
           </div>
-          <button style={{
-            background: primaryColor,
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            padding: "8px 18px",
-            fontFamily: fontFamily || "Inter",
-            fontSize: 13,
-            cursor: "default",
-            fontWeight: 600,
-          }}>
-            Sample button
-          </button>
         </div>
       </div>
     </div>

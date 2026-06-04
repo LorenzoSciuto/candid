@@ -209,12 +209,13 @@ class CandidatesRouter:
         if not candidate.cv_file:
             raise HTTPException(404, "No CV file stored for this candidate")
         filename = candidate.cv_filename or "cv"
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+        safe_filename = filename.replace('"', "").replace("\n", "").replace("\r", "")
+        ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else "bin"
         media_type = _CV_MIME.get(ext, "application/octet-stream")
         return Response(
             content=candidate.cv_file,
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
         )
 
     def _get(self, session, org_id, candidate_id) -> dict:
@@ -233,7 +234,10 @@ class CandidatesRouter:
         ]
 
         evaluation = session.exec(
-            select(Evaluation).where(Evaluation.candidate_id == candidate_id)
+            select(Evaluation).where(
+                Evaluation.candidate_id == candidate_id,
+                Evaluation.org_id == org_id,
+            )
         ).first()
         if evaluation:
             result["evaluation"] = {
@@ -250,6 +254,9 @@ class CandidatesRouter:
             result["career_history"] = json.loads(candidate.career_history)
         if candidate.status_history:
             result["status_history"] = json.loads(candidate.status_history)
+        if candidate.activity_log:
+            result["activity_log"] = json.loads(candidate.activity_log)
+        result["analysis_at"] = candidate.analysis_at
 
         return result
 
@@ -257,13 +264,13 @@ class CandidatesRouter:
         candidate = self._fetch(session, user.org_id, candidate_id)
         data = body.model_dump(exclude_none=True)
         if "status" in data and data["status"] != candidate.status:
+            now = datetime.now(timezone.utc).isoformat()
             history = json.loads(candidate.status_history or "[]")
-            history.append({
-                "status": data["status"],
-                "at": datetime.now(timezone.utc).isoformat(),
-                "by": user.name,
-            })
+            history.append({"status": data["status"], "at": now, "by": user.name})
             candidate.status_history = json.dumps(history)
+            log = json.loads(candidate.activity_log or "[]")
+            log.append({"type": "stage", "at": now, "note": f"Stage moved to {data['status']}", "by": user.name})
+            candidate.activity_log = json.dumps(log)
         for field, value in data.items():
             setattr(candidate, field, value)
         session.add(candidate)

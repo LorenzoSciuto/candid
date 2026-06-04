@@ -12,7 +12,7 @@ class TestAIEngineRetry:
     def _create_engine() -> AIEngine:
         return AIEngine("openai", "gpt-4o", "sk-test")
 
-    def test_call_shouldReturnResult_whenPrimarySucceedsOnFirstAttempt(self) -> None:
+    def test_call_should_return_result_when_primary_succeeds_on_first_attempt(self) -> None:
         engine = self._create_engine()
         with patch.object(engine, "_call_provider", return_value='{"ok":1}') as mock_call_provider, \
              patch("candid.services.ai_engine.time.sleep") as mock_time_sleep:
@@ -21,7 +21,7 @@ class TestAIEngineRetry:
         mock_call_provider.assert_called_once_with("openai", "gpt-4o", "sk-test", "prompt")
         mock_time_sleep.assert_not_called()
 
-    def test_call_shouldReturnResult_whenPrimaryFailsTwiceThenSucceeds(self) -> None:
+    def test_call_should_return_result_when_primary_fails_twice_then_succeeds(self) -> None:
         engine = self._create_engine()
         side_effects = [RuntimeError("first-failure"), RuntimeError("second-failure"), '{"ok":2}']
         with patch.object(engine, "_call_provider", side_effect=side_effects) as mock_call_provider, \
@@ -31,7 +31,7 @@ class TestAIEngineRetry:
         assert mock_call_provider.call_count == 3
         mock_time_sleep.assert_has_calls([call(1), call(2)])
 
-    def test_call_shouldNotSleepAfterLastPrimaryAttempt_whenFallbackExists(self) -> None:
+    def test_call_should_not_sleep_after_last_primary_attempt_when_fallback_exists(self) -> None:
         engine = AIEngine(
             "openai", "gpt-4o", "sk-test",
             fallbacks=[("anthropic", "claude-3-5-haiku-20241022", "sk-anthropic")],
@@ -43,7 +43,7 @@ class TestAIEngineRetry:
         assert mock_time_sleep.call_count == 2
         mock_time_sleep.assert_has_calls([call(1), call(2)])
 
-    def test_call_shouldUseExponentialBackoff_whenPrimaryFails(self) -> None:
+    def test_call_should_use_exponential_backoff_when_primary_fails(self) -> None:
         engine = self._create_engine()
         with patch.object(engine, "_call_provider", side_effect=[RuntimeError(), RuntimeError(), '{"x":1}']), \
              patch("candid.services.ai_engine.time.sleep") as mock_time_sleep:
@@ -65,7 +65,7 @@ class TestAIEngineFallback:
             fallbacks=[(fallback_provider, fallback_model, fallback_api_key)],
         )
 
-    def test_call_shouldUseFallback_whenPrimaryExhausted(self) -> None:
+    def test_call_should_use_fallback_when_primary_exhausted(self) -> None:
         engine = self._create_engine_with_fallback()
         side_effects = [RuntimeError("p1"), RuntimeError("p2"), RuntimeError("p3"), '{"fallback":1}']
         with patch.object(engine, "_call_provider", side_effect=side_effects) as mock_call_provider, \
@@ -75,7 +75,7 @@ class TestAIEngineFallback:
         fourth_call = mock_call_provider.call_args_list[3]
         assert fourth_call == call("anthropic", "claude-3-5-haiku-20241022", "sk-anthropic", "prompt")
 
-    def test_call_shouldTryFallbackOnce_whenFallbackFails(self) -> None:
+    def test_call_should_try_fallback_once_when_fallback_fails(self) -> None:
         engine = self._create_engine_with_fallback()
         all_fail_side_effects = [RuntimeError() for _ in range(4)]
         with patch.object(engine, "_call_provider", side_effect=all_fail_side_effects) as mock_call_provider, \
@@ -84,7 +84,7 @@ class TestAIEngineFallback:
                 engine._call("prompt")
         assert mock_call_provider.call_count == 4
 
-    def test_call_shouldRaiseRuntimeError_whenAllProvidersExhausted(self) -> None:
+    def test_call_should_raise_runtime_error_when_all_providers_exhausted(self) -> None:
         engine = AIEngine(
             "openai", "gpt-4o", "sk-test",
             fallbacks=[
@@ -97,14 +97,14 @@ class TestAIEngineFallback:
             with pytest.raises(RuntimeError, match="All AI providers failed.*final-error"):
                 engine._call("prompt")
 
-    def test_call_shouldRaiseAfterThreePrimaryFailures_whenNoFallbacks(self) -> None:
+    def test_call_should_raise_after_three_primary_failures_when_no_fallbacks(self) -> None:
         engine = AIEngine("openai", "gpt-4o", "sk-test")
         with patch.object(engine, "_call_provider", side_effect=RuntimeError("no-fallback")), \
              patch("candid.services.ai_engine.time.sleep"):
             with pytest.raises(RuntimeError, match="All AI providers failed.*no-fallback"):
                 engine._call("prompt")
 
-    def test_call_shouldUseSecondFallback_whenFirstFallbackFails(self) -> None:
+    def test_call_should_use_second_fallback_when_first_fallback_fails(self) -> None:
         engine = AIEngine(
             "openai", "gpt-4o", "sk-test",
             fallbacks=[
@@ -160,7 +160,7 @@ class TestAIEngineFactoryProviderResolution:
         api_key_row_mock.encrypted_key = crypto_service.encrypt(plaintext_api_key)
         return api_key_row_mock
 
-    def test_fromSessionWithFallbacks_shouldReturnEnvEngine_whenOrgIdIsEmpty(self) -> None:
+    def test_from_session_with_fallbacks_should_return_env_engine_when_org_id_is_empty(self) -> None:
         engine_factory, _ = self._create_factory()
         with patch.dict("os.environ", {"DEFAULT_PROVIDER": "groq", "GROQ_API_KEY": "env-groq-key", "DEFAULT_MODEL": "llama3-8b-8192"}):
             engine = engine_factory.from_session_with_fallbacks(MagicMock(), org_id="")
@@ -168,7 +168,7 @@ class TestAIEngineFactoryProviderResolution:
         assert engine._api_key == "env-groq-key"
         assert engine._fallbacks == []
 
-    def test_fromSessionWithFallbacks_shouldHaveNoFallbacks_whenOnlyPrimaryKeyStored(self) -> None:
+    def test_from_session_with_fallbacks_should_have_no_fallbacks_when_only_primary_key_stored(self) -> None:
         engine_factory, crypto_service = self._create_factory()
         org_config = self._create_org_config_mock("openai", "gpt-4o")
         openai_key_row = self._create_encrypted_api_key_row_mock(crypto_service, "openai", "sk-openai")
@@ -179,7 +179,7 @@ class TestAIEngineFactoryProviderResolution:
         assert engine._api_key == "sk-openai"
         assert engine._fallbacks == []
 
-    def test_fromSessionWithFallbacks_shouldPopulateFallbacks_whenMultipleKeysStored(self) -> None:
+    def test_from_session_with_fallbacks_should_populate_fallbacks_when_multiple_keys_stored(self) -> None:
         engine_factory, crypto_service = self._create_factory()
         org_config = self._create_org_config_mock("openai", "gpt-4o")
         openai_key_row = self._create_encrypted_api_key_row_mock(crypto_service, "openai", "sk-openai")
@@ -195,7 +195,7 @@ class TestAIEngineFactoryProviderResolution:
         assert fallback_provider_names == {"anthropic", "groq"}
         assert fallback_api_keys == {"sk-anthropic", "sk-groq"}
 
-    def test_fromSessionWithFallbacks_shouldUseDefaultModels_forFallbackProviders(self) -> None:
+    def test_from_session_with_fallbacks_should_use_default_models_for_fallback_providers(self) -> None:
         engine_factory, crypto_service = self._create_factory()
         org_config = self._create_org_config_mock("openai", "gpt-4o")
         anthropic_key_row = self._create_encrypted_api_key_row_mock(crypto_service, "anthropic", "sk-anthropic")
@@ -205,7 +205,7 @@ class TestAIEngineFactoryProviderResolution:
         expected_anthropic_model = AIEngineFactory._DEFAULT_PROVIDER_MODELS["anthropic"]
         assert engine._fallbacks[0][1] == expected_anthropic_model
 
-    def test_fromSessionWithFallbacks_shouldSkipFallback_whenEncryptedKeyIsEmpty(self) -> None:
+    def test_from_session_with_fallbacks_should_skip_fallback_when_encrypted_key_is_empty(self) -> None:
         engine_factory, crypto_service = self._create_factory()
         org_config = self._create_org_config_mock("openai", "gpt-4o")
         openai_key_row = self._create_encrypted_api_key_row_mock(crypto_service, "openai", "sk-openai")
@@ -217,7 +217,7 @@ class TestAIEngineFactoryProviderResolution:
         engine = engine_factory.from_session_with_fallbacks(mock_session, "org-001")
         assert engine._fallbacks == []
 
-    def test_fromSession_shouldReturnEngineWithNoFallbacks_always(self) -> None:
+    def test_from_session_should_return_engine_with_no_fallbacks_always(self) -> None:
         """from_session must never attach fallbacks (backward-compatible behaviour)."""
         engine_factory, crypto_service = self._create_factory()
         org_config = self._create_org_config_mock("openai", "gpt-4o")

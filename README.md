@@ -23,6 +23,21 @@ AI-powered recruiting assistant. Manages the full pre-hire lifecycle: CV parsing
 
 > **HTTPS / Live Room:** run `./scripts/gen-certs.sh` once to generate localhost certs. Both scripts detect them automatically and switch to HTTPS — required for the Web Speech API used in Live Room.
 
+## Public endpoints
+
+These routes are unauthenticated and exposed to the internet when deployed:
+
+| URL | Description |
+|-----|-------------|
+| `GET /` | API landing page — server status + link to docs |
+| `GET /docs` | Swagger UI — interactive API documentation |
+| `GET /redoc` | ReDoc — alternative API docs |
+| `GET /organizations/invitations/accept?token=<token>` | Accept a team invitation (redirects to app) |
+| `GET /public/jobs` | Public job listings for an org (unauthenticated) |
+| `POST /public/applications` | Candidate applies to a job (unauthenticated) |
+
+All other routes require a valid JWT (`Authorization: Bearer <token>`).
+
 ---
 
 ## Tech stack
@@ -85,15 +100,15 @@ See [`docs/PROJECT.md`](docs/PROJECT.md) for full architecture and feature docum
 - [x] Encrypted API key storage (Fernet)
 - [x] Pipeline stages editor
 - [x] i18n — EN / IT / DE
+- [x] **AI provider fallback + exponential backoff** — auto-failover across providers on error
+- [x] **Employee performance reviews** — structured review cycles (self-eval + manager feedback + KPIs)
+- [x] **Inbox notifications** — backend model + real events (new applicant, analysis done, invite accepted)
+- [x] **Org branding / white-labelling** — custom colours, fonts, logo per org for public portal
+- [x] **AI-drafted rejection emails** — personalised gap analysis, editable before send
+- [x] **2FA for candidates** — 6-digit OTP email verification (SHA-256, 10-min TTL)
+- [x] **PostgreSQL RLS** — row-level security as defence-in-depth below application filters
+- [x] **Candidate-facing async video interview portal** — one-time invite link, timed video answers, chunked upload
+- [x] **Public job listing page** — unauthenticated, shows org branding + active openings
 
 ### Planned ⬜
-- [ ] **Candidate-facing async video interview portal** — one-time invite link, 3-min timed video answers per question, chunked upload, crash recovery
-- [ ] **2FA for candidates** — 6-digit OTP email verification (SHA-256, 10-min TTL)
-- [ ] **Public job listing page** — unauthenticated, shows org branding + active openings
 - [ ] **Whisper / STT async pipeline** — post-interview audio extraction + transcription (OpenAI Whisper or Groq)
-- [ ] **AI-drafted rejection emails** — personalised gap analysis, editable before send
-- [ ] **Employee performance reviews** — structured review cycles (self-eval + manager feedback + KPIs)
-- [ ] **Org branding / white-labelling** — custom colours, fonts, logo per org for public portal
-- [ ] **Inbox notifications** — backend model + real events (new applicant, analysis done, invite accepted)
-- [ ] **AI provider fallback + exponential backoff** — auto-failover across providers on error
-- [ ] **PostgreSQL RLS** — row-level security as defence-in-depth below application filters

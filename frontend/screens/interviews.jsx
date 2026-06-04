@@ -115,7 +115,7 @@ const ScheduleModal = ({ onClose, onSaved }) => {
           <select className="select" value={interviewer} onChange={e => setInterviewer(e.target.value)}>
             <option value="">— {t('interviews.modal.interviewer')} —</option>
             {team.map(m => (
-              <option key={m.name} value={m.name}>{m.name}{m.role ? ` · ${m.role}` : ""}</option>
+              <option key={m.name} value={m.name}>{m.name}{(m.title || m.department) ? ` · ${m.title || m.department}` : ""}</option>
             ))}
           </select>
         </div>

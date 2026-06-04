@@ -753,11 +753,11 @@ const EmployeeEditModal = ({ t, employee, employees = [], onClose, onSaved }) =>
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-const EmployeesScreen = () => {
+const EmployeesScreen = ({ initialRoleFilter }) => {
   const t = window.useT();
   const [employees, setEmployees] = useState([]);
   const [showSalary, setShowSalary] = useState(false);
-  const [roleFilter, setRoleFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState(initialRoleFilter || "");
   const [deptFilter, setDeptFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);

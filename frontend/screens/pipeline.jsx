@@ -1,5 +1,20 @@
 // Pipeline (Kanban) screen — with drag-and-drop between columns
 
+const formatAppliedDate = (iso) => {
+  if (!iso) return "";
+  try {
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return "";
+    const diffDays = Math.floor((Date.now() - date.getTime()) / 86400000);
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 30) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en", { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+};
+
 const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
   const t = window.useT();
   const [stages, setStages] = useState(() => window.CANDID_DATA.STATUS || []);
@@ -100,18 +115,18 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
                   <div className="row gap-8">
                     <Avatar name={`${c.first} ${c.last}`} />
                     <div className="col" style={{ minWidth: 0 }}>
-                      <span className="name">{c.first} {c.last}</span>
+                      <span className="name" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.first} {c.last}</span>
                       <span className="role">{c.experience ? `${c.experience}y · ` : ""}{c.source || ""}</span>
                     </div>
                   </div>
                   <div className="meta">
-                    <span className="text-12 text-muted text-mono">{c.appliedAt || ""}</span>
+                    <span className="text-12 text-muted">{formatAppliedDate(c.appliedAt)}</span>
                     {c.score != null ? (
-                      <span className="score row gap-4">
+                      <span className="score row gap-4" style={{ flexShrink: 0 }}>
                         <Icons.Star size={11} style={{ color: "var(--warn)" }} fill="currentColor" stroke="none" /> {c.score.toFixed(1)}
                       </span>
                     ) : c.hasAI ? (
-                      <span className="badge ai" style={{ fontSize: 10 }}><span className="dot" /> AI screening</span>
+                      <span className="badge ai" style={{ fontSize: 10, whiteSpace: "nowrap", flexShrink: 0 }}><span className="dot" /> AI screening</span>
                     ) : null}
                   </div>
                 </div>

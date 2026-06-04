@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
@@ -10,6 +11,13 @@ from candid.models import Candidate, JobDescription
 from candid.schemas import AnalyzeRequest
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.cv_extractor import CVExtractor
+
+
+def _append_activity(candidate: Candidate, event_type: str, note: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    log = json.loads(candidate.activity_log or "[]")
+    log.append({"type": event_type, "at": now, "note": note})
+    candidate.activity_log = json.dumps(log)
 
 
 class AnalysisRouter:
@@ -51,6 +59,7 @@ class AnalysisRouter:
             if c and c.org_id == org_id:
                 c.cv_file = content
                 c.cv_filename = file.filename
+                _append_activity(c, "cv_upload", f"CV uploaded: {file.filename}")
                 session.add(c)
                 session.commit()
         return {"filename": file.filename, "text": text, "word_count": len(text.split())}
@@ -80,8 +89,10 @@ class AnalysisRouter:
         if body.candidate_id:
             c = session.get(Candidate, body.candidate_id)
             if c and c.org_id == org_id:
+                is_regen = c.ai_pre_analysis is not None
                 c.ai_pre_analysis = json.dumps(result)
                 c.cv_text = body.cv_text
+                c.analysis_at = datetime.now(timezone.utc).isoformat()
                 if body.job_title:
                     c.job_title = body.job_title
                 if body.job_description:
@@ -91,6 +102,8 @@ class AnalysisRouter:
                 extracted = result.get("extracted") or {}
                 if extracted.get("role") and not c.current_role:
                     c.current_role = extracted["role"]
+                note = "CV analysis regenerated" if is_regen else "CV analysis generated"
+                _append_activity(c, "analysis", note)
                 session.add(c)
                 session.commit()
         return result

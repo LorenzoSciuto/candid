@@ -660,13 +660,21 @@ const OrgSetupWizard = ({ user, onComplete }) => {
 
 // ── Login Screen ─────────────────────────────────────────────────────────────
 
+const _LOGIN_FEATURES = [
+  { Icon: Icons.Sparkles, label: "AI candidate analysis",    desc: "Instant CV scoring, gap detection, and tailored interview questions" },
+  { Icon: Icons.Layout,   label: "Visual hiring pipeline",   desc: "Kanban board with drag-and-drop stages and smart filters" },
+  { Icon: Icons.Mic,      label: "Interview intelligence",   desc: "Transcript clean-up, summaries, and structured evaluation" },
+  { Icon: Icons.Users,    label: "Team collaboration",       desc: "Multi-tenant workspaces with role-based access control" },
+  { Icon: Icons.UserCheck,label: "Performance reviews",      desc: "360° feedback cycles with AI-assisted writing" },
+];
+
 const LoginScreen = ({ onLogin }) => {
   const t = window.useT ? window.useT() : (k) => k;
-  const [authCfg, setAuthCfg] = useState(null); // null = loading
+  const [authCfg, setAuthCfg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const googleInitRef = useRef(false);
 
-  // Fetch auth config from backend (public endpoint, no token needed)
   useEffect(() => {
     fetch(`${window.API_BASE}/auth/config`)
       .then(r => r.ok ? r.json() : null)
@@ -674,15 +682,14 @@ const LoginScreen = ({ onLogin }) => {
       .catch(() => setAuthCfg({}));
   }, []);
 
-  // clientId: prefer backend config, allow index.html override for local dev
   const clientId = authCfg?.google_client_id || window.GOOGLE_CLIENT_ID || null;
 
-  // Mount Google Sign-In button once clientId is known
   useEffect(() => {
-    if (!clientId || !window.google?.accounts?.id) return;
+    if (!clientId || !window.google?.accounts?.id || googleInitRef.current) return;
+    googleInitRef.current = true;
     window.google.accounts.id.initialize({ client_id: clientId, callback: handleCredential });
     const target = document.getElementById("g-signin-btn");
-    if (target) window.google.accounts.id.renderButton(target, { theme: "outline", size: "large", width: 320, text: "signin_with" });
+    if (target) window.google.accounts.id.renderButton(target, { theme: "outline", size: "large", width: 300, text: "signin_with" });
   }, [clientId]);
 
   const handleCredential = async (response) => {
@@ -698,8 +705,7 @@ const LoginScreen = ({ onLogin }) => {
         const body = await res.json().catch(() => null);
         throw new Error(body?.detail || "Google sign-in failed");
       }
-      const user = await res.json();
-      onLogin(user);
+      onLogin(await res.json());
     } catch (err) {
       setError(err.message || "Sign-in failed. Is the backend running?");
       setLoading(false);
@@ -707,41 +713,182 @@ const LoginScreen = ({ onLogin }) => {
   };
 
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "var(--bg)", fontFamily: "var(--font-sans)",
-    }}>
-      <div className="card col" style={{ width: 400, padding: 40, alignItems: "center", gap: 24 }}>
-        {/* Brand */}
-        <div className="col" style={{ alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "var(--font-sans)" }}>
+
+      {/* ── Left panel — dark brand ──────────────────────────────────────── */}
+      <div style={{
+        flex: "0 0 56%", background: "#1C1917", position: "relative",
+        display: "flex", flexDirection: "column", padding: "44px 52px",
+        overflow: "hidden",
+      }}>
+
+        {/* Subtle dot-grid texture */}
+        <svg aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.045, pointerEvents: "none" }}>
+          <defs>
+            <pattern id="lgrid" width="28" height="28" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="1" fill="white" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#lgrid)" />
+        </svg>
+
+        {/* Glow orb — top-right purple */}
+        <div aria-hidden="true" style={{
+          position: "absolute", top: -160, right: -120, width: 560, height: 560,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, oklch(0.52 0.16 285 / 0.18) 0%, transparent 68%)",
+          pointerEvents: "none",
+        }} />
+        {/* Glow orb — bottom-left green */}
+        <div aria-hidden="true" style={{
+          position: "absolute", bottom: -140, left: -100, width: 480, height: 480,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, oklch(0.52 0.13 155 / 0.14) 0%, transparent 68%)",
+          pointerEvents: "none",
+        }} />
+
+        {/* Logo */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 11 }}>
           <div style={{
-            width: 56, height: 56, borderRadius: 12, background: "var(--ink)",
-            display: "grid", placeItems: "center", color: "white",
-            fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em",
+            width: 40, height: 40, borderRadius: 9, background: "white",
+            display: "grid", placeItems: "center",
+            fontSize: 20, fontWeight: 700, color: "#1C1917", letterSpacing: "-0.04em",
+            flexShrink: 0,
           }}>C</div>
-          <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em" }}>{t('login.title')}</span>
-          <span className="text-13 text-secondary" style={{ textAlign: "center" }}>{t('login.subtitle')}</span>
+          <span style={{ fontSize: 18, fontWeight: 600, color: "white", letterSpacing: "-0.02em" }}>Candid</span>
         </div>
 
-        <div style={{ width: "100%", height: 1, background: "var(--border)" }} />
-
-        {/* Auth options — shown after config loads */}
-        {authCfg === null ? (
-          <span className="text-13 text-muted">{t('common.loading')}</span>
-        ) : clientId ? (
-          <div className="col" style={{ alignItems: "center", gap: 10, width: "100%" }}>
-            <div id="g-signin-btn" style={{ minHeight: 44 }} />
+        {/* Headline + feature list */}
+        <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingTop: 40, paddingBottom: 40 }}>
+          <div style={{ marginBottom: 36 }}>
+            <h2 style={{
+              margin: "0 0 14px", fontSize: 40, fontWeight: 700, color: "white",
+              letterSpacing: "-0.035em", lineHeight: 1.13,
+            }}>
+              Hire smarter.<br />
+              <span style={{ color: "oklch(0.74 0.12 285)" }}>Move faster.</span>
+            </h2>
+            <p style={{
+              margin: 0, fontSize: 15, lineHeight: 1.65,
+              color: "rgba(255,255,255,0.48)", maxWidth: 360,
+            }}>
+              The AI recruiting workspace for modern teams — from first contact to offer letter.
+            </p>
           </div>
-        ) : (
-          <div className="col gap-8" style={{ alignItems: "center", textAlign: "center" }}>
-            <Icons.Lock size={28} style={{ color: "var(--ink-secondary)" }} />
-            <span className="text-13 text-secondary">Google Sign-In is not configured.</span>
-            <span className="text-12 text-muted">Set <code>GOOGLE_CLIENT_ID</code> in <code>backend/.env</code> to enable login.</span>
-          </div>
-        )}
 
-        {loading && <span className="text-13 text-muted">{t('login.signingIn')}</span>}
-        {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {_LOGIN_FEATURES.map(({ Icon, label, desc }, index) => (
+              <div key={index} style={{ display: "flex", gap: 13, alignItems: "flex-start" }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: 8, flexShrink: 0, marginTop: 1,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                  display: "grid", placeItems: "center",
+                  color: "oklch(0.80 0.10 285)",
+                }}>
+                  <Icon size={16} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.88)", marginBottom: 2, letterSpacing: "-0.01em" }}>{label}</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", lineHeight: 1.55 }}>{desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ position: "relative", fontSize: 11, color: "rgba(255,255,255,0.22)", letterSpacing: "0.01em" }}>
+          © 2026 Candid — AI Recruiting Platform
+        </div>
+      </div>
+
+      {/* ── Right panel — sign-in form ───────────────────────────────────── */}
+      <div style={{
+        flex: 1, background: "var(--bg)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "40px 48px",
+      }}>
+        <div style={{ width: "100%", maxWidth: 340 }}>
+
+          {/* Header */}
+          <div style={{ marginBottom: 36 }}>
+            <h1 style={{
+              margin: "0 0 8px", fontSize: 26, fontWeight: 700,
+              color: "var(--ink)", letterSpacing: "-0.025em",
+            }}>Welcome back</h1>
+            <p style={{ margin: 0, fontSize: 14, color: "var(--ink-secondary)", lineHeight: 1.55 }}>
+              Sign in to your Candid workspace
+            </p>
+          </div>
+
+          {/* Auth block */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {authCfg === null ? (
+              <div style={{ height: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>{t('common.loading')}</span>
+              </div>
+            ) : clientId ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+                <div id="g-signin-btn" style={{ minHeight: 44, display: "flex", justifyContent: "center" }} />
+              </div>
+            ) : (
+              <div style={{
+                padding: "20px 22px", background: "var(--bg-sunken)",
+                borderRadius: "var(--r-lg)", border: "1px solid var(--border)",
+                textAlign: "center", display: "flex", flexDirection: "column",
+                alignItems: "center", gap: 8,
+              }}>
+                <Icons.Lock size={22} style={{ color: "var(--ink-muted)" }} />
+                <p style={{ margin: 0, fontSize: 13, color: "var(--ink-secondary)" }}>Google Sign-In not configured</p>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--ink-muted)" }}>
+                  Set <code style={{ background: "var(--border-strong)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>GOOGLE_CLIENT_ID</code> in <code style={{ background: "var(--border-strong)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>backend/.env</code>
+                </p>
+              </div>
+            )}
+
+            {loading && (
+              <div style={{ textAlign: "center" }}>
+                <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>{t('login.signingIn')}</span>
+              </div>
+            )}
+            {error && (
+              <div style={{
+                padding: "10px 14px", borderRadius: "var(--r-md)",
+                background: "var(--danger-soft)", border: "1px solid oklch(0.55 0.18 25 / 0.18)",
+              }}>
+                <span style={{ fontSize: 13, color: "var(--danger)" }}>{error}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Divider with label */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "28px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            <span style={{ fontSize: 11, color: "var(--ink-faint)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Secure sign-in</span>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+          </div>
+
+          {/* Trust badges */}
+          <div style={{ display: "flex", justifyContent: "center", gap: 20 }}>
+            {[
+              { icon: Icons.Lock,  label: "SSO ready"       },
+              { icon: Icons.Users, label: "Multi-tenant"    },
+              { icon: Icons.Check, label: "SOC-2 aligned"   },
+            ].map(({ icon: BadgeIcon, label }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-muted)" }}>
+                <BadgeIcon size={12} />
+                {label}
+              </div>
+            ))}
+          </div>
+
+          {/* Terms */}
+          <p style={{ marginTop: 44, fontSize: 11, color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.7 }}>
+            By signing in you agree to our Terms of Service and Privacy Policy.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -765,6 +912,7 @@ const App = () => {
   const [user, setUser] = useState(loadUser);
   const [locale, setLocale] = useState(() => localStorage.getItem("candid_locale") || "en");
   const [route, setRoute] = useState(routeFromHash);
+  const [routeData, setRouteData] = useState({});
   const [candidateId, setCandidateId] = useState(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -772,6 +920,7 @@ const App = () => {
   const [t_tweaks, setTweak] = window.useTweaks(TWEAKS_DEFAULTS);
   const [liveCounts, setLiveCounts] = useState({});
   const [liveInterview, setLiveInterview] = useState(null);
+  const t_app = window.useT ? window.useT() : k => k;
 
   // Persist locale
   useEffect(() => { localStorage.setItem("candid_locale", locale); }, [locale]);
@@ -834,6 +983,7 @@ const App = () => {
   const navigate = (r, data) => {
     window.history.pushState(null, "", `#${r}`);
     setRoute(r);
+    setRouteData(data || {});
     if (r === "liveroom" && data) setLiveInterview(data);
   };
 
@@ -851,10 +1001,10 @@ const App = () => {
     if (user && !user.token) { clearUser(); setUser(null); }
   }, []);
 
-  const handleLogin = (u) => { saveUser(u); setUser(u); };
-  const handleLogout = () => { clearUser(); setUser(null); window.location.hash = ""; };
+  const handleLogin = (u) => { window._authToken = u?.token || null; saveUser(u); setUser(u); };
+  const handleLogout = () => { window._authToken = null; clearUser(); setUser(null); window.location.hash = ""; };
   const handleUserUpdate = (u) => { saveUser(u); setUser(u); };
-  const handleOrgSetupComplete = (u) => { saveUser(u); setUser(u); };
+  const handleOrgSetupComplete = (u) => { window._authToken = u?.token || null; saveUser(u); setUser(u); };
 
   const handleSwitchOrg = async (orgId) => {
     const res = await fetch(`${window.API_BASE}/auth/switch-org`, {
@@ -936,7 +1086,6 @@ const App = () => {
     }
   })();
 
-  const t_app = window.useT ? window.useT() : k => k;
   const topActions = (
     <>
       <Btn onClick={() => setQuickOpen(true)} icon={<Icons.ClipPaste size={14} />}>{t_app('topbar.quickAdd')}</Btn>
@@ -964,9 +1113,9 @@ const App = () => {
           <div className="scroll">
             {route === "pipeline"     && <window.PipelineScreen onOpenCandidate={openCandidate} onQuickAdd={() => setQuickOpen(true)} />}
             {route === "candidates"   && <window.CandidatesScreen onOpenCandidate={openCandidate} />}
-            {route === "jobs"         && <window.JobsScreen onRoute={navigate} />}
+            {route === "jobs"         && <window.JobsScreen onRoute={navigate} initialRoleFilter={routeData.roleFilter} />}
             {route === "roles"        && <window.RolesScreen onRoute={navigate} />}
-            {route === "employees"    && <window.EmployeesScreen />}
+            {route === "employees"    && <window.EmployeesScreen initialRoleFilter={routeData.roleFilter} />}
             {route === "interviews"   && <window.InterviewsScreen onRoute={navigate} />}
             {route === "inbox"        && <window.InboxScreen onRoute={navigate} />}
             {route === "reports"      && <window.ReportsScreen />}

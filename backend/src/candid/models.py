@@ -95,6 +95,10 @@ class Candidate(SQLModel, table=True):
     # JSON: [{status, at, by}]
     status_history: Optional[str] = None
     extra_information: Optional[str] = None
+    # ISO timestamp of last AI analysis run
+    analysis_at: Optional[str] = None
+    # JSON: [{type, at, note}] — append-only audit log
+    activity_log: Optional[str] = None
     cv_file: Optional[bytes] = None
     otp_hash: Optional[str] = None          # SHA-256 hex digest of the 6-digit OTP
     otp_expires_at: Optional[str] = None    # ISO datetime string (UTC)

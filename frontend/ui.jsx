@@ -91,7 +91,7 @@ const Avatar = ({ name, size = "", src }) => {
   return <span className={`avatar ${size}`} style={{ background: `oklch(0.93 0.04 ${hue})`, color: `oklch(0.4 0.08 ${hue})` }}>{init}</span>;
 };
 
-const Modal = ({ open, onClose, title, children, footer, width }) => {
+const Modal = ({ open, onClose, title, children, footer, width, disableBackdropClose }) => {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };
@@ -100,7 +100,7 @@ const Modal = ({ open, onClose, title, children, footer, width }) => {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={disableBackdropClose ? undefined : onClose}>
       <div className="modal" style={width ? { width } : undefined} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div className="weight-600">{title}</div>

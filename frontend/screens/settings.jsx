@@ -185,7 +185,7 @@ const PROVIDERS = [
   { id: "openai",    name: "OpenAI",    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4.1"], keyPlaceholder: "sk-…" },
   { id: "anthropic", name: "Anthropic", models: ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5-20251001", "claude-3-5-sonnet-20241022"], keyPlaceholder: "sk-ant-…" },
   { id: "gemini",    name: "Gemini",    models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"], keyPlaceholder: "AIza…" },
-  { id: "groq",      name: "Groq",      models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"], keyPlaceholder: "gsk_…" },
+  { id: "groq",      name: "Groq",      models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-3b-preview", "gemma2-9b-it"], keyPlaceholder: "gsk_…" },
 ];
 
 const AISettings = ({ t }) => {
@@ -311,7 +311,6 @@ const AISettings = ({ t }) => {
                 <span className="weight-600" style={{ fontSize: 13 }}>{p.name}</span>
                 {activeProvider === p.id && <span style={{ width: 14, height: 14, borderRadius: 999, background: "var(--ink)", color: "white", display: "grid", placeItems: "center" }}><Icons.Check size={9} /></span>}
               </div>
-              <span className="text-11 text-muted text-mono">{p.models[0]}</span>
             </button>
           ))}
         </div>
@@ -409,34 +408,102 @@ const loadLocations = () => {
 };
 
 const ProfileSettings = ({ t, user, onLogout, onUserUpdate }) => {
-  const [role, setRole] = useState(() => localStorage.getItem("candid_role") || user?.role || "");
+  const [title, setTitle] = useState(user?.title || "");
+  const [department, setDepartment] = useState(user?.department || "");
+  const [picture, setPicture] = useState(user?.picture || "");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = React.useRef(null);
 
-  const save = () => {
-    localStorage.setItem("candid_role", role);
-    onUserUpdate && onUserUpdate({ ...user, role });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const resizeToBase64 = (file) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const size = Math.min(img.width, img.height);
+        const scale = 256 / size;
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await resizeToBase64(file);
+    setPicture(dataUrl);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${window.API_BASE}/auth/users/me`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, department, picture: picture || null }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onUserUpdate && onUserUpdate({ ...user, title: data.title, department: data.department, picture: data.picture });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch { /* offline */ }
+    setSaving(false);
   };
 
   return (
     <div className="col gap-16">
-      <div className="card card-pad col gap-12">
-        <span className="weight-600">{t('settings.tab.profile')}</span>
-        <div className="row gap-14" style={{ alignItems: "center" }}>
-          <Avatar name={user?.name || "User"} src={user?.picture} size="xl" />
-          <div className="col gap-4">
-            <span className="weight-600" style={{ fontSize: 16 }}>{user?.name || "—"}</span>
-            <span className="text-13 text-secondary">{user?.email || "—"}</span>
+      <div className="card card-pad col gap-20">
+        {/* Avatar section */}
+        <div className="col gap-4" style={{ alignItems: "center" }}>
+          <div style={{ position: "relative", display: "inline-block" }}>
+            {picture
+              ? <img src={picture} style={{ width: 88, height: 88, borderRadius: "50%", objectFit: "cover", border: "3px solid var(--border)" }} referrerPolicy="no-referrer" />
+              : <span style={{ width: 88, height: 88, borderRadius: "50%", background: `oklch(0.93 0.04 ${[...(user?.name || "?")].reduce((a, c) => a + c.charCodeAt(0), 0) % 360})`, color: `oklch(0.4 0.08 ${[...(user?.name || "?")].reduce((a, c) => a + c.charCodeAt(0), 0) % 360})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, border: "3px solid var(--border)" }}>
+                  {(user?.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                </span>
+            }
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{ position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: "50%", background: "var(--ink)", color: "white", border: "2px solid var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              title="Change photo">
+              <Icons.Edit size={12} />
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileChange} />
+          </div>
+          <span className="weight-700" style={{ fontSize: 17, marginTop: 8 }}>{user?.name || "—"}</span>
+          <span className="text-13 text-secondary">{user?.email || "—"}</span>
+          {picture && picture !== user?.picture && (
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }} onClick={() => setPicture(user?.picture || "")}>
+              {t('common.cancel')}
+            </button>
+          )}
+        </div>
+
+        <div style={{ height: 1, background: "var(--border)" }} />
+
+        {/* Editable fields */}
+        <div className="col gap-10">
+          <div>
+            <label className="label">Titolo / ruolo</label>
+            <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="es. Recruiting Manager" />
+          </div>
+          <div>
+            <label className="label">Dipartimento</label>
+            <input className="input" value={department} onChange={e => setDepartment(e.target.value)} placeholder="es. HR" />
           </div>
         </div>
-        <div>
-          <label className="label">Your role / title</label>
-          <input className="input" value={role} onChange={e => setRole(e.target.value)} placeholder="e.g. Recruiting Manager" />
-        </div>
-        <div className="row gap-8">
-          <Btn kind="primary" onClick={save}>{saved ? "Saved ✓" : t('common.save')}</Btn>
+
+        <div className="row gap-8" style={{ justifyContent: "space-between" }}>
           <Btn onClick={onLogout}>{t('user.signOut')}</Btn>
+          <Btn kind="primary" onClick={save} disabled={saving}>{saved ? "Salvato ✓" : t('common.save')}</Btn>
         </div>
       </div>
     </div>
@@ -630,24 +697,22 @@ const PipelineSettings = ({ t }) => {
           </div>
         ))}
         {adding && (
-          <div className="col gap-10" style={{ padding: "14px 18px", borderTop: "1px solid var(--border-soft)" }}>
-            <div className="row gap-12">
+          <div className="col gap-14" style={{ padding: "18px 18px 20px", borderTop: "2px solid var(--border)", background: "var(--bg-sunken)" }}>
+            <div className="row gap-12" style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <label className="label">Label</label>
-                <input className="input" value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Technical Screen" autoFocus onKeyDown={e => e.key === "Enter" && addStage()} />
+                <input className="input" value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="es. Technical Screen" autoFocus onKeyDown={e => e.key === "Enter" && addStage()} />
               </div>
               <div>
                 <label className="label">Color</label>
-                <div style={{ marginTop: 6 }}>
-                  <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)}
-                    style={{ width: 36, height: 32, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none" }} />
-                </div>
+                <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)}
+                  style={{ width: 38, height: 36, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none", display: "block" }} />
               </div>
             </div>
             {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
-            <div className="row gap-8">
-              <Btn kind="primary" onClick={addStage} disabled={!newLabel.trim() || saving}>Add</Btn>
-              <Btn onClick={() => setAdding(false)}>Cancel</Btn>
+            <div className="row gap-10" style={{ justifyContent: "flex-end" }}>
+              <Btn onClick={() => { setAdding(false); setNewLabel(""); setError(""); }}>Cancel</Btn>
+              <Btn kind="primary" onClick={addStage} disabled={!newLabel.trim() || saving}>Add stage</Btn>
             </div>
           </div>
         )}
@@ -689,7 +754,7 @@ const TeamSettings = ({ t, user, onLogout }) => {
         setOrg(d);
         if (d?.members) {
           localStorage.setItem("candid_team_cache", JSON.stringify(
-            d.members.map(m => ({ name: m.name, email: m.email, role: m.role }))
+            d.members.map(m => ({ name: m.name, email: m.email, role: m.role, title: m.title || null, department: m.department || null }))
           ));
         }
         setLoading(false);

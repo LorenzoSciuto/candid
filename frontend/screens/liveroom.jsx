@@ -12,6 +12,8 @@ const LiveRoomScreen = ({ interview, onDone }) => {
   const [sttError, setSttError] = useState(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processError, setProcessError] = useState(null);
 
   const recognitionRef = useRef(null);
   const shouldRunRef = useRef(false);
@@ -133,6 +135,7 @@ const LiveRoomScreen = ({ interview, onDone }) => {
 
     if (!interview?.id || bubbles.length === 0) return;
     setSaving(true);
+    setProcessError(null);
     const rawContent = buildTranscriptText(bubbles);
     try {
       await fetch(`${window.API_BASE}/interviews/${interview.id}`, {
@@ -141,10 +144,22 @@ const LiveRoomScreen = ({ interview, onDone }) => {
         body: JSON.stringify({ raw_content: rawContent }),
       });
       setSaved(true);
+      setSaving(false);
+      setProcessing(true);
+      try {
+        await fetch(`${window.API_BASE}/interviews/${interview.id}/process`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raw_content: rawContent }),
+        });
+      } catch {
+        setProcessError("AI processing failed — transcript saved, you can retry from the interview detail.");
+      }
+      setProcessing(false);
     } catch {
       setSttError("Failed to save transcript to server.");
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const reset = () => {
@@ -267,12 +282,21 @@ const LiveRoomScreen = ({ interview, onDone }) => {
 
       {saved && (
         <div className="card card-pad row gap-12" style={{ alignItems: "center" }}>
-          <Icons.Check size={16} style={{ color: "var(--positive)" }} />
-          <div className="col">
-            <span className="weight-500">Transcript saved</span>
-            <span className="text-12 text-muted">{bubbles.length} lines · {fmt(elapsed)} recorded. Open the interview to view or summarize.</span>
+          {processing
+            ? <span className="badge ai" style={{ padding: "4px 10px" }}><span className="dot" /> Analyzing…</span>
+            : <Icons.Check size={16} style={{ color: "var(--positive)" }} />
+          }
+          <div className="col" style={{ flex: 1 }}>
+            <span className="weight-500">{processing ? "Cleaning up and summarizing transcript…" : "Interview processed"}</span>
+            <span className="text-12 text-muted">
+              {processing
+                ? "AI is correcting names and generating a summary. This may take a few seconds."
+                : `${bubbles.length} lines · ${fmt(elapsed)} recorded.`
+              }
+            </span>
+            {processError && <span className="text-12" style={{ color: "var(--danger)", marginTop: 4 }}>{processError}</span>}
           </div>
-          <Btn kind="primary" onClick={onDone}>Back to Interviews</Btn>
+          {!processing && <Btn kind="primary" onClick={onDone}>Back to Interviews</Btn>}
         </div>
       )}
     </div>

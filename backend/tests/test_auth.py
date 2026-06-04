@@ -110,10 +110,28 @@ class TestGoogleAuth:
         assert resp.status_code == 401
         assert "Invalid Google token" in resp.json()["detail"]
 
+    def test_401_when_aud_mismatch(self, auth_client_google: TestClient) -> None:
+        google_payload = {
+            "sub": "google-sub-99", "email": "newuser@example.com",
+            "name": "New User", "picture": None,
+            "aud": "other-app-client-id",
+        }
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = google_payload
+        with patch("candid.routers.auth.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=MagicMock(
+                get=AsyncMock(return_value=mock_resp)
+            ))
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            resp = auth_client_google.post("/auth/google", json={"token": "foreign-token"})
+        assert resp.status_code == 401
+        assert "audience mismatch" in resp.json()["detail"]
+
     def test_new_user_gets_wizard_response(self, auth_client_google: TestClient) -> None:
         google_payload = {
             "sub": "google-sub-99", "email": "newuser@example.com",
             "name": "New User", "picture": "https://example.com/pic.jpg",
+            "aud": "fake-client-id",
         }
         mock_resp = MagicMock(status_code=200)
         mock_resp.json.return_value = google_payload
@@ -141,6 +159,7 @@ class TestGoogleAuth:
         google_payload = {
             "sub": "google-sub-42", "email": "existing@example.com",
             "name": "Existing User", "picture": None,
+            "aud": "fake-client-id",
         }
         mock_resp = MagicMock(status_code=200)
         mock_resp.json.return_value = google_payload

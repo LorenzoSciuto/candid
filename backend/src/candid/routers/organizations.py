@@ -135,6 +135,8 @@ class OrganizationsRouter:
                 "email": user.email if user else "",
                 "picture": user.picture if user else None,
                 "role": mbr.role,
+                "title": user.title if user else None,
+                "department": user.department if user else None,
                 "joined_at": mbr.joined_at,
             })
         # Pending invitations

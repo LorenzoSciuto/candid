@@ -46,8 +46,15 @@ class AIEngine:
         prompt = Prompts.QUICK_PARSE.format(raw_text=raw_text)
         return self._parse_json(self._call(prompt))
 
-    def process_transcript(self, raw_transcript: str) -> dict:
-        prompt = Prompts.TRANSCRIPT.format(raw_transcript=raw_transcript)
+    def process_transcript(self, raw_transcript: str, cv_context: Optional[str] = None) -> dict:
+        cv_context_section = (
+            f"\nCandidate CV (use for name/company/role corrections):\n{cv_context[:2000]}\n"
+            if cv_context else ""
+        )
+        prompt = Prompts.TRANSCRIPT.format(
+            raw_transcript=raw_transcript,
+            cv_context_section=cv_context_section,
+        )
         return self._parse_json(self._call(prompt))
 
     def summarize_interview(self, text: str) -> dict:
@@ -253,7 +260,7 @@ class AIEngineFactory:
         "openai": "gpt-4o",
         "anthropic": "claude-3-5-haiku-20241022",
         "gemini": "gemini-2.0-flash",
-        "groq": "llama3-8b-8192",
+        "groq": "llama-3.1-8b-instant",
     }
 
     def __init__(self, crypto_service: CryptoService) -> None:

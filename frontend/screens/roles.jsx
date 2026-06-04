@@ -5,6 +5,7 @@ const RolesScreen = ({ onRoute }) => {
   const [employees, setEmployees] = useState([]);
   const [liveJds, setLiveJds] = useState([]);
   const [editRole, setEditRole] = useState(null);
+  const [viewRole, setViewRole] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -67,113 +68,103 @@ const RolesScreen = ({ onRoute }) => {
           <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>{t('roles.addFirst')}</Btn>
         </div>
       ) : (
-        <div className="col gap-24">
-          {(depts.length > 0 ? depts : [null]).map(dept => {
-            const deptRoles = dept ? roles.filter(r => r.department === dept) : roles.filter(r => !r.department);
-            if (deptRoles.length === 0) return null;
-            return (
-              <div key={dept || "__none"}>
-                {dept && (
-                  <div className="row gap-8" style={{ alignItems: "center", marginBottom: 10 }}>
-                    <span className="text-12 weight-500" style={{ color: "var(--ink-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{dept}</span>
-                    <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                    <span className="text-12 text-muted">{deptRoles.length}</span>
-                  </div>
-                )}
-                <div className="col gap-10">
-                  {deptRoles.map(role => {
+        <div className="card" style={{ overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-sunken)" }}>
+                <th style={{ padding: "9px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('roles.modal.name')}</th>
+                <th style={{ padding: "9px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('roles.modal.dept')}</th>
+                <th style={{ padding: "9px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.06em", width: 200 }}>{t('roles.headcount')}</th>
+                <th style={{ padding: "9px 16px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('roles.openSeats')}</th>
+                <th style={{ padding: "9px 16px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('roles.activeJDs')}</th>
+                <th style={{ padding: "9px 16px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('roles.inEmployees')}</th>
+                <th style={{ padding: "9px 16px", width: 96 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {(depts.length > 0 ? [...depts, null] : [null]).map(dept => {
+                const deptRoles = dept ? roles.filter(r => r.department === dept) : roles.filter(r => !r.department);
+                if (deptRoles.length === 0) return null;
+                return [
+                  dept && (
+                    <tr key={`dept-${dept}`} style={{ background: "var(--bg-subtle, var(--bg-sunken))" }}>
+                      <td colSpan={7} style={{ padding: "6px 16px" }}>
+                        <span className="text-11 weight-600" style={{ color: "var(--ink-secondary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{dept}</span>
+                        <span className="text-11 text-muted" style={{ marginLeft: 8 }}>{deptRoles.length}</span>
+                      </td>
+                    </tr>
+                  ),
+                  ...deptRoles.map((role, rowIndex) => {
                     const filled = empByRole[role.id] || 0;
                     const total  = role.headcount || 1;
                     const gap    = Math.max(0, total - filled);
                     const openJds = jdByRole[role.id] || 0;
                     const pct = Math.min(100, Math.round((filled / total) * 100));
                     const hiring = gap > 0;
-
+                    const isLast = rowIndex === deptRoles.length - 1;
                     return (
-                      <div key={role.id} className="card" style={{ padding: "18px 20px" }}>
-                        <div className="row" style={{ gap: 20, alignItems: "flex-start" }}>
-                          {/* Left — identity */}
-                          <div className="col" style={{ flex: "0 0 260px", minWidth: 0 }}>
-                            <div className="row gap-8" style={{ alignItems: "center", marginBottom: 4 }}>
-                              <span className="weight-600" style={{ fontSize: 14.5 }}>{role.name}</span>
-                              {hiring ? (
-                                <span className="badge ai" style={{ fontSize: 10.5 }}><span className="dot" /> {t('roles.hiring')}</span>
-                              ) : (
-                                <span className="badge" style={{ fontSize: 10.5, background: "var(--positive-soft)", color: "var(--positive)" }}>{t('roles.full')}</span>
-                              )}
-                            </div>
-                            {role.description && (
-                              <div className="text-12 text-secondary" style={{ lineHeight: 1.5, marginTop: 2 }}>
-                                {role.description.length > 110 ? role.description.slice(0, 110) + "…" : role.description}
-                              </div>
+                      <tr key={role.id} style={{ borderBottom: isLast ? "none" : "1px solid var(--border)", cursor: "pointer" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover, var(--bg-sunken))"}
+                        onMouseLeave={e => e.currentTarget.style.background = ""}
+                        onClick={() => setViewRole({ role, filled, total, gap, openJds, pct, hiring })}>
+                        {/* Name + status */}
+                        <td style={{ padding: "12px 16px" }}>
+                          <div className="row gap-8" style={{ alignItems: "center" }}>
+                            <span className="weight-600" style={{ fontSize: 13.5 }}>{role.name}</span>
+                            {hiring ? (
+                              <span className="badge ai" style={{ fontSize: 10 }}><span className="dot" /> {t('roles.hiring')}</span>
+                            ) : (
+                              <span className="badge" style={{ fontSize: 10, background: "var(--positive-soft)", color: "var(--positive)" }}>{t('roles.full')}</span>
                             )}
                           </div>
-
-                          {/* Center — headcount bar */}
-                          <div className="col" style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
-                            <div className="row" style={{ justifyContent: "space-between", marginBottom: 5 }}>
-                              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>{t('roles.headcount')}</span>
-                              <span className="text-12 text-mono weight-500">{filled} / {total}</span>
+                        </td>
+                        {/* Dept */}
+                        <td style={{ padding: "12px 16px" }}>
+                          <span className="text-13 text-secondary">{role.department || "—"}</span>
+                        </td>
+                        {/* Headcount bar */}
+                        <td style={{ padding: "12px 16px" }}>
+                          <div className="row gap-10" style={{ alignItems: "center" }}>
+                            <div style={{ flex: 1, height: 5, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden", minWidth: 60 }}>
+                              <div style={{ height: "100%", width: `${pct}%`, borderRadius: 999, background: hiring ? "var(--ai)" : "var(--positive)", transition: "width 0.4s ease" }} />
                             </div>
-                            <div style={{ height: 6, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden" }}>
-                              <div style={{
-                                height: "100%",
-                                width: `${pct}%`,
-                                borderRadius: 999,
-                                background: hiring ? "var(--ai)" : "var(--positive)",
-                                transition: "width 0.4s ease",
-                              }} />
-                            </div>
-                            <div className="row gap-16" style={{ marginTop: 10 }}>
-                              <div className="col gap-1">
-                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('roles.openSeats')}</span>
-                                <span className="text-13 weight-600" style={{ color: hiring ? "var(--warn)" : "var(--positive)" }}>{gap}</span>
-                              </div>
-                              <div className="col gap-1">
-                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('roles.activeJDs')}</span>
-                                <span className="text-13 weight-600">{openJds}</span>
-                              </div>
-                              <div className="col gap-1">
-                                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('roles.inEmployees')}</span>
-                                <span className="text-13 weight-600">{filled}</span>
-                              </div>
-                            </div>
+                            <span className="text-12 text-mono weight-500" style={{ flexShrink: 0 }}>{filled}/{total}</span>
                           </div>
-
-                          {/* Right — actions */}
-                          <div className="row gap-6" style={{ flexShrink: 0, alignItems: "center" }}>
-                            <Btn onClick={() => onRoute && onRoute("jobs")} style={{ fontSize: 12 }}>{t('roles.viewPositions')}</Btn>
-                            <Btn onClick={() => onRoute && onRoute("employees")} style={{ fontSize: 12 }}>{t('roles.viewEmployees')}</Btn>
-                            <button className="icon-btn" onClick={() => setEditRole(role)} title="Edit">
-                              <Icons.Edit size={14} />
-                            </button>
-                            <button className="icon-btn" onClick={() => setDeleteTarget(role)} title="Delete"
-                              style={{ color: "var(--ink-muted)" }}>
-                              <Icons.X size={14} />
-                            </button>
+                        </td>
+                        {/* Open seats */}
+                        <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                          <span className="text-13 weight-600" style={{ color: hiring ? "var(--warn)" : "var(--positive)" }}>{gap}</span>
+                        </td>
+                        {/* Active JDs */}
+                        <td style={{ padding: "12px 16px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                          <span className="text-13 weight-600"
+                            style={{ cursor: openJds > 0 ? "pointer" : "default", color: openJds > 0 ? "var(--ai)" : undefined, textDecoration: openJds > 0 ? "underline dotted" : "none" }}
+                            onClick={() => openJds > 0 && onRoute && onRoute("jobs", { roleFilter: role.id })}>
+                            {openJds}
+                          </span>
+                        </td>
+                        {/* Employees */}
+                        <td style={{ padding: "12px 16px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                          <span className="text-13 weight-600"
+                            style={{ cursor: filled > 0 ? "pointer" : "default", color: filled > 0 ? "var(--ai)" : undefined, textDecoration: filled > 0 ? "underline dotted" : "none" }}
+                            onClick={() => filled > 0 && onRoute && onRoute("employees", { roleFilter: role.id })}>
+                            {filled}
+                          </span>
+                        </td>
+                        {/* Actions */}
+                        <td style={{ padding: "12px 16px" }} onClick={e => e.stopPropagation()}>
+                          <div className="row gap-4" style={{ justifyContent: "flex-end" }}>
+                            <button className="icon-btn" onClick={() => setEditRole(role)} title="Edit"><Icons.Edit size={14} /></button>
+                            <button className="icon-btn" onClick={() => setDeleteTarget(role)} title="Delete" style={{ color: "var(--ink-muted)" }}><Icons.X size={14} /></button>
                           </div>
-                        </div>
-                      </div>
+                        </td>
+                      </tr>
                     );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Roles without department */}
-          {(() => {
-            const undept = roles.filter(r => !r.department);
-            if (undept.length === 0 || depts.length === 0) return null;
-            return (
-              <div>
-                <div className="row gap-8" style={{ alignItems: "center", marginBottom: 10 }}>
-                  <span className="text-12 weight-500" style={{ color: "var(--ink-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('roles.other')}</span>
-                  <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                </div>
-              </div>
-            );
-          })()}
+                  }),
+                ];
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -194,9 +185,20 @@ const RolesScreen = ({ onRoute }) => {
         </div>
       )}
 
+      {viewRole && (
+        <RoleViewModal
+          {...viewRole}
+          onClose={() => setViewRole(null)}
+          onEdit={() => { setEditRole(viewRole.role); setViewRole(null); }}
+          onNavigateJobs={() => { setViewRole(null); onRoute && onRoute("jobs", { roleFilter: viewRole.role.id }); }}
+          onNavigateEmployees={() => { setViewRole(null); onRoute && onRoute("employees", { roleFilter: viewRole.role.id }); }}
+        />
+      )}
+
       {(editRole || createOpen) && (
         <RoleModal
           role={editRole}
+          depts={depts}
           onClose={() => { setEditRole(null); setCreateOpen(false); }}
           onSaved={() => { setEditRole(null); setCreateOpen(false); reload(); }}
         />
@@ -205,7 +207,66 @@ const RolesScreen = ({ onRoute }) => {
   );
 };
 
-const RoleModal = ({ role, onClose, onSaved }) => {
+const RoleViewModal = ({ role, filled, total, gap, openJds, pct, hiring, onClose, onEdit, onNavigateJobs, onNavigateEmployees }) => {
+  const t = window.useT();
+  return (
+    <Modal open title={role.name} onClose={onClose}
+      footer={<><Btn onClick={onClose}>{t('common.cancel')}</Btn><Btn kind="primary" onClick={onEdit}>{t('common.edit') || "Modifica"}</Btn></>}>
+      <div className="col gap-16">
+        {/* Meta row */}
+        <div className="row gap-12" style={{ alignItems: "center", flexWrap: "wrap" }}>
+          {role.department && (
+            <span className="badge" style={{ fontSize: 11 }}>{role.department}</span>
+          )}
+          {hiring ? (
+            <span className="badge ai" style={{ fontSize: 11 }}><span className="dot" /> {t('roles.hiring')}</span>
+          ) : (
+            <span className="badge" style={{ fontSize: 11, background: "var(--positive-soft)", color: "var(--positive)" }}>{t('roles.full')}</span>
+          )}
+        </div>
+
+        {/* Headcount bar */}
+        <div className="col gap-6">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <span className="text-12 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{t('roles.headcount')}</span>
+            <span className="text-13 text-mono weight-600">{filled} / {total}</span>
+          </div>
+          <div style={{ height: 8, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pct}%`, borderRadius: 999, background: hiring ? "var(--ai)" : "var(--positive)", transition: "width 0.4s ease" }} />
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          <div className="card" style={{ padding: "12px 14px", textAlign: "center" }}>
+            <div className="text-20 weight-700" style={{ color: hiring ? "var(--warn)" : "var(--positive)" }}>{gap}</div>
+            <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>{t('roles.openSeats')}</div>
+          </div>
+          <div className="card" style={{ padding: "12px 14px", textAlign: "center", cursor: openJds > 0 ? "pointer" : "default" }}
+            onClick={() => openJds > 0 && onNavigateJobs()}>
+            <div className="text-20 weight-700" style={{ color: openJds > 0 ? "var(--ai)" : undefined }}>{openJds}</div>
+            <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>{t('roles.activeJDs')}</div>
+          </div>
+          <div className="card" style={{ padding: "12px 14px", textAlign: "center", cursor: filled > 0 ? "pointer" : "default" }}
+            onClick={() => filled > 0 && onNavigateEmployees()}>
+            <div className="text-20 weight-700" style={{ color: filled > 0 ? "var(--ai)" : undefined }}>{filled}</div>
+            <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>{t('roles.inEmployees')}</div>
+          </div>
+        </div>
+
+        {/* Description */}
+        {role.description && (
+          <div className="col gap-4">
+            <span className="text-12 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{t('roles.modal.description')}</span>
+            <p className="text-13" style={{ lineHeight: 1.6, margin: 0, color: "var(--ink-secondary)" }}>{role.description}</p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+const RoleModal = ({ role, depts, onClose, onSaved }) => {
   const t = window.useT();
   const [name, setName] = useState(role?.name || "");
   const [dept, setDept] = useState(role?.department || "");
@@ -246,12 +307,16 @@ const RoleModal = ({ role, onClose, onSaved }) => {
   };
 
   return (
-    <Modal open title={role ? t('roles.modal.edit') : t('roles.modal.new')} onClose={onClose}
+    <Modal open title={role ? t('roles.modal.edit') : t('roles.modal.new')} onClose={onClose} disableBackdropClose
       footer={<><Btn onClick={onClose}>{t('common.cancel')}</Btn><Btn kind="primary" onClick={save} disabled={!name || saving}>{saving ? t('common.saving') : t('common.save')}</Btn></>}>
       <div className="col gap-12">
         <div><label className="label">{t('roles.modal.name')}</label><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Senior Frontend Engineer" autoFocus /></div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 10 }}>
-          <div><label className="label">{t('roles.modal.dept')}</label><input className="input" value={dept} onChange={e => setDept(e.target.value)} placeholder="Engineering" /></div>
+          <div>
+            <label className="label">{t('roles.modal.dept')}</label>
+            <input className="input" value={dept} onChange={e => setDept(e.target.value)} placeholder="Engineering" list="role-depts-list" autoComplete="off" />
+            <datalist id="role-depts-list">{(depts || []).map(d => <option key={d} value={d} />)}</datalist>
+          </div>
           <div><label className="label">{t('roles.modal.headcount')}</label><input className="input" type="number" min={1} value={headcount} onChange={e => setHeadcount(e.target.value)} /></div>
         </div>
         <div>

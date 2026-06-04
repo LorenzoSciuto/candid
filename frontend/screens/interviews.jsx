@@ -138,7 +138,12 @@ const ScheduleModal = ({ onClose, onSaved }) => {
 
 const WeekView = ({ interviews, candidates, onRoute }) => {
   const t = window.useT();
-  const [weekStart, setWeekStart] = useState(() => getMondayOf(new Date()));
+  const [weekStart, setWeekStart] = useState(() => {
+    // Jump to first upcoming interview's week instead of always showing current week
+    const sorted = [...interviews].filter(iv => iv.date).sort((a, b) => a.date < b.date ? -1 : 1);
+    if (sorted.length > 0) return getMondayOf(new Date(sorted[0].date + "T12:00:00"));
+    return getMondayOf(new Date());
+  });
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = fmtDate(new Date());
@@ -161,6 +166,9 @@ const WeekView = ({ interviews, candidates, onRoute }) => {
     return `${s.toLocaleString("default", { month: "short" })} – ${e.toLocaleString("default", { month: "short" })} ${e.getFullYear()}`;
   })();
 
+  const thisWeekHasInterviews = days.some(d => (byDay[fmtDate(d)] || []).length > 0);
+  const hasAnyInterviews = interviews.some(iv => iv.date);
+
   return (
     <div>
       <div className="row" style={{ alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -168,10 +176,20 @@ const WeekView = ({ interviews, candidates, onRoute }) => {
           <Icons.ChevronLeft size={14} /> Prev
         </button>
         <span className="text-13 weight-500" style={{ flex: 1, textAlign: "center" }}>{weekLabel}</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => setWeekStart(getMondayOf(new Date()))}>Today</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setWeekStart(w => addDays(w, 7))}>
           Next <Icons.ChevronRight size={14} />
         </button>
       </div>
+      {!thisWeekHasInterviews && hasAnyInterviews && (
+        <div className="text-13 text-muted" style={{ textAlign: "center", padding: "8px 0 12px" }}>
+          No interviews this week · <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", fontSize: 12 }}
+            onClick={() => {
+              const next = interviews.filter(iv => iv.date).sort((a, b) => a.date < b.date ? -1 : 1)[0];
+              if (next) setWeekStart(getMondayOf(new Date(next.date + "T12:00:00")));
+            }}>Jump to next →</button>
+        </div>
+      )}
       <div className="card" style={{ overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid var(--border)" }}>
           {days.map((d, i) => {

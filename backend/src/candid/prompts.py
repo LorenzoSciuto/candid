@@ -9,14 +9,18 @@ You are a senior technical recruiter. Analyse the candidate CV.{position_section
 Return a JSON object with exactly these keys:
 - "overview": string — 2-3 sentence narrative summary of the candidate profile
 - "strengths": array of 3-5 strings — top technical and soft skill matches
-- "weaknesses": array of 2-4 strings — gaps, missing skills, or risks to probe
+- "weaknesses": array of 2-4 strings — skill gaps, missing experience areas, or risks to probe, \
+assessed against the candidate's full career trajectory and the roles they have held; \
+do NOT anchor to their current employer's industry or technology stack
 - "deep_dive_questions": array of exactly 3 strings — tailored interview questions
 - "career_history": array of objects in reverse chronological order, each: \
 {{"title": string, "company": string, "period": string, "description": string (1 sentence)}}
 - "extracted_info": object {{"first_name", "last_name", "email", "role"}} — null if not found
-- "role_fits": array — one entry per open position listed below, each: \
-{{"role_id": string, "title": string, "score": float 0-5 (fractions allowed), \
-"reason": string (1 sentence)}}. Empty array if no open positions provided.
+- "role_fits": array — score the candidate against each open position listed at the end of \
+this prompt (NOT against their current employer or current role). One entry per listed \
+position: {{"role_id": string, "title": string, "score": float 0-5 (fractions allowed), \
+"reason": string (1 sentence explaining fit based on the candidate's full career history)}}. \
+Empty array if no open positions are provided.
 
 CV:
 {cv_text}
@@ -43,14 +47,16 @@ Text:
 Return only valid JSON. No markdown fences."""
 
     TRANSCRIPT = """\
-Identify speakers 'Interviewer' and 'Candidate' in the following interview transcript.
+Identify speakers 'Interviewer' and 'Candidate' in the following interview transcript. \
+Correct speech-to-text errors in company names, role titles, technologies, and proper nouns \
+using the candidate CV context provided below — prefer exact spellings found in the CV.
 
 Return a JSON object with exactly these keys:
-- "cleaned_transcript" — full transcript with speaker labels, one turn per line as \
-"[Speaker]: text"
+- "cleaned_transcript" — full transcript with speaker labels and corrected proper nouns, \
+one turn per line as "[Speaker]: text"
 - "summary" — 2-3 sentence summary of the key signals and candidate impressions
 - "extra_info" — notable quotes or observations worth highlighting
-
+{cv_context_section}
 Transcript:
 {raw_transcript}
 

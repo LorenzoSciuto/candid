@@ -19,6 +19,7 @@ class UserUpdate(BaseModel):
     name: str | None = None
     title: str | None = None
     department: str | None = None
+    picture: str | None = None
 
 
 class AcceptInviteRequest(BaseModel):
@@ -108,10 +109,12 @@ class AuthRouter:
                 user.title = body.title
             if body.department is not None:
                 user.department = body.department
+            if body.picture is not None:
+                user.picture = body.picture
             session.add(user)
             session.commit()
             session.refresh(user)
-            return {"ok": True, "name": user.name, "title": user.title, "department": user.department}
+            return {"ok": True, "name": user.name, "title": user.title, "department": user.department, "picture": user.picture}
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -124,6 +127,8 @@ class AuthRouter:
         if resp.status_code != 200:
             raise HTTPException(401, "Invalid Google token")
         data = resp.json()
+        if data.get("aud") != self._settings.google_client_id:
+            raise HTTPException(401, "Token audience mismatch — not issued for this application")
         user_id = data.get("sub")
         if not user_id:
             raise HTTPException(401, "Token missing subject claim")

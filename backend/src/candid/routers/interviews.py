@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org
-from candid.models import Interview
+from candid.models import Candidate, Interview
 from candid.schemas import InterviewCreate, InterviewProcess, InterviewSummarize, InterviewUpdate
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.transcription_service import TranscriptionService
@@ -111,15 +111,27 @@ class InterviewsRouter:
 
     def _process(self, session, org_id, interview_id, body: InterviewProcess) -> Interview:
         interview = self._fetch(session, org_id, interview_id)
+        candidate = session.get(Candidate, interview.candidate_id)
+        cv_context = candidate.cv_text if candidate else None
         try:
             engine = self._ai_factory.from_session(session, org_id)
-            result = engine.process_transcript(body.raw_content)
+            result = engine.process_transcript(body.raw_content, cv_context=cv_context)
         except Exception as exc:
             raise HTTPException(502, f"AI error: {exc}") from exc
         interview.raw_content = body.raw_content
         interview.cleaned_transcript = result.get("cleaned_transcript")
         interview.ai_summary = result.get("summary")
         interview.extra_info = result.get("extra_info")
+        cleaned = interview.cleaned_transcript or body.raw_content
+        try:
+            summary_result = engine.summarize_interview(cleaned)
+            interview.ai_summary = summary_result.get("summary") or interview.ai_summary
+            interview.extra_info = (
+                "\n".join(summary_result.get("bullets", []))
+                or interview.extra_info
+            )
+        except Exception:
+            pass
         session.add(interview)
         session.commit()
         session.refresh(interview)

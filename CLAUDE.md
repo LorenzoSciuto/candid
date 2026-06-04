@@ -51,8 +51,12 @@ backend/src/candid/
     ├── roles.py          /roles — CRUD + AI description improve
     ├── job_descriptions.py /job-descriptions — CRUD + AI improve
     ├── employees.py      /employees — CRUD
+    ├── performance_reviews.py /employees/{id}/reviews — CRUD + AI improve
     ├── quick_add.py      /quick-add — AI extraction
-    └── ai.py             /ai/rewrite — email rewrite
+    ├── ai.py             /ai/rewrite — email rewrite
+    ├── public.py         /public/jobs + /public/applications — unauthenticated
+    ├── notifications.py  /notifications — inbox events
+    └── branding.py       /branding — org white-labelling
 ```
 
 ### OO + DI pattern
@@ -81,12 +85,14 @@ uv run alembic current / history / downgrade -1
 
 ```bash
 cd backend
-uv run pytest                              # all 156 tests
+uv run pytest                              # all tests
 uv run pytest tests/test_candidates.py    # single file
 uv run pytest -k "TestCreate"             # filter
 ```
 
 Tests use in-memory SQLite + `app.dependency_overrides[require_org]` — no Postgres needed.
+
+Test naming: snake_case `test_method_should_behavior_when_condition`.
 
 ## Frontend architecture
 
@@ -121,3 +127,7 @@ No bundler. Script load order in `index.html` is strict (version query strings b
 | Interviews | `screens/interviews.jsx` | List + week view + `ScheduleModal` |
 | Settings | `screens/settings.jsx` | AI config, team, pipeline stages, danger zone |
 | Quick Add | `screens/quickadd.jsx` | CV upload → AI parse → candidate create |
+| Inbox | `screens/inbox.jsx` | Notification feed |
+| Reports | `screens/reports.jsx` | Hiring funnel analytics |
+| Live Room | `screens/liveroom.jsx` | Real-time interview transcription (Web Speech API, requires HTTPS) |
+| Pre-interview | `screens/preinterview.jsx` | AI briefing before interview |

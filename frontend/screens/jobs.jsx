@@ -58,7 +58,7 @@ const OwnerSelect = ({ value, onChange }) => {
               <Avatar name={m.name} />
               <div className="col" style={{ minWidth: 0 }}>
                 <span className="text-13 weight-500">{m.name}</span>
-                {m.role && <span className="text-11 text-muted">{m.role}</span>}
+                {(m.title || m.department) && <span className="text-11 text-muted">{m.title || m.department}</span>}
               </div>
               {value.includes(m.name) && <Icons.Check size={12} style={{ marginLeft: "auto", color: "var(--positive)" }} />}
             </label>
@@ -71,10 +71,10 @@ const OwnerSelect = ({ value, onChange }) => {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-const JobsScreen = ({ onRoute }) => {
+const JobsScreen = ({ onRoute, initialRoleFilter }) => {
   const t = window.useT();
   const [jds, setJds] = useState([]);
-  const [roleFilter, setRoleFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState(initialRoleFilter || "");
   const [statusFilter, setStatusFilter] = useState("");
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -379,7 +379,7 @@ const JdModal = ({ jd, onClose, onSaved }) => {
   };
 
   return (
-    <Modal open title={isEdit ? t('jobs.modal.edit') : t('jobs.modal.new')} onClose={onClose}
+    <Modal open title={isEdit ? t('jobs.modal.edit') : t('jobs.modal.new')} onClose={onClose} disableBackdropClose
       footer={
         <>
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>

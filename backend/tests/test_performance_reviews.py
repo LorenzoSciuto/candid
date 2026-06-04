@@ -39,19 +39,19 @@ def _employee_id(client: TestClient) -> str:
 
 
 class TestListReviews:
-    def test_listReviews_shouldReturnEmpty_whenNoReviewsExist(self, client: TestClient) -> None:
+    def test_list_reviews_should_return_empty_when_no_reviews_exist(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.get(f"/employees/{employee_id}/reviews")
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_listReviews_shouldReturn404_whenEmployeeNotFound(self, client: TestClient) -> None:
+    def test_list_reviews_should_return_404_when_employee_not_found(self, client: TestClient) -> None:
         response = client.get("/employees/emp-notexist/reviews")
         assert response.status_code == 404
 
 
 class TestCreateReview:
-    def test_createReview_shouldReturn201_withReviewId(self, client: TestClient) -> None:
+    def test_create_review_should_return_201_with_review_id(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD)
         assert response.status_code == 201
@@ -59,7 +59,7 @@ class TestCreateReview:
         assert review_data["id"].startswith("pr-")
         assert review_data["employee_id"] == employee_id
 
-    def test_createReview_shouldPersistAllFields_whenAllFieldsProvided(self, client: TestClient) -> None:
+    def test_create_review_should_persist_all_fields_when_all_fields_provided(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD)
         assert response.status_code == 201
@@ -72,7 +72,7 @@ class TestCreateReview:
         assert review_data["next_review_date"] == REVIEW_PAYLOAD["next_review_date"]
         assert review_data["created_at"] is not None
 
-    def test_createReview_shouldReturn201_whenOnlyRequiredFieldProvided(self, client: TestClient) -> None:
+    def test_create_review_should_return_201_when_only_required_field_provided(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.post(f"/employees/{employee_id}/reviews", json={"period": "Q2-2026"})
         assert response.status_code == 201
@@ -80,18 +80,18 @@ class TestCreateReview:
         assert review_data["period"] == "Q2-2026"
         assert review_data["rating"] is None
 
-    def test_createReview_shouldReturn404_whenEmployeeNotFound(self, client: TestClient) -> None:
+    def test_create_review_should_return_404_when_employee_not_found(self, client: TestClient) -> None:
         response = client.post("/employees/emp-ghost/reviews", json=REVIEW_PAYLOAD)
         assert response.status_code == 404
 
 
 class TestGetReview:
-    def test_getReview_shouldReturn404_whenReviewNotFound(self, client: TestClient) -> None:
+    def test_get_review_should_return_404_when_review_not_found(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.get(f"/employees/{employee_id}/reviews/pr-notexist")
         assert response.status_code == 404
 
-    def test_getReview_shouldReturnReview_whenReviewExists(self, client: TestClient) -> None:
+    def test_get_review_should_return_review_when_review_exists(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         created = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD).json()
         response = client.get(f"/employees/{employee_id}/reviews/{created['id']}")
@@ -100,7 +100,7 @@ class TestGetReview:
 
 
 class TestUpdateReview:
-    def test_updateReview_shouldUpdateFields_whenReviewExists(self, client: TestClient) -> None:
+    def test_update_review_should_update_fields_when_review_exists(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         created = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD).json()
         response = client.patch(
@@ -110,7 +110,7 @@ class TestUpdateReview:
         assert response.status_code == 200
         assert response.json()["rating"] == "Exceeds Expectations"
 
-    def test_updateReview_shouldPreserveUnchangedFields_whenPartialUpdateProvided(self, client: TestClient) -> None:
+    def test_update_review_should_preserve_unchanged_fields_when_partial_update_provided(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         created = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD).json()
         client.patch(
@@ -121,7 +121,7 @@ class TestUpdateReview:
         assert fetched["period"] == REVIEW_PAYLOAD["period"]
         assert fetched["self_evaluation"] == REVIEW_PAYLOAD["self_evaluation"]
 
-    def test_updateReview_shouldReturn404_whenReviewNotFound(self, client: TestClient) -> None:
+    def test_update_review_should_return_404_when_review_not_found(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.patch(
             f"/employees/{employee_id}/reviews/pr-ghost",
@@ -131,7 +131,7 @@ class TestUpdateReview:
 
 
 class TestDeleteReview:
-    def test_deleteReview_shouldReturn204_andRemoveReview(self, client: TestClient) -> None:
+    def test_delete_review_should_return_204_and_remove_review(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         created = client.post(f"/employees/{employee_id}/reviews", json=REVIEW_PAYLOAD).json()
         delete_response = client.delete(f"/employees/{employee_id}/reviews/{created['id']}")
@@ -139,14 +139,14 @@ class TestDeleteReview:
         get_response = client.get(f"/employees/{employee_id}/reviews/{created['id']}")
         assert get_response.status_code == 404
 
-    def test_deleteReview_shouldReturn404_whenReviewNotFound(self, client: TestClient) -> None:
+    def test_delete_review_should_return_404_when_review_not_found(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.delete(f"/employees/{employee_id}/reviews/pr-nope")
         assert response.status_code == 404
 
 
 class TestImproveReviewText:
-    def test_improveReviewText_shouldReturnImprovedText_whenManagerFeedbackField(
+    def test_improve_review_text_should_return_improved_text_when_manager_feedback_field(
         self, client: TestClient, ai_factory: AIEngineFactory
     ) -> None:
         employee_id = _employee_id(client)
@@ -165,7 +165,7 @@ class TestImproveReviewText:
         finally:
             ai_factory.from_session = original_from_session
 
-    def test_improveReviewText_shouldReturnImprovedText_whenSelfEvaluationField(
+    def test_improve_review_text_should_return_improved_text_when_self_evaluation_field(
         self, client: TestClient, ai_factory: AIEngineFactory
     ) -> None:
         employee_id = _employee_id(client)
@@ -184,7 +184,7 @@ class TestImproveReviewText:
         finally:
             ai_factory.from_session = original_from_session
 
-    def test_improveReviewText_shouldReturn502_whenAiEngineRaisesError(
+    def test_improve_review_text_should_return_502_when_ai_engine_raises_error(
         self, client: TestClient, ai_factory: AIEngineFactory
     ) -> None:
         employee_id = _employee_id(client)
@@ -202,7 +202,7 @@ class TestImproveReviewText:
         finally:
             ai_factory.from_session = original_from_session
 
-    def test_improveReviewText_shouldReturn422_whenTextIsEmpty(self, client: TestClient) -> None:
+    def test_improve_review_text_should_return_422_when_text_is_empty(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.post(
             f"/employees/{employee_id}/reviews/improve-text",
@@ -210,7 +210,7 @@ class TestImproveReviewText:
         )
         assert response.status_code == 422
 
-    def test_improveReviewText_shouldReturn422_whenTextIsWhitespaceOnly(self, client: TestClient) -> None:
+    def test_improve_review_text_should_return_422_when_text_is_whitespace_only(self, client: TestClient) -> None:
         employee_id = _employee_id(client)
         response = client.post(
             f"/employees/{employee_id}/reviews/improve-text",

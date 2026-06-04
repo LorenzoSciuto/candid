@@ -32,6 +32,10 @@ const mapCandidate = (c) => ({
     summary: iv.ai_summary,
     raw_content: iv.raw_content,
     cleaned_transcript: iv.cleaned_transcript,
+    transcript_raw: iv.transcript_raw || null,
+    transcript_status: iv.transcript_status || null,
+    transcript_language: iv.transcript_language || null,
+    ai_evaluation: iv.ai_evaluation ? (typeof iv.ai_evaluation === "string" ? JSON.parse(iv.ai_evaluation) : iv.ai_evaluation) : null,
   })),
   evaluation: c.evaluation || null,
   statusHistory: c.status_history || [],
@@ -824,6 +828,159 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
   );
 };
 
+// ── Transcript Status Badge ───────────────────────────────────────────────────
+
+const TranscriptStatusBadge = ({ status }) => {
+  if (!status) return null;
+  const configByStatus = {
+    pending:    { kind: "neutral", label: "Pending" },
+    processing: { kind: "ai",     label: "Processing…" },
+    done:       { kind: "positive", label: "Transcribed" },
+    failed:     { kind: "danger", label: "Failed" },
+  };
+  const config = configByStatus[status] || { kind: "neutral", label: status };
+  return <Badge kind={config.kind}>{config.label}</Badge>;
+};
+
+// ── AI Evaluation Card ────────────────────────────────────────────────────────
+
+const AiEvaluationCard = ({ evaluation }) => {
+  if (!evaluation) return null;
+
+  const recommendationColors = {
+    strong_yes: "var(--positive)",
+    yes:        "var(--ai)",
+    maybe:      "var(--warn)",
+    no:         "var(--danger)",
+  };
+  const recommendationColor = recommendationColors[evaluation.recommendation] || "var(--ink-secondary)";
+  const scorePercent = Math.round(((evaluation.score || 0) / 10) * 100);
+
+  return (
+    <div className="ai-panel col gap-12" style={{ marginTop: 10 }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <span className="ai-tag"><Icons.Sparkles size={11} /> AI Evaluation</span>
+        <div className="row gap-10" style={{ alignItems: "center" }}>
+          {evaluation.recommendation && (
+            <span className="text-12 weight-600" style={{ color: recommendationColor, textTransform: "capitalize" }}>
+              {evaluation.recommendation.replace("_", " ")}
+            </span>
+          )}
+          {evaluation.score != null && (
+            <span className="text-12 text-mono weight-600">{evaluation.score}/10</span>
+          )}
+        </div>
+      </div>
+
+      {evaluation.score != null && (
+        <div style={{ height: 5, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${scorePercent}%`, background: scorePercent >= 70 ? "var(--positive)" : scorePercent >= 40 ? "var(--warn)" : "var(--danger)", borderRadius: 999, transition: "width 0.4s ease" }} />
+        </div>
+      )}
+
+      {evaluation.summary && (
+        <div className="text-13" style={{ lineHeight: 1.6, color: "var(--ink-secondary)" }}>{evaluation.summary}</div>
+      )}
+
+      {evaluation.strengths?.length > 0 && (
+        <div>
+          <div className="text-12 weight-600" style={{ marginBottom: 4, color: "var(--positive)" }}>Strengths</div>
+          <ul className="ai-list strengths">
+            {evaluation.strengths.map((strength, index) => (
+              <li key={index}><span className="marker"><Icons.Check size={11} /></span><span className="text-12">{strength}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {evaluation.concerns?.length > 0 && (
+        <div>
+          <div className="text-12 weight-600" style={{ marginBottom: 4, color: "var(--warn)" }}>Concerns</div>
+          <ul className="ai-list weaknesses">
+            {evaluation.concerns.map((concern, index) => (
+              <li key={index}><span className="marker"><Icons.X size={11} /></span><span className="text-12">{concern}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Interview Card ────────────────────────────────────────────────────────────
+
+const InterviewCard = ({ interview, onOpenTranscript, onUploadRecording, onRefresh, t }) => {
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false);
+  const audioInputRef = useRef(null);
+  const hasWhisperTranscript = interview.transcript_status === "done" && interview.transcript_raw;
+
+  const handleFileSelected = async (event) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
+    await onUploadRecording(interview.id, selectedFile, onRefresh);
+    event.target.value = "";
+  };
+
+  return (
+    <div className="card" style={{ overflow: "hidden" }}>
+      <div className="card-pad row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="row gap-12">
+          <div style={{ width: 40, height: 40, borderRadius: 8, background: "var(--bg-sunken)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <Icons.Mic size={16} />
+          </div>
+          <div className="col">
+            <div className="row gap-8" style={{ alignItems: "center", flexWrap: "wrap" }}>
+              <span className="weight-500">{interview.title || interview.type}</span>
+              <Badge>{interview.type}</Badge>
+              {interview.transcript_status && <TranscriptStatusBadge status={interview.transcript_status} />}
+            </div>
+            <span className="text-12 text-muted">
+              {[interview.date, interview.duration && `${interview.duration}`, interview.interviewer && `with ${interview.interviewer}`].filter(Boolean).join(" · ")}
+            </span>
+            {interview.summary && (
+              <span className="text-13 text-secondary" style={{ marginTop: 4, lineHeight: 1.5 }}>{interview.summary}</span>
+            )}
+          </div>
+        </div>
+        <div className="row gap-8">
+          <input ref={audioInputRef} type="file" accept=".mp3,.mp4,.wav,.webm,.m4a" style={{ display: "none" }} onChange={handleFileSelected} />
+          <Btn icon={<Icons.Upload size={13} />} onClick={() => audioInputRef.current?.click()}>
+            {interview.transcript_status === "processing" ? "Processing…" : "Upload Recording"}
+          </Btn>
+          <Btn onClick={() => onOpenTranscript(interview)}>{t('common.open')}</Btn>
+        </div>
+      </div>
+
+      {hasWhisperTranscript && (
+        <div style={{ borderTop: "1px solid var(--border-soft)" }}>
+          <button
+            className="row gap-8 text-12 text-secondary"
+            style={{ width: "100%", padding: "8px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+            onClick={() => setTranscriptExpanded(prev => !prev)}
+          >
+            <Icons.ChevronRight size={12} style={{ transform: transcriptExpanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
+            Transcript
+            {interview.transcript_language && (
+              <span className="text-11 text-mono text-muted" style={{ marginLeft: 4 }}>[{interview.transcript_language}]</span>
+            )}
+          </button>
+          {transcriptExpanded && (
+            <div style={{ padding: "0 16px 14px", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.7, color: "var(--ink-secondary)", whiteSpace: "pre-wrap", maxHeight: 300, overflowY: "auto" }}>
+              {interview.transcript_raw}
+            </div>
+          )}
+        </div>
+      )}
+
+      {interview.transcript_status === "done" && interview.ai_evaluation && (
+        <div style={{ borderTop: "1px solid var(--border-soft)", padding: "0 16px 14px" }}>
+          <AiEvaluationCard evaluation={interview.ai_evaluation} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Interviews Tab ────────────────────────────────────────────────────────────
 
 const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
@@ -832,39 +989,53 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
   const [title, setTitle] = useState("");
   const [interviewer, setInterviewer] = useState("");
   const [saving, setSaving] = useState(false);
-  const [transcriptIv, setTranscriptIv] = useState(null);
+  const [transcriptInterview, setTranscriptInterview] = useState(null);
+  const [uploadError, setUploadError] = useState("");
 
   const addInterview = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${window.API_BASE}/interviews`, {
+      const response = await fetch(`${window.API_BASE}/interviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ candidate_id: c.id, title, interviewer, raw_content: rawContent, type: "Manual Paste" }),
       });
-      if (res.ok) { onRefresh(); setCreating(false); setRawContent(""); setTitle(""); setInterviewer(""); }
+      if (response.ok) { onRefresh(); setCreating(false); setRawContent(""); setTitle(""); setInterviewer(""); }
     } catch { /* offline */ }
     setSaving(false);
   };
 
+  const uploadRecording = async (interviewId, selectedFile, afterUpload) => {
+    setUploadError("");
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    try {
+      const response = await fetch(`${window.API_BASE}/interviews/${interviewId}/upload-audio`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) throw new Error(await response.text());
+      afterUpload && afterUpload();
+    } catch (uploadException) {
+      setUploadError(`Upload failed: ${uploadException.message}`);
+    }
+  };
+
   return (
     <div className="col gap-12">
-      {(c.interviews || []).map(iv => (
-        <div key={iv.id} className="card card-pad row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div className="row gap-12">
-            <div style={{ width: 40, height: 40, borderRadius: 8, background: "var(--bg-sunken)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-              <Icons.Mic size={16} />
-            </div>
-            <div className="col">
-              <div className="row gap-8"><span className="weight-500">{iv.title || iv.type}</span><Badge>{iv.type}</Badge></div>
-              <span className="text-12 text-muted">
-                {[iv.date, iv.duration && `${iv.duration}`, iv.interviewer && `with ${iv.interviewer}`].filter(Boolean).join(" · ")}
-              </span>
-              {iv.summary && <span className="text-13 text-secondary" style={{ marginTop: 4, lineHeight: 1.5 }}>{iv.summary}</span>}
-            </div>
-          </div>
-          <Btn onClick={() => setTranscriptIv(iv)}>{t('common.open')}</Btn>
-        </div>
+      {uploadError && (
+        <div className="text-12" style={{ color: "var(--danger)", padding: "8px 0" }}>{uploadError}</div>
+      )}
+
+      {(c.interviews || []).map(interview => (
+        <InterviewCard
+          key={interview.id}
+          interview={interview}
+          onOpenTranscript={setTranscriptInterview}
+          onUploadRecording={uploadRecording}
+          onRefresh={onRefresh}
+          t={t}
+        />
       ))}
 
       {creating ? (
@@ -893,11 +1064,11 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
         </div>
       )}
 
-      {transcriptIv && (
-        <Modal open title={transcriptIv.title || transcriptIv.type || t('candidate.iv.transcript')} onClose={() => setTranscriptIv(null)} width={720}
-          footer={<Btn onClick={() => setTranscriptIv(null)}>{t('common.close')}</Btn>}>
+      {transcriptInterview && (
+        <Modal open title={transcriptInterview.title || transcriptInterview.type || t('candidate.iv.transcript')} onClose={() => setTranscriptInterview(null)} width={720}
+          footer={<Btn onClick={() => setTranscriptInterview(null)}>{t('common.close')}</Btn>}>
           {(() => {
-            const text = transcriptIv.raw_content || transcriptIv.cleaned_transcript || "";
+            const text = transcriptInterview.raw_content || transcriptInterview.cleaned_transcript || "";
             return text ? (
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.75, whiteSpace: "pre-wrap", color: "var(--ink-secondary)", maxHeight: 520, overflowY: "auto" }}>
                 {text}

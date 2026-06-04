@@ -1,6 +1,7 @@
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailService
 from candid.services.notification_service import NotificationService
 from candid.services.otp_service import OtpService
+from candid.services.transcription_service import TranscriptionService
 
 
 class Application:
@@ -44,6 +46,10 @@ class Application:
         self._ai_factory = AIEngineFactory(self._crypto)
         self._otp = OtpService()
         self._notification_service = NotificationService()
+        self._transcription_service = TranscriptionService(
+            upload_dir=Path("uploads/audio"),
+            ai_engine=self._ai_factory._from_env(),
+        )
         self._email = EmailService(
             smtp_host=self._settings.smtp_host,
             smtp_port=self._settings.smtp_port,
@@ -157,7 +163,7 @@ class Application:
             CandidatesRouter(self._db, self._notification_service, self._ai_factory, self._email).router,
             NotificationsRouter(self._db).router,
             AnalysisRouter(self._db, self._ai_factory, self._extractor).router,
-            InterviewsRouter(self._db, self._ai_factory).router,
+            InterviewsRouter(self._db, self._ai_factory, self._transcription_service).router,
             EvaluationsRouter(self._db).router,
             ConfigRouter(self._db, self._crypto).router,
             QuickAddRouter(self._db, self._ai_factory).router,

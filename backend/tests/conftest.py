@@ -1,5 +1,6 @@
 import pytest
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
@@ -9,11 +10,12 @@ from sqlmodel.pool import StaticPool
 from candid.config import Settings
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org, require_user
+from candid.services.ai_engine import AIEngine, AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
-from candid.services.ai_engine import AIEngineFactory
 from candid.services.email_service import EmailService
 from candid.services.notification_service import NotificationService
+from candid.services.transcription_service import TranscriptionService
 
 TEST_ORG_ID = "org-test"
 _TEST_USER = UserCtx(
@@ -73,6 +75,13 @@ def notification_service() -> NotificationService:
 
 
 @pytest.fixture(scope="session")
+def transcription_service(tmp_path_factory: pytest.TempPathFactory, crypto: CryptoService) -> TranscriptionService:
+    upload_dir = tmp_path_factory.mktemp("uploads")
+    ai_engine = AIEngine(provider="openai", model="gpt-4o", api_key="test-key")
+    return TranscriptionService(upload_dir=upload_dir, ai_engine=ai_engine)
+
+
+@pytest.fixture(scope="session")
 def client(
     db: Database,
     settings: Settings,
@@ -81,6 +90,7 @@ def client(
     extractor: CVExtractor,
     email_service: EmailService,
     notification_service: NotificationService,
+    transcription_service: TranscriptionService,
 ) -> TestClient:
     from candid.routers.ai import AIRouter
     from candid.routers.analysis import AnalysisRouter
@@ -110,7 +120,7 @@ def client(
     for router in [
         CandidatesRouter(db, notification_service, ai_factory, email_service).router,
         AnalysisRouter(db, ai_factory, extractor).router,
-        InterviewsRouter(db, ai_factory).router,
+        InterviewsRouter(db, ai_factory, transcription_service).router,
         EvaluationsRouter(db).router,
         ConfigRouter(db, crypto).router,
         QuickAddRouter(db, ai_factory).router,

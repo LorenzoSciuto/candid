@@ -296,6 +296,19 @@ def upgrade() -> None:
             op.f("ix_performance_review_org_id"), "performance_review", ["org_id"], unique=False
         )
 
+    # Columns added by post-baseline PRs — guard with _column_exists so this
+    # migration is safe to run on a DB that already has them.
+    for col_name in ("otp_hash", "otp_expires_at"):
+        if not _column_exists("candidate", col_name):
+            op.add_column("candidate", sa.Column(col_name, sqlmodel.sql.sqltypes.AutoString(), nullable=True))
+
+    for col_name in ("audio_file_path", "transcript_raw", "transcript_status", "transcript_language", "ai_evaluation"):
+        if not _column_exists("interview", col_name):
+            op.add_column("interview", sa.Column(col_name, sqlmodel.sql.sqltypes.AutoString(), nullable=True))
+
+    if not _column_exists("organization", "branding_config"):
+        op.add_column("organization", sa.Column("branding_config", sqlmodel.sql.sqltypes.AutoString(), nullable=True))
+
 
 def downgrade() -> None:
     op.drop_index(op.f("ix_performance_review_org_id"), table_name="performance_review")

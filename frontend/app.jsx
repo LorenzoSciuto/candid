@@ -177,6 +177,84 @@ const HiringPlanModal = ({ onClose, onNavigate }) => {
   );
 };
 
+// ── Server health monitor ─────────────────────────────────────────────────────
+
+const useServerHealth = () => {
+  const [online, setOnline] = useState(true);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await window._baseFetch(`${window.API_BASE}/`, { signal: AbortSignal.timeout(4000) });
+        if (!cancelled) setOnline(res.ok || res.status < 500);
+      } catch {
+        if (!cancelled) setOnline(false);
+      }
+      if (!cancelled) setChecking(false);
+    };
+    check();
+    const timer = setInterval(check, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
+
+  return { online, checking };
+};
+
+const ServerOfflineOverlay = () => (
+  <div style={{
+    position: "fixed", inset: 0, zIndex: 9999,
+    background: "var(--bg, #fafaf9)",
+    display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center",
+    fontFamily: "var(--font-sans, ui-sans-serif, system-ui, sans-serif)",
+    gap: 0,
+  }}>
+    <div style={{
+      width: 460, padding: "40px 44px",
+      background: "var(--surface, #fff)",
+      border: "1px solid var(--border, #e5e5e5)",
+      borderRadius: 16,
+      display: "flex", flexDirection: "column", alignItems: "center",
+      gap: 16, textAlign: "center",
+    }}>
+      <div style={{
+        width: 52, height: 52, borderRadius: 14,
+        background: "var(--danger-soft, #fef2f2)",
+        border: "1px solid oklch(0.55 0.18 25 / 0.18)",
+        display: "grid", placeItems: "center",
+      }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--danger, #ef4444)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18.364 5.636a9 9 0 0 1 0 12.728M5.636 5.636a9 9 0 0 0 0 12.728" />
+          <path d="M15.536 8.464a5 5 0 0 1 0 7.072M8.464 8.464a5 5 0 0 0 0 7.072" />
+          <line x1="12" y1="12" x2="12.01" y2="12" />
+        </svg>
+      </div>
+      <div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink, #1c1917)", letterSpacing: "-0.02em", marginBottom: 6 }}>
+          Server unreachable
+        </div>
+        <div style={{ fontSize: 13.5, color: "var(--ink-secondary, #78716c)", lineHeight: 1.6 }}>
+          Cannot connect to the backend at <code style={{ background: "var(--bg-sunken, #f5f5f4)", padding: "1px 6px", borderRadius: 4, fontFamily: "var(--font-mono, ui-monospace)", fontSize: 12 }}>{window.API_BASE}</code>
+        </div>
+      </div>
+      <div style={{
+        width: "100%", padding: "14px 16px",
+        background: "var(--bg-sunken, #f5f5f4)",
+        borderRadius: 10, textAlign: "left",
+        fontSize: 12.5, color: "var(--ink-secondary, #78716c)", lineHeight: 1.8,
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--ink, #1c1917)" }}>Start the backend:</div>
+        <code style={{ fontFamily: "var(--font-mono, ui-monospace)", color: "var(--ink, #1c1917)" }}>./scripts/server.sh</code>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--ink-faint, #a8a29e)" }}>
+        Checking automatically every 5 seconds…
+      </div>
+    </div>
+  </div>
+);
+
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 
 const SESSION_KEY = "candid_user";
@@ -1111,7 +1189,7 @@ const App = () => {
         <div className="main">
           <Topbar crumbs={crumbs} actions={topActions} />
           <div className="scroll">
-            {route === "pipeline"     && <window.PipelineScreen onOpenCandidate={openCandidate} onQuickAdd={() => setQuickOpen(true)} />}
+            {route === "pipeline"     && <window.PipelineScreen onOpenCandidate={openCandidate} onQuickAdd={() => setQuickOpen(true)} onRoute={navigate} />}
             {route === "candidates"   && <window.CandidatesScreen onOpenCandidate={openCandidate} />}
             {route === "jobs"         && <window.JobsScreen onRoute={navigate} initialRoleFilter={routeData.roleFilter} />}
             {route === "roles"        && <window.RolesScreen onRoute={navigate} />}
@@ -1164,12 +1242,19 @@ const App = () => {
 // ── Portal entry-point ────────────────────────────────────────────────────────
 
 const PortalEntry = () => {
+  const { online, checking } = useServerHealth();
+
   const hash = window.location.hash.replace("#", "");
   if (hash.startsWith("portal/")) {
-    const portalSlug = hash.slice("portal/".length);
-    return <window.PortalScreen slug={portalSlug} />;
+    return <window.PortalScreen slug={hash.slice("portal/".length)} />;
   }
-  return <App />;
+
+  return (
+    <>
+      {!checking && !online && <ServerOfflineOverlay />}
+      <App />
+    </>
+  );
 };
 
 ReactDOM.createRoot(document.getElementById("root")).render(<PortalEntry />);

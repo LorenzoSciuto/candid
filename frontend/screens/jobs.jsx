@@ -80,6 +80,7 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
   const [createOpen, setCreateOpen] = useState(false);
   const [editJd, setEditJd] = useState(null);
   const [viewJd, setViewJd] = useState(null);
+  const [deleteJdTarget, setDeleteJdTarget] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const menuRef = useRef(null);
@@ -117,7 +118,12 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
 
   const deleteJd = (id) => {
     setMenuOpen(null);
-    if (!confirm("Delete this position? This cannot be undone.")) return;
+    setDeleteJdTarget(id);
+  };
+
+  const confirmDeleteJd = () => {
+    const id = deleteJdTarget;
+    setDeleteJdTarget(null);
     setJds(prev => prev.filter(j => j.id !== id));
     fetch(`${window.API_BASE}/job-descriptions/${id}`, { method: "DELETE" }).catch(() => {});
   };
@@ -327,6 +333,14 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
       {viewJd && (
         <JdViewModal jd={viewJd} roles={roles} onClose={() => setViewJd(null)}
           onEdit={() => { setEditJd(viewJd); setViewJd(null); }} t={t} />
+      )}
+      {deleteJdTarget && (
+        <ConfirmDialog
+          title={t('roles.deleteTitle')}
+          message="This position will be permanently deleted and cannot be recovered."
+          onConfirm={confirmDeleteJd}
+          onCancel={() => setDeleteJdTarget(null)}
+        />
       )}
     </div>
   );

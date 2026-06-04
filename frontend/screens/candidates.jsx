@@ -12,26 +12,6 @@ const mapCandidate = (c) => ({
 
 // ── Styled delete / destructive confirm ────────────────────────────────────────
 
-const ConfirmDialog = ({ title, message, confirmLabel, onConfirm, onCancel }) => {
-  const t = window.useT();
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}
-      onClick={onCancel}>
-      <div className="card col" style={{ width: 400, padding: 28, gap: 20 }}
-        onClick={e => e.stopPropagation()}>
-        <div className="col gap-6">
-          <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>{title}</span>
-          <span className="text-13 text-secondary">{message}</span>
-        </div>
-        <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
-          <Btn onClick={onCancel}>{t('common.cancel')}</Btn>
-          <Btn kind="danger" onClick={onConfirm}>{confirmLabel || t('common.delete')}</Btn>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ── New candidate modal ────────────────────────────────────────────────────────
 
 const NewCandidateModal = ({ onClose, onCreated }) => {

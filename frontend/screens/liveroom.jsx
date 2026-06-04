@@ -12,6 +12,7 @@ const LiveRoomScreen = ({ interview, onDone }) => {
   const [sttError, setSttError] = useState(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [processError, setProcessError] = useState(null);
 
@@ -19,6 +20,7 @@ const LiveRoomScreen = ({ interview, onDone }) => {
   const shouldRunRef = useRef(false);
   const activeSpeakerRef = useRef("Candidate");
   const transcriptEndRef = useRef(null);
+  const resolvedInterviewIdRef = useRef(interview?.id || null);
 
   useEffect(() => { activeSpeakerRef.current = activeSpeaker; }, [activeSpeaker]);
 
@@ -29,10 +31,10 @@ const LiveRoomScreen = ({ interview, onDone }) => {
     return () => clearInterval(id);
   }, [recording, paused]);
 
-  // Auto-scroll
+  // Auto-scroll (only while recording)
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [bubbles, liveText]);
+    if (recording) transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [bubbles, liveText, recording]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -102,6 +104,7 @@ const LiveRoomScreen = ({ interview, onDone }) => {
     }
     setSttError(null);
     setSaved(false);
+    setReviewing(false);
     const r = buildRecognition();
     recognitionRef.current = r;
     shouldRunRef.current = true;
@@ -133,32 +136,83 @@ const LiveRoomScreen = ({ interview, onDone }) => {
     setLiveText("");
     try { recognitionRef.current?.stop(); } catch {}
 
-    if (!interview?.id || bubbles.length === 0) return;
+    if (bubbles.length === 0) return;
+
     setSaving(true);
+    setSttError(null);
+
+    let interviewId = resolvedInterviewIdRef.current;
+
+    if (!interviewId) {
+      if (!interview?.candidateId) {
+        setSaving(false);
+        setReviewing(true);
+        return;
+      }
+      try {
+        const res = await fetch(`${window.API_BASE}/interviews`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            candidate_id: interview.candidateId,
+            type: interview.type || "Live",
+            title: interview.title || "Live Interview",
+            interviewer: interview.interviewer || null,
+            date: new Date().toISOString().slice(0, 10),
+          }),
+        });
+        if (!res.ok) throw new Error("create failed");
+        const created = await res.json();
+        interviewId = created.id;
+        resolvedInterviewIdRef.current = interviewId;
+      } catch {
+        setSttError("Failed to create interview record on server.");
+        setSaving(false);
+        return;
+      }
+    }
+
+    try {
+      await fetch(`${window.API_BASE}/interviews/${interviewId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_content: buildTranscriptText(bubbles) }),
+      });
+      setSaving(false);
+      setReviewing(true);
+    } catch {
+      setSttError("Failed to save transcript to server.");
+      setSaving(false);
+    }
+  };
+
+  const deleteBubble = (index) => {
+    setBubbles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const synthesize = async () => {
+    const interviewId = resolvedInterviewIdRef.current;
+    if (!interviewId) return;
+    setProcessing(true);
     setProcessError(null);
     const rawContent = buildTranscriptText(bubbles);
     try {
-      await fetch(`${window.API_BASE}/interviews/${interview.id}`, {
+      await fetch(`${window.API_BASE}/interviews/${interviewId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ raw_content: rawContent }),
       });
-      setSaved(true);
-      setSaving(false);
-      setProcessing(true);
-      try {
-        await fetch(`${window.API_BASE}/interviews/${interview.id}/process`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ raw_content: rawContent }),
-        });
-      } catch {
-        setProcessError("AI processing failed — transcript saved, you can retry from the interview detail.");
-      }
+      await fetch(`${window.API_BASE}/interviews/${interviewId}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_content: rawContent }),
+      });
       setProcessing(false);
+      setReviewing(false);
+      setSaved(true);
     } catch {
-      setSttError("Failed to save transcript to server.");
-      setSaving(false);
+      setProcessError("AI processing failed — transcript saved, you can retry from the interview detail.");
+      setProcessing(false);
     }
   };
 
@@ -172,6 +226,7 @@ const LiveRoomScreen = ({ interview, onDone }) => {
     setLiveText("");
     setSttError(null);
     setSaved(false);
+    setReviewing(false);
   };
 
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -189,6 +244,7 @@ const LiveRoomScreen = ({ interview, onDone }) => {
             <Icons.Mic size={16} />
             <span style={{ fontWeight: 600, fontSize: 18 }}>{interviewTitle}</span>
             {recording && <Badge kind="danger"><span className="rec-dot" /> REC {fmt(elapsed)}</Badge>}
+            {reviewing && !processing && <Badge kind="warning">Review transcript</Badge>}
             {saved && <Badge kind="positive">Transcript saved</Badge>}
           </div>
           <span className="text-13 text-secondary">{candidateName} · with {interviewerName}</span>
@@ -211,11 +267,11 @@ const LiveRoomScreen = ({ interview, onDone }) => {
         {/* Controls */}
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <div className="row gap-8">
-            {!recording ? (
+            {!recording && !reviewing && !saved ? (
               <Btn kind="primary" onClick={start} icon={<Icons.Mic size={14} />} disabled={!SpeechRecognition || saving}>
                 Start recording
               </Btn>
-            ) : (
+            ) : recording ? (
               <>
                 <Btn kind="secondary" onClick={pause} icon={paused ? <Icons.Play size={12} /> : <Icons.Pause size={12} />}>
                   {paused ? "Resume" : "Pause"}
@@ -224,8 +280,8 @@ const LiveRoomScreen = ({ interview, onDone }) => {
                   {saving ? "Saving…" : "Stop & save"}
                 </Btn>
               </>
-            )}
-            {!recording && bubbles.length > 0 && (
+            ) : null}
+            {!recording && !reviewing && !saved && bubbles.length > 0 && (
               <button className="btn btn-ghost btn-sm" onClick={reset}>Reset</button>
             )}
           </div>
@@ -266,7 +322,13 @@ const LiveRoomScreen = ({ interview, onDone }) => {
               <div className="text-12" style={{ marginTop: 6 }}>Words appear here in real time. Tap the speaker button to switch between candidate and interviewer.</div>
             </div>
           )}
-          {bubbles.map((b, i) => <TranscriptBubble key={i} {...b} />)}
+          {bubbles.map((b, i) => (
+            <TranscriptBubble
+              key={i}
+              {...b}
+              onDelete={reviewing ? () => deleteBubble(i) : null}
+            />
+          ))}
           {liveText && (
             <TranscriptBubble
               speaker={activeSpeaker}
@@ -280,31 +342,70 @@ const LiveRoomScreen = ({ interview, onDone }) => {
         </div>
       </div>
 
+      {/* Review panel */}
+      {reviewing && !saved && (
+        <div className="card card-pad col gap-12">
+          <div className="row gap-12" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div className="col gap-2">
+              <span className="weight-600">Review transcript</span>
+              <span className="text-12 text-muted">
+                {bubbles.length} line{bubbles.length !== 1 ? "s" : ""} · {fmt(elapsed)} recorded. Remove unwanted lines, then synthesize.
+              </span>
+              {processError && <span className="text-12" style={{ color: "var(--danger)", marginTop: 4 }}>{processError}</span>}
+            </div>
+            <div className="row gap-8">
+              <Btn kind="ghost" onClick={reset} disabled={processing}>Discard</Btn>
+              <Btn
+                kind="ai"
+                icon={processing ? null : <Icons.Sparkles size={14} />}
+                onClick={synthesize}
+                disabled={processing || bubbles.length === 0 || !resolvedInterviewIdRef.current}
+              >
+                {processing ? "Synthesizing…" : "Cleanup & Synthesize"}
+              </Btn>
+            </div>
+          </div>
+          {processing && (
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <span className="badge ai" style={{ padding: "4px 10px" }}><span className="dot" /> Analyzing…</span>
+              <span className="text-12 text-muted">AI is cleaning names and generating a summary.</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Done panel */}
       {saved && (
         <div className="card card-pad row gap-12" style={{ alignItems: "center" }}>
-          {processing
-            ? <span className="badge ai" style={{ padding: "4px 10px" }}><span className="dot" /> Analyzing…</span>
-            : <Icons.Check size={16} style={{ color: "var(--positive)" }} />
-          }
+          <Icons.Check size={16} style={{ color: "var(--positive)" }} />
           <div className="col" style={{ flex: 1 }}>
-            <span className="weight-500">{processing ? "Cleaning up and summarizing transcript…" : "Interview processed"}</span>
-            <span className="text-12 text-muted">
-              {processing
-                ? "AI is correcting names and generating a summary. This may take a few seconds."
-                : `${bubbles.length} lines · ${fmt(elapsed)} recorded.`
-              }
-            </span>
-            {processError && <span className="text-12" style={{ color: "var(--danger)", marginTop: 4 }}>{processError}</span>}
+            <span className="weight-500">Interview processed</span>
+            <span className="text-12 text-muted">{bubbles.length} lines · {fmt(elapsed)} recorded.</span>
           </div>
-          {!processing && <Btn kind="primary" onClick={onDone}>Back to Interviews</Btn>}
+          <Btn kind="primary" onClick={onDone}>Back to Interviews</Btn>
         </div>
       )}
     </div>
   );
 };
 
-const TranscriptBubble = ({ speaker, who, t, text, live }) => (
-  <div className={`bubble ${speaker.toLowerCase()} ${live ? "live" : ""}`}>
+const TranscriptBubble = ({ speaker, who, t, text, live, onDelete }) => (
+  <div className={`bubble ${speaker.toLowerCase()} ${live ? "live" : ""}`} style={{ position: "relative" }}>
+    {onDelete && (
+      <button
+        onClick={onDelete}
+        title="Remove line"
+        style={{
+          position: "absolute", top: 6, right: 6,
+          background: "none", border: "none", cursor: "pointer",
+          color: "var(--ink-muted)", fontSize: 16, lineHeight: 1,
+          padding: "2px 5px", borderRadius: 4,
+          opacity: 0.5,
+        }}
+        onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+        onMouseLeave={e => e.currentTarget.style.opacity = "0.5"}
+      >×</button>
+    )}
     {speaker === "Interviewer" && <Avatar name={who} />}
     <div className="col" style={{ maxWidth: "70%" }}>
       <div className="meta">

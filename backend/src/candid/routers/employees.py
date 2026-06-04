@@ -96,7 +96,7 @@ class EmployeesRouter:
         ):
             employee = self._fetch(session, user.org_id, employee_id)
             self._apply_reminder(session, employee, body.note)
-            self._create_reminder_notification(session, user.org_id, employee)
+            self._create_reminder_notification(session, user.org_id, user.user_id, employee)
             return employee
 
         @self.router.delete("/{employee_id}/reminder", status_code=204)
@@ -124,14 +124,17 @@ class EmployeesRouter:
         session.commit()
 
     def _create_reminder_notification(
-        self, session: Session, org_id: str, employee: Employee
+        self, session: Session, org_id: str, user_id: str, employee: Employee
     ) -> None:
         full_name = f"{employee.first_name} {employee.last_name}"
         notification = Notification(
             org_id=org_id,
-            notification_type="reminder",
-            message=f"Reminder set for {full_name}: {employee.reminder_note}",
-            reference_id=employee.id,
+            user_id=user_id,
+            category="reminder",
+            title=f"Reminder: {full_name}",
+            body=employee.reminder_note or "",
+            entity_id=employee.id,
+            entity_type="employee",
         )
         session.add(notification)
         session.commit()

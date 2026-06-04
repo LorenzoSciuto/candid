@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 from sqlmodel import Session, create_engine
@@ -23,5 +24,10 @@ class Database:
         command.upgrade(cfg, "head")
 
     def get_session(self) -> Generator[Session, None, None]:
+        with Session(self._engine) as session:
+            yield session
+
+    @contextmanager
+    def get_session_direct(self) -> Generator[Session, None, None]:
         with Session(self._engine) as session:
             yield session

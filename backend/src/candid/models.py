@@ -102,16 +102,18 @@ class Candidate(SQLModel, table=True):
     cv_file: Optional[bytes] = None
     otp_hash: Optional[str] = None          # SHA-256 hex digest of the 6-digit OTP
     otp_expires_at: Optional[str] = None    # ISO datetime string (UTC)
+    job_description_id: Optional[str] = Field(default=None, foreign_key="job_description.id", index=True)
 
 
 class Interview(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("i"), primary_key=True)
     org_id: str = Field(default="", index=True)
-    candidate_id: str = Field(foreign_key="candidate.id", index=True)
+    candidate_id: Optional[str] = Field(default=None, foreign_key="candidate.id", index=True)
     type: str = "Manual Paste"
     title: Optional[str] = None
     interviewer: Optional[str] = None
     date: Optional[str] = None
+    time: Optional[str] = None
     duration: Optional[str] = None
     raw_content: Optional[str] = None
     cleaned_transcript: Optional[str] = None
@@ -154,7 +156,6 @@ class JobDescription(SQLModel, table=True):
     description: Optional[str] = None
     requirements: Optional[str] = None
     location: Optional[str] = None
-    remote_ok: bool = False
     status: str = "Draft"
     openings: int = 1
     owner: Optional[str] = None

@@ -26,6 +26,11 @@ const SKILL_KEYS = {
   "Systems Thinking":     "skill.systemsThinking",
 };
 
+const SOURCES = [
+  "Referral", "LinkedIn", "Inbound", "Job board",
+  "Agency", "CV Upload", "Portal", "Other",
+];
+
 window.CANDID_DATA = {
-  STATUS, HUMAN_SKILLS, TECH_SKILLS, SKILL_KEYS, initials,
+  STATUS, HUMAN_SKILLS, TECH_SKILLS, SKILL_KEYS, SOURCES, initials,
 };

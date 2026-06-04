@@ -290,6 +290,9 @@ const InterviewsScreen = ({ onRoute }) => {
   const [view, setView] = useState("list");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [transcriptIv, setTranscriptIv] = useState(null);
+  const [q, setQ] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [interviewerFilter, setInterviewerFilter] = useState("all");
 
   const reload = () => {
     Promise.all([
@@ -307,18 +310,41 @@ const InterviewsScreen = ({ onRoute }) => {
   useEffect(reload, []);
 
   const today = new Date().toISOString().slice(0, 10);
-  const displayUpcoming = interviews.filter(iv => iv.date && iv.date >= today);
-  const displayPast = interviews.filter(iv => !iv.date || iv.date < today);
-  const allDisplay = [...displayUpcoming, ...displayPast];
+  const candName = (iv) => candidates[iv.candidate_id] || "—";
 
-  const candName = (iv) => iv.candidateName || candidates[iv.candidate_id] || iv.candidate_id || "Unknown";
+  const upcomingAll = interviews.filter(iv => iv.date && iv.date >= today);
+
+  const interviewers = useMemo(() => {
+    const set = new Set();
+    upcomingAll.forEach(iv => { if (iv.interviewer) set.add(iv.interviewer); });
+    return [...set].sort();
+  }, [interviews]);
+
+  const types = useMemo(() => {
+    const set = new Set();
+    upcomingAll.forEach(iv => { if (iv.type) set.add(iv.type); });
+    return [...set].sort();
+  }, [interviews]);
+
+  const displayUpcoming = useMemo(() => upcomingAll.filter(iv => {
+    if (q) {
+      const ql = q.toLowerCase();
+      const name = candName(iv).toLowerCase();
+      const title = (iv.title || iv.type || "").toLowerCase();
+      const iwr = (iv.interviewer || "").toLowerCase();
+      if (!name.includes(ql) && !title.includes(ql) && !iwr.includes(ql)) return false;
+    }
+    if (typeFilter !== "all" && iv.type !== typeFilter) return false;
+    if (interviewerFilter !== "all" && iv.interviewer !== interviewerFilter) return false;
+    return true;
+  }), [interviews, q, typeFilter, interviewerFilter, candidates]);
 
   return (
     <div className="page page-wide">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
           <h1 className="page-h1">{t('interviews.title')}</h1>
-          <div className="page-sub">{displayUpcoming.length} upcoming · {interviews.length} total</div>
+          <div className="page-sub">{displayUpcoming.length} upcoming</div>
         </div>
         <div className="row gap-8">
           <SegControl
@@ -335,75 +361,62 @@ const InterviewsScreen = ({ onRoute }) => {
         </div>
       </div>
 
+      <div className="card" style={{ padding: "10px 12px", marginBottom: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="row gap-6" style={{ background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px", flex: "1 1 200px" }}>
+          <Icons.Search size={14} style={{ color: "var(--ink-muted)" }} />
+          <input className="input" style={{ border: 0, padding: "4px 0", background: "transparent" }} placeholder="Search candidate, title, interviewer…" value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+        <select className="select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ width: 140 }}>
+          <option value="all">All types</option>
+          {types.map(tp => <option key={tp} value={tp}>{tp}</option>)}
+        </select>
+        <select className="select" value={interviewerFilter} onChange={e => setInterviewerFilter(e.target.value)} style={{ width: 160 }}>
+          <option value="all">All interviewers</option>
+          {interviewers.map(iv => <option key={iv} value={iv}>{iv}</option>)}
+        </select>
+        {(q || typeFilter !== "all" || interviewerFilter !== "all") && (
+          <button className="btn btn-ghost btn-sm" onClick={() => { setQ(""); setTypeFilter("all"); setInterviewerFilter("all"); }}>{t('common.clear')}</button>
+        )}
+      </div>
+
       {view === "week" ? (
-        <WeekView interviews={allDisplay} candidates={candidates} onRoute={onRoute} />
+        <WeekView interviews={upcomingAll} candidates={candidates} onRoute={onRoute} />
       ) : (
         <>
-          {displayUpcoming.length > 0 && (
-            <>
-              <div className="weight-600 text-13 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>{t('interviews.upcoming')}</div>
-              <div className="col gap-8" style={{ marginBottom: 28 }}>
-                {displayUpcoming.map(iv => (
-                  <div key={iv.id} className="card row" style={{ padding: 14, alignItems: "center", justifyContent: "space-between" }}>
-                    <div className="row gap-16" style={{ minWidth: 0 }}>
-                      <div style={{ width: 56, textAlign: "center", padding: "6px 8px", background: "var(--bg-sunken)", borderRadius: 6, flexShrink: 0 }}>
-                        <div className="text-mono text-12 text-muted">{iv.date || "TBD"}</div>
-                        {iv.time && <div className="text-mono text-11 text-muted">{iv.time}</div>}
-                      </div>
-                      <div className="col" style={{ minWidth: 0 }}>
-                        <div className="row gap-8">
-                          <span className="weight-500">{iv.title || iv.type}</span>
-                          <Badge>{iv.type || "Interview"}</Badge>
-                        </div>
-                        <div className="text-12 text-secondary">
-                          {candName(iv)}{iv.interviewer ? ` · with ${iv.interviewer}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
-                        </div>
-                      </div>
+          {displayUpcoming.length > 0 ? (
+            <div className="col gap-8">
+              {displayUpcoming.map(iv => (
+                <div key={iv.id} className="card row" style={{ padding: 14, alignItems: "center", justifyContent: "space-between" }}>
+                  <div className="row gap-16" style={{ minWidth: 0 }}>
+                    <div style={{ width: 56, textAlign: "center", padding: "6px 8px", background: "var(--bg-sunken)", borderRadius: 6, flexShrink: 0 }}>
+                      <div className="text-mono text-12 text-muted">{iv.date || "TBD"}</div>
+                      {iv.time && <div className="text-mono text-11 text-muted">{iv.time}</div>}
                     </div>
-                    <div className="row gap-8">
-                      <Btn kind="primary" icon={<Icons.Mic size={14} />}
-                        onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>
-                        Record
-                      </Btn>
+                    <div className="col" style={{ minWidth: 0 }}>
+                      <div className="row gap-8">
+                        <span className="weight-500">{iv.title || iv.type}</span>
+                        <Badge>{iv.type || "Interview"}</Badge>
+                      </div>
+                      <div className="text-12 text-secondary">
+                        {candName(iv)}{iv.interviewer ? ` · with ${iv.interviewer}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {displayPast.length > 0 && (
-            <>
-              <div className="weight-600 text-13 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>{t('interviews.recent')}</div>
-              <div className="card" style={{ overflow: "hidden" }}>
-                {displayPast.map((iv, i) => (
-                  <div key={iv.id} className="row" style={{ padding: "14px 18px", justifyContent: "space-between", borderBottom: i === displayPast.length - 1 ? 0 : "1px solid var(--border-soft)" }}>
-                    <div className="row gap-12">
-                      <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--bg-sunken)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                        <Icons.Mic size={14} />
-                      </div>
-                      <div className="col">
-                        <div className="row gap-8">
-                          <span className="weight-500">{iv.title || iv.type}</span>
-                          <span className="text-12 text-muted">· {iv.date || "—"}{iv.duration ? ` · ${iv.duration}` : ""}</span>
-                        </div>
-                        <span className="text-12 text-secondary">{candName(iv)}{iv.interviewer ? ` · with ${iv.interviewer}` : ""}</span>
-                      </div>
-                    </div>
-                    <div className="row gap-12" style={{ maxWidth: 480, alignItems: "center" }}>
-                      {iv.ai_summary && <span className="text-12 text-secondary" style={{ flex: 1, textAlign: "right" }}>{iv.ai_summary}</span>}
-                      <Btn onClick={() => setTranscriptIv(iv)}>{t('interviews.transcript')}</Btn>
-                    </div>
+                  <div className="row gap-8">
+                    <Btn kind="primary" icon={<Icons.Mic size={14} />}
+                      onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>
+                      Record
+                    </Btn>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {!loading && displayUpcoming.length === 0 && displayPast.length === 0 && (
-            <div className="card card-pad" style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
-              {t('interviews.empty')}
+                </div>
+              ))}
             </div>
+          ) : (
+            !loading && (
+              <div className="card card-pad" style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
+                {t('interviews.empty')}
+              </div>
+            )
           )}
         </>
       )}

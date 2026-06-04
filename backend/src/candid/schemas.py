@@ -18,6 +18,7 @@ class CandidateCreate(BaseModel):
     extra_information: Optional[str] = None
     cv_text: Optional[str] = None
     cv_filename: Optional[str] = None
+    job_description_id: Optional[str] = None
 
 
 class CandidateUpdate(BaseModel):
@@ -34,6 +35,7 @@ class CandidateUpdate(BaseModel):
     extra_information: Optional[str] = None
     cv_text: Optional[str] = None
     cv_filename: Optional[str] = None
+    job_description_id: Optional[str] = None
 
 
 # ── Analysis ───────────────────────────────────────────────────────────────────
@@ -53,11 +55,12 @@ class QuickAddRequest(BaseModel):
 # ── Interviews ──────────────────────────────────────────────────────────────────
 
 class InterviewCreate(BaseModel):
-    candidate_id: str
+    candidate_id: Optional[str] = None
     type: str = "Manual Paste"
     title: Optional[str] = None
     interviewer: Optional[str] = None
     date: Optional[str] = None
+    time: Optional[str] = None
     raw_content: Optional[str] = None
 
 
@@ -65,6 +68,7 @@ class InterviewUpdate(BaseModel):
     title: Optional[str] = None
     interviewer: Optional[str] = None
     date: Optional[str] = None
+    time: Optional[str] = None
     duration: Optional[str] = None
     raw_content: Optional[str] = None
     cleaned_transcript: Optional[str] = None
@@ -161,7 +165,6 @@ class JobDescriptionCreate(BaseModel):
     description: Optional[str] = None
     requirements: Optional[str] = None
     location: Optional[str] = None
-    remote_ok: bool = False
     status: str = "Draft"
     openings: int = 1
     owner: Optional[str] = None
@@ -172,7 +175,6 @@ class JobDescriptionUpdate(BaseModel):
     description: Optional[str] = None
     requirements: Optional[str] = None
     location: Optional[str] = None
-    remote_ok: Optional[bool] = None
     status: Optional[str] = None
     openings: Optional[int] = None
     owner: Optional[str] = None
@@ -227,7 +229,6 @@ class PublicJobItem(BaseModel):
     id: str
     title: str
     location: Optional[str] = None
-    remote_ok: bool
     description: Optional[str] = None
     requirements: Optional[str] = None
     openings: int

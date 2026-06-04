@@ -148,7 +148,17 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
           <h1 className="page-h1">{t('jobs.title')}</h1>
           <div className="page-sub">{rows.length} of {jds.length} positions · {activeCount} active</div>
         </div>
-        <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>{t('jobs.new')}</Btn>
+        <div className="row gap-8">
+          {window.CANDID_ORG?.slug && (
+            <Btn icon={<Icons.Link size={14} />} onClick={() => {
+              const base = window.location.href.split("#")[0];
+              const url = `${base}#portal/${window.CANDID_ORG.slug}`;
+              navigator.clipboard?.writeText(url).catch(() => {});
+              window.open(url, "_blank");
+            }}>{t('jobs.portal.link')}</Btn>
+          )}
+          <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>{t('jobs.new')}</Btn>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
@@ -209,7 +219,15 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
                     </div>
                   </JdTd>
                   <JdTd><span className="text-13 text-secondary">{roles[j.role_id]?.name || "—"}</span></JdTd>
-                  <JdTd><span className="text-13 text-secondary">{j.location || "—"}{j.remote_ok ? " · Remote OK" : ""}</span></JdTd>
+                  <JdTd>
+                    {j.location
+                      ? <div className="row gap-4" style={{ flexWrap: "wrap" }}>
+                          {j.location.split(",").map(l => l.trim()).filter(Boolean).map(l =>
+                            <span key={l} className="badge" style={{ fontSize: 11 }}>{l}</span>
+                          )}
+                        </div>
+                      : <span className="text-muted">—</span>}
+                  </JdTd>
                   <JdTd>
                     <Badge kind={j.status === "Active" ? "positive" : j.status === "Draft" ? undefined : "warn"}>{j.status}</Badge>
                   </JdTd>
@@ -260,6 +278,18 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
               onClick={() => { setMenuOpen(null); setEditJd(j); }}>
               <Icons.Edit size={13} /> {t('common.edit')}
             </button>
+            {j.status === "Active" && window.CANDID_ORG?.slug && (
+              <button className="btn btn-ghost btn-sm row gap-6" style={{ width: "100%", justifyContent: "flex-start" }}
+                onClick={() => {
+                  setMenuOpen(null);
+                  const base = window.location.href.split("#")[0];
+                  const url = `${base}#portal/${window.CANDID_ORG.slug}`;
+                  navigator.clipboard?.writeText(url).catch(() => {});
+                  window.open(url, "_blank");
+                }}>
+                <Icons.Link size={13} /> {t('jobs.action.portal')}
+              </button>
+            )}
             <div style={{ height: 1, background: "var(--border-soft)", margin: "4px 0" }} />
             {(s === "Draft" || s === "Closed" || s === "On hold") && (
               <button className="btn btn-ghost btn-sm row gap-6" style={{ width: "100%", justifyContent: "flex-start" }}
@@ -317,8 +347,9 @@ const JdModal = ({ jd, onClose, onSaved }) => {
   const [roleId, setRoleId] = useState(jd?.role_id || "");
   const [title, setTitle] = useState(jd?.title || "");
   const [description, setDescription] = useState(jd?.description || "");
-  const [location, setLocation] = useState(jd?.location || "");
-  const [remoteOk, setRemoteOk] = useState(jd?.remote_ok || false);
+  const [selectedLocations, setSelectedLocations] = useState(() =>
+    jd?.location ? jd.location.split(",").map(s => s.trim()).filter(Boolean) : []
+  );
   const [status, setStatus] = useState(jd?.status || "Draft");
   const [openings, setOpenings] = useState(jd?.openings || 1);
   // owners: string[] — serialized as comma-separated string to backend
@@ -344,9 +375,7 @@ const JdModal = ({ jd, onClose, onSaved }) => {
     const body = {
       role_id: roleId, title,
       description: description || null,
-      requirements: null,
-      location: location || null,
-      remote_ok: remoteOk,
+      location: selectedLocations.length > 0 ? selectedLocations.join(", ") : null,
       status, openings: parseInt(openings) || 1,
       owner: owners.length > 0 ? owners.join(", ") : null,
     };
@@ -390,14 +419,29 @@ const JdModal = ({ jd, onClose, onSaved }) => {
         <div><label className="label">{t('jobs.modal.role')}</label><RoleSelect value={roleId} onChange={setRoleId} placeholder="Select role…" /></div>
         <div><label className="label">{t('jobs.modal.title')}</label><input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" /></div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label className="label">{t('jobs.modal.location')}</label>
-            <select className="select" value={location} onChange={e => setLocation(e.target.value)}>
-              <option value="">— Select —</option>
-              {locations.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
+        <div>
+          <label className="label">{t('jobs.modal.location')}</label>
+          <div className="row gap-6" style={{ flexWrap: "wrap" }}>
+            {locations.map(l => {
+              const selected = selectedLocations.includes(l);
+              return (
+                <button key={l} type="button"
+                  onClick={() => setSelectedLocations(prev => selected ? prev.filter(x => x !== l) : [...prev, l])}
+                  style={{
+                    padding: "4px 12px", borderRadius: 999, fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+                    border: `1px solid ${selected ? "var(--ink)" : "var(--border)"}`,
+                    background: selected ? "var(--ink)" : "transparent",
+                    color: selected ? "var(--bg, #fff)" : "var(--ink-secondary)",
+                    transition: "all 0.1s",
+                  }}>
+                  {l}
+                </button>
+              );
+            })}
           </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div><label className="label">{t('jobs.modal.status')}</label>
             <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
               <option value="Draft">{t('status.draft')}</option>
@@ -407,10 +451,6 @@ const JdModal = ({ jd, onClose, onSaved }) => {
             </select>
           </div>
           <div><label className="label">{t('jobs.modal.openings')}</label><input className="input" type="number" min={1} value={openings} onChange={e => setOpenings(e.target.value)} style={{ width: 80 }} /></div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 22 }}>
-            <input type="checkbox" id="remote_ok" checked={remoteOk} onChange={e => setRemoteOk(e.target.checked)} />
-            <label htmlFor="remote_ok" className="text-13">{t('jobs.modal.remoteOk')}</label>
-          </div>
         </div>
 
         <div>
@@ -458,12 +498,12 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
         <div className="row gap-8" style={{ flexWrap: "wrap", alignItems: "center" }}>
           <Badge kind={statusKind}>{jd.status}</Badge>
           {roleName && <span className="text-13 text-secondary">{roleName}</span>}
-          {jd.location && (
-            <span className="row gap-4 text-13 text-secondary">
+          {jd.location && jd.location.split(",").map(l => l.trim()).filter(Boolean).map(l => (
+            <span key={l} className="row gap-4 text-13 text-secondary">
               <Icons.MapPin size={12} style={{ color: "var(--ink-muted)" }} />
-              {jd.location}{jd.remote_ok ? " · Remote OK" : ""}
+              {l}
             </span>
-          )}
+          ))}
           <span className="row gap-4 text-13 text-secondary">
             <Icons.Users size={12} style={{ color: "var(--ink-muted)" }} />
             {jd.openings || 1} opening{(jd.openings || 1) !== 1 ? "s" : ""}

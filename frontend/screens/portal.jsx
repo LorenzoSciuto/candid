@@ -274,25 +274,11 @@ const JobCard = ({ job, accentColor, onApply }) => {
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {job.location && (
-          <span style={{ fontSize: 13, color: "#6b7280" }}>
-            📍 {job.location}
+        {job.location && job.location.split(",").map(l => l.trim()).filter(Boolean).map(l => (
+          <span key={l} style={{ fontSize: 13, color: "#6b7280" }}>
+            📍 {l}
           </span>
-        )}
-        {job.remote_ok && (
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 500,
-              padding: "2px 8px",
-              borderRadius: 12,
-              background: "#eff6ff",
-              color: "#2563eb",
-            }}
-          >
-            Remote OK
-          </span>
-        )}
+        ))}
       </div>
 
       {excerpt && (

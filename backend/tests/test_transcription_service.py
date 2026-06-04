@@ -12,12 +12,17 @@ from candid.services.ai_engine import AIEngine
 from candid.services.transcription_service import TranscriptionResult, TranscriptionService
 
 
-def _make_ai_engine() -> AIEngine:
-    return AIEngine(provider="openai", model="gpt-4o", api_key="test-key")
+def _make_ai_engine_factory() -> MagicMock:
+    factory = MagicMock()
+    engine = MagicMock()
+    engine._call = MagicMock(return_value="{}")
+    factory.from_session.return_value = engine
+    factory.resolve_api_key.return_value = "test-key"
+    return factory
 
 
 def _make_service(tmp_path: Path) -> TranscriptionService:
-    return TranscriptionService(upload_dir=tmp_path / "uploads", ai_engine=_make_ai_engine())
+    return TranscriptionService(upload_dir=tmp_path / "uploads", ai_engine_factory=_make_ai_engine_factory())
 
 
 def _make_in_memory_session() -> Session:
@@ -31,7 +36,7 @@ def _make_in_memory_session() -> Session:
 
 
 def _make_interview(session: Session) -> Interview:
-    interview = Interview(org_id="org-test", candidate_id="c-test", type="Audio Upload")
+    interview = Interview(org_id="org-test", type="Audio Upload")
     session.add(interview)
     session.commit()
     session.refresh(interview)
@@ -136,14 +141,17 @@ class TestEvaluateTranscript:
     })
 
     def test_evaluateTranscript_shouldReturnDict_whenAiEngineSucceeds(self, tmp_path: Path) -> None:
-        ai_engine = _make_ai_engine()
-        service = TranscriptionService(upload_dir=tmp_path, ai_engine=ai_engine)
+        ai_engine_factory = _make_ai_engine_factory()
+        ai_engine_factory.from_session.return_value._call = MagicMock(return_value=self._EVALUATION_JSON)
+        service = TranscriptionService(upload_dir=tmp_path, ai_engine_factory=ai_engine_factory)
+        session = _make_in_memory_session()
 
-        with patch.object(AIEngine, "_call", return_value=self._EVALUATION_JSON):
-            evaluation = service.evaluate_transcript(
-                transcript_text="Interviewer: Tell me. Candidate: Sure.",
-                interview_context="Senior Engineer role",
-            )
+        evaluation = service.evaluate_transcript(
+            transcript_text="Interviewer: Tell me. Candidate: Sure.",
+            interview_context="Senior Engineer role",
+            session=session,
+            org_id="org-test",
+        )
 
         assert evaluation["strengths"] == ["Clear communicator", "Strong technical background"]
         assert evaluation["concerns"] == ["Limited leadership experience"]
@@ -165,7 +173,6 @@ class TestProcessInterviewAudio:
     def _make_interview_with_audio(self, session: Session, audio_path: Path) -> Interview:
         interview = Interview(
             org_id="org-test",
-            candidate_id="c-test",
             type="Audio Upload",
             audio_file_path=str(audio_path),
         )
@@ -181,18 +188,18 @@ class TestProcessInterviewAudio:
         session = _make_in_memory_session()
         interview = self._make_interview_with_audio(session, audio_file)
 
-        ai_engine = _make_ai_engine()
-        service = TranscriptionService(upload_dir=tmp_path, ai_engine=ai_engine)
-
         mock_transcription_result = TranscriptionResult(
             text=self._TRANSCRIPT_TEXT,
             language="en",
             duration_seconds=10.0,
         )
 
+        ai_engine_factory = _make_ai_engine_factory()
+        ai_engine_factory.from_session.return_value._call = MagicMock(return_value=self._EVALUATION_JSON)
+        service = TranscriptionService(upload_dir=tmp_path, ai_engine_factory=ai_engine_factory)
+
         with patch.object(service, "transcribe", return_value=mock_transcription_result):
-            with patch.object(AIEngine, "_call", return_value=self._EVALUATION_JSON):
-                service.process_interview_audio(session, interview)
+            service.process_interview_audio(session, interview, "org-test")
 
         session.refresh(interview)
         assert interview.transcript_status == "done"
@@ -209,11 +216,10 @@ class TestProcessInterviewAudio:
         session = _make_in_memory_session()
         interview = self._make_interview_with_audio(session, audio_file)
 
-        ai_engine = _make_ai_engine()
-        service = TranscriptionService(upload_dir=tmp_path, ai_engine=ai_engine)
+        service = _make_service(tmp_path)
 
         with patch.object(service, "transcribe", side_effect=RuntimeError("Transcription failed")):
-            service.process_interview_audio(session, interview)
+            service.process_interview_audio(session, interview, "org-test")
 
         session.refresh(interview)
         assert interview.transcript_status == "failed"

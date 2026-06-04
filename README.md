@@ -110,5 +110,4 @@ See [`docs/PROJECT.md`](docs/PROJECT.md) for full architecture and feature docum
 - [x] **Candidate-facing async video interview portal** — one-time invite link, timed video answers, chunked upload
 - [x] **Public job listing page** — unauthenticated, shows org branding + active openings
 
-### Planned ⬜
-- [ ] **Whisper / STT async pipeline** — post-interview audio extraction + transcription (OpenAI Whisper or Groq)
+- [x] **Whisper / STT async pipeline** — async background task, audio extraction via ffmpeg, transcription via OpenAI Whisper or Groq, uses org's configured API key

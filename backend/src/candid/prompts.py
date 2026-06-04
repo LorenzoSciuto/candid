@@ -16,6 +16,8 @@ do NOT anchor to their current employer's industry or technology stack
 - "career_history": array of objects in reverse chronological order, each: \
 {{"title": string, "company": string, "period": string, "description": string (1 sentence)}}
 - "extracted_info": object {{"first_name", "last_name", "email", "role"}} — null if not found
+- "overall_score": float 0-10 (fractions allowed) — holistic quality score for this candidate \
+based on career depth, trajectory, and breadth of relevant experience
 - "role_fits": array — score the candidate against each open position listed at the end of \
 this prompt (NOT against their current employer or current role). One entry per listed \
 position: {{"role_id": string, "title": string, "score": float 0-5 (fractions allowed), \

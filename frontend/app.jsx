@@ -233,23 +233,14 @@ const ServerOfflineOverlay = () => (
       </div>
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink, #1c1917)", letterSpacing: "-0.02em", marginBottom: 6 }}>
-          Server unreachable
+          Service Unavailable
         </div>
         <div style={{ fontSize: 13.5, color: "var(--ink-secondary, #78716c)", lineHeight: 1.6 }}>
-          Cannot connect to the backend at <code style={{ background: "var(--bg-sunken, #f5f5f4)", padding: "1px 6px", borderRadius: 4, fontFamily: "var(--font-mono, ui-monospace)", fontSize: 12 }}>{window.API_BASE}</code>
+          Candid is temporarily unreachable. Please try again in a moment.
         </div>
       </div>
-      <div style={{
-        width: "100%", padding: "14px 16px",
-        background: "var(--bg-sunken, #f5f5f4)",
-        borderRadius: 10, textAlign: "left",
-        fontSize: 12.5, color: "var(--ink-secondary, #78716c)", lineHeight: 1.8,
-      }}>
-        <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--ink, #1c1917)" }}>Start the backend:</div>
-        <code style={{ fontFamily: "var(--font-mono, ui-monospace)", color: "var(--ink, #1c1917)" }}>./scripts/server.sh</code>
-      </div>
       <div style={{ fontSize: 12, color: "var(--ink-faint, #a8a29e)" }}>
-        Checking automatically every 5 seconds…
+        Retrying automatically…
       </div>
     </div>
   </div>
@@ -1014,6 +1005,15 @@ const App = () => {
     return () => window.removeEventListener("candid:unauthorized", handler);
   }, []);
 
+  // Load org metadata (slug, name) for portal links
+  useEffect(() => {
+    if (!user || !user.org_id) return;
+    fetch(`${window.API_BASE}/organizations/current`)
+      .then(r => r.ok ? r.json() : null)
+      .then(org => { if (org) window.CANDID_ORG = org; })
+      .catch(() => {});
+  }, [user?.org_id]);
+
   // Load org pipeline stages from API; broadcast to all screens via custom event
   useEffect(() => {
     if (!user || !user.org_id) return;
@@ -1038,6 +1038,8 @@ const App = () => {
       fetch(`${window.API_BASE}/employees`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${window.API_BASE}/interviews`).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([stats, jds, roles, emps, ivs]) => {
+      if (Array.isArray(jds)) window.CANDID_DATA.JDS = jds;
+      if (Array.isArray(roles)) window.CANDID_DATA.ROLES = roles;
       setLiveCounts({
         candidates: stats?.total ?? null,
         pipeline: stats?.total ?? null,

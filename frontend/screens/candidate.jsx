@@ -185,8 +185,10 @@ const EditCandidateModal = ({ candidate, onClose, onSaved }) => {
 
   const statuses = window.CANDID_DATA.STATUS || [];
 
+  const sources = window.CANDID_DATA.SOURCES || [];
+
   return (
-    <Modal open title="Edit candidate" onClose={onClose}
+    <Modal open title={t('candidates.edit')} onClose={onClose}
       footer={
         <>
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
@@ -195,23 +197,23 @@ const EditCandidateModal = ({ candidate, onClose, onSaved }) => {
       }>
       <div className="col gap-12">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div><label className="label">First name</label><input className="input" value={first} onChange={e => setFirst(e.target.value)} /></div>
-          <div><label className="label">Last name</label><input className="input" value={last} onChange={e => setLast(e.target.value)} /></div>
-          <div><label className="label">Email</label><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
-          <div><label className="label">Phone</label><input className="input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} /></div>
-          <div><label className="label">Current role / title</label><input className="input" value={role} onChange={e => setRole(e.target.value)} /></div>
-          <div><label className="label">Location</label><input className="input" value={location} onChange={e => setLocation(e.target.value)} /></div>
-          <div><label className="label">Years of experience</label><input className="input" type="number" min={0} value={experience} onChange={e => setExperience(e.target.value)} /></div>
+          <div><label className="label">{t('candidates.form.first')}</label><input className="input" value={first} onChange={e => setFirst(e.target.value)} /></div>
+          <div><label className="label">{t('candidates.form.last')}</label><input className="input" value={last} onChange={e => setLast(e.target.value)} /></div>
+          <div><label className="label">{t('candidates.form.email')}</label><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
+          <div><label className="label">{t('candidates.form.phone')}</label><input className="input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+          <div><label className="label">{t('candidates.form.role')}</label><input className="input" value={role} onChange={e => setRole(e.target.value)} /></div>
+          <div><label className="label">{t('candidates.form.location')}</label><input className="input" value={location} onChange={e => setLocation(e.target.value)} /></div>
+          <div><label className="label">{t('candidates.form.experience')}</label><input className="input" type="number" min={0} value={experience} onChange={e => setExperience(e.target.value)} /></div>
           <div>
-            <label className="label">Source</label>
+            <label className="label">{t('candidates.form.source')}</label>
             <select className="select" value={source} onChange={e => setSource(e.target.value)}>
               <option value="">—</option>
-              {["Referral", "LinkedIn", "Inbound", "Job board", "Agency", "Other"].map(s => <option key={s}>{s}</option>)}
+              {sources.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         </div>
         <div>
-          <label className="label">Stage</label>
+          <label className="label">{t('candidates.form.stage')}</label>
           <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
             {statuses.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
@@ -1146,22 +1148,41 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
     }
   };
 
+  const today = new Date().toISOString().slice(0, 10);
+  const allInterviews = c.interviews || [];
+  const upcoming = allInterviews.filter(iv => iv.date && iv.date >= today);
+  const past = allInterviews.filter(iv => !iv.date || iv.date < today);
+
+  const renderInterviews = (list) => list.map(interview => (
+    <InterviewCard
+      key={interview.id}
+      interview={interview}
+      onOpenTranscript={setTranscriptInterview}
+      onUploadRecording={uploadRecording}
+      onRefresh={onRefresh}
+      t={t}
+    />
+  ));
+
   return (
     <div className="col gap-12">
       {uploadError && (
         <div className="text-12" style={{ color: "var(--danger)", padding: "8px 0" }}>{uploadError}</div>
       )}
 
-      {(c.interviews || []).map(interview => (
-        <InterviewCard
-          key={interview.id}
-          interview={interview}
-          onOpenTranscript={setTranscriptInterview}
-          onUploadRecording={uploadRecording}
-          onRefresh={onRefresh}
-          t={t}
-        />
-      ))}
+      {upcoming.length > 0 && (
+        <div className="col gap-8">
+          <span className="text-11 weight-600 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>Upcoming</span>
+          {renderInterviews(upcoming)}
+        </div>
+      )}
+
+      {past.length > 0 && (
+        <div className="col gap-8">
+          <span className="text-11 weight-600 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>Past</span>
+          {renderInterviews(past)}
+        </div>
+      )}
 
       {creating ? (
         <div className="card card-pad col gap-10">

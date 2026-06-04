@@ -76,7 +76,7 @@ class PublicJobsRouter:
             session, organization_record.id, job_id
         )
         candidate = self._create_portal_candidate(
-            session, organization_record.id, job_description_record.title, body
+            session, organization_record.id, job_description_record, body
         )
         return PortalApplicationResponse(ok=True, candidate_id=candidate.id)
 
@@ -114,7 +114,7 @@ class PublicJobsRouter:
         self,
         session: Session,
         org_id: str,
-        job_title: str,
+        job_description_record: "JobDescription",
         body: PortalApplicationRequest,
     ) -> Candidate:
         candidate = Candidate(
@@ -126,7 +126,8 @@ class PublicJobsRouter:
             cv_text=body.cv_text,
             status="pending_otp",
             source="Portal",
-            job_title=job_title,
+            job_title=job_description_record.title,
+            job_description_id=job_description_record.id,
         )
         session.add(candidate)
         session.commit()
@@ -148,7 +149,6 @@ class PublicJobsRouter:
             id=job.id,
             title=job.title,
             location=job.location,
-            remote_ok=job.remote_ok,
             description=job.description,
             requirements=job.requirements,
             openings=job.openings,

@@ -329,6 +329,24 @@ class AIEngineFactory:
             fallbacks=fallback_providers,
         )
 
+    def resolve_api_key(self, session: Session, org_id: str, provider: str) -> str:
+        """Return the decrypted API key for the given provider from the org's stored keys, or env fallback."""
+        org_api_key_row = session.exec(
+            select(OrgApiKey).where(
+                OrgApiKey.org_id == org_id,
+                OrgApiKey.provider == provider,
+            )
+        ).first()
+        if org_api_key_row and org_api_key_row.encrypted_key:
+            return self._crypto_service.decrypt(org_api_key_row.encrypted_key)
+        env_key_map = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "groq": "GROQ_API_KEY",
+        }
+        return os.environ.get(env_key_map.get(provider, ""), "")
+
     def _create_engine_from_environment(
         self, provider: Optional[str] = None, model: Optional[str] = None
     ) -> AIEngine:

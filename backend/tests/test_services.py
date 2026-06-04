@@ -1,4 +1,6 @@
 import io
+import json
+from datetime import datetime, timedelta, timezone
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
@@ -8,6 +10,7 @@ from candid.services.auth_service import create_token, verify_token
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.notification_service import NotificationService
+from candid.services.otp_service import OtpService
 from candid.services.email_service import EmailService
 
 
@@ -83,6 +86,43 @@ class TestCVExtractor:
         with mock.patch("fitz.open", return_value=mock_doc):
             with pytest.raises(ValueError, match="image-only"):
                 self.extractor.extract("scan.pdf", b"fake-pdf-bytes")
+
+
+class TestOtpService:
+    def setup_method(self) -> None:
+        self.service = OtpService()
+
+    def test_generateOtp_shouldReturnSixDigitString(self) -> None:
+        otp_code = self.service.generate_otp()
+        assert len(otp_code) == 6
+        assert otp_code.isdigit()
+
+    def test_hashOtp_shouldReturnDifferentHashForDifferentCodes(self) -> None:
+        assert self.service.hash_otp("123456") != self.service.hash_otp("654321")
+
+    def test_hashOtp_shouldReturnSameHashForSameCode_whenCalledTwice(self) -> None:
+        assert self.service.hash_otp("999999") == self.service.hash_otp("999999")
+
+    def test_isExpired_shouldReturnTrue_whenExpiryIsInThePast(self) -> None:
+        assert self.service.is_expired((datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()) is True
+
+    def test_isExpired_shouldReturnFalse_whenExpiryIsInTheFuture(self) -> None:
+        assert self.service.is_expired((datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()) is False
+
+    def test_verify_shouldReturnTrue_whenCodeCorrectAndNotExpired(self) -> None:
+        stored_hash = self.service.hash_otp("123456")
+        future_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        assert self.service.verify("123456", stored_hash, future_expiry) is True
+
+    def test_verify_shouldReturnFalse_whenCodeWrong(self) -> None:
+        stored_hash = self.service.hash_otp("123456")
+        future_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        assert self.service.verify("000000", stored_hash, future_expiry) is False
+
+    def test_verify_shouldReturnFalse_whenExpired(self) -> None:
+        stored_hash = self.service.hash_otp("123456")
+        past_expiry = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+        assert self.service.verify("123456", stored_hash, past_expiry) is False
 
 
 def _make_in_memory_session():
@@ -174,7 +214,6 @@ class TestAuthService:
 
     def test_expired_token_raises(self) -> None:
         import jwt
-        from datetime import datetime, timedelta, timezone
         payload = {
             "sub": "user-exp",
             "exp": datetime.now(timezone.utc) - timedelta(seconds=1),

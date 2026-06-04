@@ -24,6 +24,7 @@ from candid.routers.interviews import InterviewsRouter
 from candid.routers.job_descriptions import JobDescriptionsRouter
 from candid.routers.organizations import OrganizationsRouter
 from candid.routers.notifications import NotificationsRouter
+from candid.routers.public_applications import PublicApplicationsRouter
 from candid.routers.quick_add import QuickAddRouter
 from candid.routers.roles import RolesRouter
 from candid.services.ai_engine import AIEngineFactory
@@ -31,6 +32,7 @@ from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailService
 from candid.services.notification_service import NotificationService
+from candid.services.otp_service import OtpService
 from candid.services.transcription_service import TranscriptionService
 
 
@@ -41,6 +43,7 @@ class Application:
         self._crypto = CryptoService(self._settings.fernet_key)
         self._extractor = CVExtractor()
         self._ai_factory = AIEngineFactory(self._crypto)
+        self._otp = OtpService()
         self._notification_service = NotificationService()
         self._transcription_service = TranscriptionService(
             upload_dir=Path("uploads/audio"),
@@ -143,6 +146,10 @@ class Application:
         # accept_invitation is intentionally public (invitation token is the proof)
         fastapi_app.include_router(
             OrganizationsRouter(self._db, self._email, self._settings, self._notification_service).router
+        )
+        # Public candidate application OTP flow — unauthenticated
+        fastapi_app.include_router(
+            PublicApplicationsRouter(self._db, self._otp, self._email, self._settings).router
         )
         # Branding: contains both public (/public/...) and auth-protected endpoints;
         # mounted without a global dependency so the public GET remains unauthenticated

@@ -150,7 +150,7 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
         </div>
         <div className="row gap-8">
           {window.CANDID_ORG?.slug && (
-            <Btn icon={<Icons.Link size={14} />} onClick={() => {
+            <Btn icon={<Icons.ArrowRight size={14} />} onClick={() => {
               const base = window.location.href.split("#")[0];
               const url = `${base}#portal/${window.CANDID_ORG.slug}`;
               navigator.clipboard?.writeText(url).catch(() => {});
@@ -287,7 +287,7 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
                   navigator.clipboard?.writeText(url).catch(() => {});
                   window.open(url, "_blank");
                 }}>
-                <Icons.Link size={13} /> {t('jobs.action.portal')}
+                <Icons.ArrowRight size={13} /> {t('jobs.action.portal')}
               </button>
             )}
             <div style={{ height: 1, background: "var(--border-soft)", margin: "4px 0" }} />

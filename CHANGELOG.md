@@ -6,8 +6,18 @@ All notable changes to Candid. Follows [Keep a Changelog](https://keepachangelog
 
 ## [Unreleased] — develop
 
+### Added
+- Server offline overlay: app detects unreachable backend within 4 s and shows a full-screen error with start command; polls every 5 s and auto-recovers
+- Pipeline: "View all →" link in subtitle navigates to Candidates list
+
+### Fixed
+- `interview` table missing 5 columns (`audio_file_path`, `transcript_raw`, `transcript_status`, `transcript_language`, `ai_evaluation`) — caused 500 + CORS errors on `/interviews`
+- `candidate` table missing `otp_hash`, `otp_expires_at` columns
+- `organization` table missing `branding_config` column
+- Baseline migration updated to add missing columns via guarded ALTER TABLE
+
 ### Changed
-- Alembic migrations squashed: 3 incremental scripts → 1 clean baseline (`0001_baseline_schema.py`). All ops guarded with `IF NOT EXISTS`. On an existing DB run `alembic stamp 0001` then `alembic upgrade head`.
+- Alembic migrations squashed: 3 incremental scripts → 1 clean baseline (`0001_baseline_schema.py`). All ops guarded with `IF NOT EXISTS`. On an existing DB run `alembic stamp --purge 0001` then `alembic upgrade head`.
 
 ---
 

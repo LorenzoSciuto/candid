@@ -15,7 +15,7 @@ const formatAppliedDate = (iso) => {
   }
 };
 
-const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
+const PipelineScreen = ({ onOpenCandidate, onQuickAdd, onRoute }) => {
   const t = window.useT();
   const [stages, setStages] = useState(() => window.CANDID_DATA.STATUS || []);
   const [candidates, setCandidates] = useState([]);
@@ -78,7 +78,14 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd }) => {
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
           <h1 className="page-h1">{t('pipeline.title')}</h1>
-          <div className="page-sub">{candidates.length} candidates · {t('pipeline.hint')}</div>
+          <div className="page-sub row gap-8" style={{ alignItems: "center" }}>
+            <span>{candidates.length} candidates · {t('pipeline.hint')}</span>
+            {onRoute && (
+              <button className="link text-12" style={{ fontWeight: 500 }} onClick={() => onRoute("candidates")}>
+                View all →
+              </button>
+            )}
+          </div>
         </div>
         <div className="row gap-8">
           <div className="row gap-6" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px" }}>

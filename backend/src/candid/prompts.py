@@ -143,6 +143,25 @@ use plain section titles followed by newline)
 
 Return only valid JSON. No markdown fences."""
 
+    TRANSCRIPT_EVALUATION = """\
+You are a recruiting assistant evaluating an interview transcript.
+
+Interview context: {interview_context}
+
+Transcript:
+{transcript_text}
+
+Return JSON with:
+{{
+  "strengths": ["..."],
+  "concerns": ["..."],
+  "recommendation": "strong_yes|yes|maybe|no",
+  "score": <0-10>,
+  "summary": "2-3 sentence eval"
+}}
+
+Return only valid JSON. No markdown fences."""
+
     REJECTION_EMAIL = """
 You are an empathetic HR professional writing a rejection email.
 

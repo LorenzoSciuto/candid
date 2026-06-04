@@ -1,8 +1,11 @@
+import io
+import json
 import unittest.mock as mock
 
 from fastapi.testclient import TestClient
 
 from candid.services.ai_engine import AIEngine
+from candid.services.transcription_service import TranscriptionResult, TranscriptionService
 
 
 def _make_candidate(client: TestClient) -> str:
@@ -86,3 +89,62 @@ class TestProcessInterview:
         with mock.patch.object(AIEngine, "_call", side_effect=RuntimeError("AI down")):
             resp = client.post(f"/interviews/{iid}/process", json={"raw_content": "some text"})
         assert resp.status_code == 502
+
+
+class TestUploadAudio:
+    _MOCK_TRANSCRIPTION_RESULT = TranscriptionResult(
+        text="Hello, my name is Alex.",
+        language="en",
+        duration_seconds=4.0,
+    )
+    _MOCK_EVALUATION_JSON = json.dumps({
+        "strengths": ["Articulate"],
+        "concerns": [],
+        "recommendation": "yes",
+        "score": 8,
+        "summary": "Good candidate.",
+    })
+
+    def test_uploadAudio_shouldReturn200_whenValidFile(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        iid = client.post("/interviews", json={"candidate_id": cid, "type": "Audio Upload"}).json()["id"]
+
+        fake_audio = io.BytesIO(b"RIFF fake wav data")
+        fake_audio.name = "recording.wav"
+
+        with mock.patch.object(TranscriptionService, "transcribe", return_value=self._MOCK_TRANSCRIPTION_RESULT):
+            with mock.patch.object(AIEngine, "_call", return_value=self._MOCK_EVALUATION_JSON):
+                resp = client.post(
+                    f"/interviews/{iid}/upload-audio",
+                    files={"file": ("recording.wav", fake_audio, "audio/wav")},
+                )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "processing"
+
+    def test_uploadAudio_shouldReturn404_whenInterviewNotFound(self, client: TestClient) -> None:
+        fake_audio = io.BytesIO(b"RIFF fake wav data")
+        resp = client.post(
+            "/interviews/nonexistent/upload-audio",
+            files={"file": ("recording.wav", fake_audio, "audio/wav")},
+        )
+        assert resp.status_code == 404
+
+
+class TestGetTranscript:
+    def test_getTranscript_shouldReturn200_whenInterviewExists(self, client: TestClient) -> None:
+        cid = _make_candidate(client)
+        iid = client.post("/interviews", json={"candidate_id": cid, "type": "Manual Paste"}).json()["id"]
+
+        resp = client.get(f"/interviews/{iid}/transcript")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "transcript_raw" in data
+        assert "transcript_status" in data
+        assert "transcript_language" in data
+        assert "ai_evaluation" in data
+
+    def test_getTranscript_shouldReturn404_whenInterviewNotFound(self, client: TestClient) -> None:
+        resp = client.get("/interviews/nonexistent/transcript")
+        assert resp.status_code == 404

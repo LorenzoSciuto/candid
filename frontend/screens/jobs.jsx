@@ -486,7 +486,7 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
   const roleName = roles[jd.role_id]?.name;
 
   return (
-    <Modal open title={jd.title} onClose={onClose} width={640}
+    <Modal open title={jd.title} onClose={onClose} width={640} disableBackdropClose={false}
       footer={
         <>
           <Btn onClick={onClose}>{t('common.close')}</Btn>

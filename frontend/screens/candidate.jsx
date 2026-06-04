@@ -1072,7 +1072,7 @@ const TranscriptViewModal = ({ interview, onClose, t }) => {
   }[activeSection];
 
   return (
-    <Modal open title={interview.title || interview.type || t('candidate.iv.transcript')} onClose={onClose} width={760}
+    <Modal open title={interview.title || interview.type || t('candidate.iv.transcript')} onClose={onClose} width={760} disableBackdropClose={false}
       footer={<Btn onClick={onClose}>{t('common.close')}</Btn>}>
       {sections.length > 1 && (
         <div className="row gap-4" style={{ marginBottom: 16, borderBottom: "1px solid var(--border-soft)", paddingBottom: 12 }}>

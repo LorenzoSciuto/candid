@@ -257,7 +257,7 @@ const TranscriptModal = ({ interview, onClose }) => {
   };
 
   return (
-    <Modal open title={interview.title || interview.type || "Transcript"} onClose={onClose} width={720}
+    <Modal open title={interview.title || interview.type || "Transcript"} onClose={onClose} width={720} disableBackdropClose={false}
       footer={
         <div className="row gap-8" style={{ flex: 1, justifyContent: "space-between", alignItems: "center" }}>
           <div className="row gap-8">

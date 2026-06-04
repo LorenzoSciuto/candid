@@ -93,7 +93,7 @@ const Avatar = ({ name, size = "", src }) => {
   return <span className={`avatar ${size}`} style={{ background: `oklch(0.93 0.04 ${hue})`, color: `oklch(0.4 0.08 ${hue})` }}>{init}</span>;
 };
 
-const Modal = ({ open, onClose, title, children, footer, width, disableBackdropClose }) => {
+const Modal = ({ open, onClose, title, children, footer, width, disableBackdropClose = true }) => {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };

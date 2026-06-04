@@ -156,16 +156,12 @@ class TestListPublicJobs:
 # ── POST /public/organizations/{slug}/jobs/{job_id}/apply ─────────────────────
 
 _APPLICATION_PAYLOAD = {
-    "first_name": "Alice",
-    "last_name": "Smith",
-    "email": "alice@example.com",
-    "phone": "+1-555-0100",
-    "cv_text": "Alice Smith — 8 years of Python backend experience.",
+    "cv_text": "Alice Smith — alice@example.com — 8 years of Python backend experience.",
 }
 
 
 class TestApplyForJob:
-    def test_applyForJob_shouldCreateCandidateWithPendingOtpStatus(
+    def test_applyForJob_shouldCreateCandidateWithNewStatus(
         self, portal_client: TestClient
     ) -> None:
         response = portal_client.post(
@@ -219,5 +215,5 @@ class TestApplyForJob:
             candidate = session.get(Candidate, candidate_id)
         assert candidate is not None
         assert candidate.source == "Portal"
-        assert candidate.status == "pending_otp"
+        assert candidate.status == "new"
         assert candidate.job_title == "Senior Backend Engineer"

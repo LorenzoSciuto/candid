@@ -1,5 +1,5 @@
 import json
-import re
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -12,13 +12,13 @@ from candid.schemas import (
     PublicJobItem,
     PublicJobListResponse,
 )
-
-_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+from candid.services.ai_engine import AIEngineFactory
 
 
 class PublicJobsRouter:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, ai_engine_factory: Optional[AIEngineFactory] = None) -> None:
         self._db = database
+        self._ai_factory = ai_engine_factory
         self.router = APIRouter(prefix="/public", tags=["public"])
         self._register()
 
@@ -70,15 +70,24 @@ class PublicJobsRouter:
         job_id: str,
         body: PortalApplicationRequest,
     ) -> PortalApplicationResponse:
-        self._validate_email(body.email)
         organization_record = self._fetch_org_by_slug(session, org_slug)
         job_description_record = self._fetch_active_job(
             session, organization_record.id, job_id
         )
+        parsed = self._parse_cv(session, organization_record.id, body.cv_text or "")
         candidate = self._create_portal_candidate(
-            session, organization_record.id, job_description_record, body
+            session, organization_record.id, job_description_record, body, parsed
         )
         return PortalApplicationResponse(ok=True, candidate_id=candidate.id)
+
+    def _parse_cv(self, session: Session, org_id: str, cv_text: str) -> dict:
+        if not cv_text.strip() or self._ai_factory is None:
+            return {}
+        try:
+            engine = self._ai_factory.from_session(session, org_id)
+            return engine.parse_quick_add(cv_text)
+        except Exception:
+            return {}
 
     def _fetch_org_by_slug(self, session: Session, slug: str) -> Organization:
         organization_record = session.exec(
@@ -116,15 +125,23 @@ class PublicJobsRouter:
         org_id: str,
         job_description_record: "JobDescription",
         body: PortalApplicationRequest,
+        parsed: dict,
     ) -> Candidate:
+        first_name = parsed.get("first_name") or "Unknown"
+        last_name  = parsed.get("last_name")  or ""
+        email      = parsed.get("email")      or None
+        phone      = parsed.get("phone")      or None
         candidate = Candidate(
             org_id=org_id,
-            first_name=body.first_name,
-            last_name=body.last_name,
-            email=body.email,
-            phone=body.phone,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            current_role=parsed.get("current_role") or None,
+            years_of_experience=parsed.get("years_of_experience") or None,
+            location=parsed.get("location") or None,
             cv_text=body.cv_text,
-            status="pending_otp",
+            status="new",
             source="Portal",
             job_title=job_description_record.title,
             job_description_id=job_description_record.id,
@@ -154,7 +171,3 @@ class PublicJobsRouter:
             openings=job.openings,
         )
 
-    @staticmethod
-    def _validate_email(email: str) -> None:
-        if not _EMAIL_PATTERN.match(email):
-            raise HTTPException(status_code=422, detail="Invalid email address")

@@ -143,7 +143,7 @@ class Application:
     def _mount_routers(self, fastapi_app: FastAPI) -> None:
         # Public routers — no bearer required
         fastapi_app.include_router(AuthRouter(self._settings, self._db).router)
-        fastapi_app.include_router(PublicJobsRouter(self._db).router)
+        fastapi_app.include_router(PublicJobsRouter(self._db, self._ai_factory).router)
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
         fastapi_app.include_router(

@@ -242,10 +242,6 @@ class PublicJobListResponse(BaseModel):
 
 
 class PortalApplicationRequest(BaseModel):
-    first_name: str
-    last_name: str
-    email: str
-    phone: Optional[str] = None
     cv_text: Optional[str] = None
 
 

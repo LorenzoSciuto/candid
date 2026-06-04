@@ -6,6 +6,13 @@ All notable changes to Candid. Follows [Keep a Changelog](https://keepachangelog
 
 ## [Unreleased] — develop
 
+### Changed
+- Alembic migrations squashed: 3 incremental scripts → 1 clean baseline (`0001_baseline_schema.py`). All ops guarded with `IF NOT EXISTS`. On an existing DB run `alembic stamp 0001` then `alembic upgrade head`.
+
+---
+
+## [previous-unreleased]
+
 ### Security
 - **Fix:** Google OAuth token now validates `aud` claim against `GOOGLE_CLIENT_ID` — prevents tokens issued for other apps from authenticating
 - **Fix:** Evaluation fetch in candidate detail now filters by `org_id` — prevents theoretical cross-tenant data leak

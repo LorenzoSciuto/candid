@@ -1,234 +1,115 @@
 // PortalScreen — public job listing portal (no auth required)
 // Rendered when URL hash starts with #portal/{slug}
 
-const { useState, useEffect } = React;
+const { useState, useEffect, useMemo } = React;
+
+const STORAGE_KEY_APPLIED = (slug) => `candid_portal_applied_${slug}`;
+const STORAGE_KEY_STARRED = (slug) => `candid_portal_starred_${slug}`;
+
+const loadSet = (key) => { try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch { return new Set(); } };
+const saveSet = (key, set) => { try { localStorage.setItem(key, JSON.stringify([...set])); } catch {} };
+
+// ── Design tokens ─────────────────────────────────────────────────────────────
+
+const mix = (hex, amount) => {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
+  const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
+  return `rgb(${r},${g},${b})`;
+};
+
+const luminance = (hex) => {
+  const num = parseInt(hex.replace("#",""), 16);
+  const r = (num >> 16) / 255, g = ((num >> 8) & 0xff) / 255, b = (num & 0xff) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const onAccent = (hex) => luminance(hex || "#111") > 0.45 ? "#111827" : "#ffffff";
 
 // ── Apply Modal ───────────────────────────────────────────────────────────────
 
-const ApplyModal = ({ job, orgSlug, onClose }) => {
+const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
   const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [cvText, setCvText] = useState("");
+  const [lastName,  setLastName]  = useState("");
+  const [email,     setEmail]     = useState("");
+  const [phone,     setPhone]     = useState("");
+  const [cvText,    setCvText]    = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [error,      setError]    = useState("");
+  const [success,    setSuccess]  = useState(false);
 
-  const isValidEmail = (value) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+  const accent = accentColor || "#111827";
+  const fg     = onAccent(accent);
 
-  const canSubmit = () =>
-    firstName.trim() && lastName.trim() && email.trim() && isValidEmail(email);
+  const valid = firstName.trim() && lastName.trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
 
-  const handleSubmit = async () => {
-    if (!canSubmit()) return;
-    setSubmitting(true);
-    setError("");
+  const submit = async () => {
+    if (!valid) return;
+    setSubmitting(true); setError("");
     try {
-      const response = await window._baseFetch(
-        `${window.API_BASE}/public/organizations/${orgSlug}/jobs/${job.id}/apply`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-            email: email.trim(),
-            phone: phone.trim() || null,
-            cv_text: cvText.trim() || null,
-          }),
-        }
-      );
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.detail || "Submission failed");
-      }
+      const res = await fetch(`${window.API_BASE}/public/organizations/${orgSlug}/jobs/${job.id}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), phone: phone.trim() || null, cv_text: cvText.trim() || null }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Submission failed");
       setSuccess(true);
-    } catch (err) {
-      setError(err.message || "Something went wrong. Please try again.");
-    }
+      onApplied(job.id);
+    } catch (err) { setError(err.message || "Something went wrong. Please try again."); }
     setSubmitting(false);
   };
 
-  const inputStyle = {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 8,
-    border: "1.5px solid #d1d5db",
-    fontSize: 14,
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
-  };
-
-  const labelStyle = {
-    display: "block",
-    fontSize: 13,
-    fontWeight: 500,
-    marginBottom: 5,
-    color: "#374151",
-  };
-
-  const overlayStyle = {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-    padding: 16,
-  };
-
-  const modalStyle = {
-    background: "#fff",
-    borderRadius: 12,
-    padding: 32,
-    width: "100%",
-    maxWidth: 520,
-    maxHeight: "90vh",
-    overflowY: "auto",
-    fontFamily: "ui-sans-serif, system-ui, sans-serif",
-  };
+  const inp = { width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid #e5e7eb", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "#fff", transition: "border-color .15s" };
+  const lbl = { display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5, color: "#6b7280", letterSpacing: ".04em", textTransform: "uppercase" };
 
   return (
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={modalStyle}>
-        {success ? (
-          <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>✓</div>
-            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 600 }}>Application submitted!</h2>
-            <p style={{ color: "#6b7280", margin: "0 0 24px" }}>
-              Check your email for a verification code.
-            </p>
-            <button
-              onClick={onClose}
-              style={{
-                padding: "10px 24px",
-                borderRadius: 8,
-                border: "none",
-                background: "#111827",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
-            >
-              Close
-            </button>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16, backdropFilter: "blur(4px)" }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 540, maxHeight: "92vh", overflowY: "auto", fontFamily: "ui-sans-serif, system-ui, sans-serif", boxShadow: "0 24px 60px rgba(0,0,0,.18)" }}>
+
+        {/* Header strip */}
+        <div style={{ background: accent, padding: "24px 28px", borderRadius: "16px 16px 0 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", opacity: .7, color: fg, marginBottom: 4 }}>Apply for position</div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: fg, letterSpacing: "-.01em" }}>{job.title}</h2>
+              {job.location && <div style={{ marginTop: 4, fontSize: 13, color: fg, opacity: .75 }}>📍 {job.location.split(",").map(l => l.trim()).filter(Boolean).join(" · ")}</div>}
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: fg, opacity: .7, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 0, marginLeft: 12 }}>×</button>
           </div>
-        ) : (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-              <div>
-                <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600 }}>Apply for {job.title}</h2>
-                {job.location && (
-                  <span style={{ fontSize: 13, color: "#6b7280" }}>{job.location}</span>
-                )}
-              </div>
-              <button
-                onClick={onClose}
-                style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af", padding: 4 }}
-              >
-                ×
-              </button>
-            </div>
+        </div>
 
+        <div style={{ padding: "28px 28px 24px" }}>
+          {success ? (
+            <div style={{ textAlign: "center", padding: "32px 0 16px" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f0fdf4", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 16 }}>✓</div>
+              <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700 }}>Application sent!</h3>
+              <p style={{ color: "#6b7280", margin: "0 0 24px", lineHeight: 1.6 }}>Check your email for a verification code to confirm your application.</p>
+              <button onClick={onClose} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Done</button>
+            </div>
+          ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "flex", gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>First name *</label>
-                  <input
-                    style={inputStyle}
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Alice"
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Last name *</label>
-                  <input
-                    style={inputStyle}
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Smith"
-                  />
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div><label style={lbl}>First name *</label><input style={inp} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Alice" autoFocus /></div>
+                <div><label style={lbl}>Last name *</label><input style={inp} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Smith" /></div>
               </div>
-
+              <div><label style={lbl}>Email *</label><input style={inp} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="alice@example.com" /></div>
+              <div><label style={lbl}>Phone <span style={{ textTransform: "none", fontWeight: 400 }}>(optional)</span></label><input style={inp} type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 0100" /></div>
               <div>
-                <label style={labelStyle}>Email *</label>
-                <input
-                  style={inputStyle}
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="alice@example.com"
-                />
+                <label style={lbl}>CV / Resume <span style={{ textTransform: "none", fontWeight: 400 }}>(optional — paste text)</span></label>
+                <textarea style={{ ...inp, resize: "vertical", minHeight: 120, lineHeight: 1.6 }} value={cvText} onChange={e => setCvText(e.target.value)} placeholder="Paste your work experience, skills, education…" />
               </div>
-
-              <div>
-                <label style={labelStyle}>Phone <span style={{ fontWeight: 400, color: "#9ca3af" }}>(optional)</span></label>
-                <input
-                  style={inputStyle}
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 555 0100"
-                />
-              </div>
-
-              <div>
-                <label style={labelStyle}>CV / Resume <span style={{ fontWeight: 400, color: "#9ca3af" }}>(optional)</span></label>
-                <textarea
-                  style={{ ...inputStyle, resize: "vertical", minHeight: 140 }}
-                  value={cvText}
-                  onChange={(e) => setCvText(e.target.value)}
-                  placeholder="Paste your CV here — work experience, skills, education…"
-                />
-              </div>
-
-              {error && (
-                <div style={{ color: "#dc2626", fontSize: 13, padding: "8px 12px", background: "#fef2f2", borderRadius: 6 }}>
-                  {error}
-                </div>
-              )}
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-                <button
-                  onClick={onClose}
-                  style={{
-                    padding: "10px 20px",
-                    borderRadius: 8,
-                    border: "1.5px solid #d1d5db",
-                    background: "#fff",
-                    fontSize: 14,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={!canSubmit() || submitting}
-                  style={{
-                    padding: "10px 24px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: "#111827",
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: canSubmit() && !submitting ? "pointer" : "not-allowed",
-                    opacity: canSubmit() && !submitting ? 1 : 0.6,
-                  }}
-                >
-                  {submitting ? "Submitting…" : "Submit application"}
+              {error && <div style={{ color: "#dc2626", fontSize: 13, padding: "10px 14px", background: "#fef2f2", borderRadius: 8, lineHeight: 1.5 }}>{error}</div>}
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+                <button onClick={onClose} style={{ padding: "11px 20px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                <button onClick={submit} disabled={!valid || submitting} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: valid && !submitting ? "pointer" : "not-allowed", opacity: valid && !submitting ? 1 : .55, fontFamily: "inherit", transition: "opacity .15s" }}>
+                  {submitting ? "Sending…" : "Submit application"}
                 </button>
               </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -236,70 +117,79 @@ const ApplyModal = ({ job, orgSlug, onClose }) => {
 
 // ── Job Card ──────────────────────────────────────────────────────────────────
 
-const JobCard = ({ job, accentColor, onApply }) => {
-  const MAX_DESC_LENGTH = 200;
+const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) => {
+  const [hovered, setHovered] = useState(false);
+  const accent = accentColor || "#111827";
+  const fg     = onAccent(accent);
+
   const excerpt = job.description
-    ? job.description.length > MAX_DESC_LENGTH
-      ? job.description.slice(0, MAX_DESC_LENGTH) + "…"
-      : job.description
+    ? job.description.length > 180 ? job.description.slice(0, 180) + "…" : job.description
     : null;
+
+  const locations = job.location ? job.location.split(",").map(l => l.trim()).filter(Boolean) : [];
 
   return (
     <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         background: "#fff",
-        borderRadius: 12,
-        border: "1.5px solid #e5e7eb",
-        padding: "24px",
+        borderRadius: 16,
+        border: `1.5px solid ${hovered ? accent : "#e5e7eb"}`,
+        padding: 24,
         display: "flex",
         flexDirection: "column",
-        gap: 12,
+        gap: 14,
+        transition: "border-color .2s, box-shadow .2s, transform .15s",
+        boxShadow: hovered ? "0 8px 32px rgba(0,0,0,.10)" : "0 1px 4px rgba(0,0,0,.05)",
+        transform: hovered ? "translateY(-2px)" : "none",
+        cursor: "default",
+        position: "relative",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: "#111827" }}>{job.title}</h3>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            padding: "3px 10px",
-            borderRadius: 20,
-            background: "#f0fdf4",
-            color: "#16a34a",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {job.openings} {job.openings === 1 ? "opening" : "openings"}
-        </span>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {job.location && job.location.split(",").map(l => l.trim()).filter(Boolean).map(l => (
-          <span key={l} style={{ fontSize: 13, color: "#6b7280" }}>
-            📍 {l}
-          </span>
-        ))}
-      </div>
-
-      {excerpt && (
-        <p style={{ margin: 0, fontSize: 14, color: "#4b5563", lineHeight: 1.6 }}>{excerpt}</p>
+      {/* Applied badge */}
+      {applied && (
+        <div style={{ position: "absolute", top: 16, right: 52, background: "#f0fdf4", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, letterSpacing: ".04em", textTransform: "uppercase" }}>
+          Applied ✓
+        </div>
       )}
 
-      <div style={{ marginTop: 4 }}>
+      {/* Star button */}
+      <button
+        onClick={() => onToggleStar(job.id)}
+        title={starred ? "Remove from favourites" : "Save as favourite"}
+        style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 4, color: starred ? "#f59e0b" : "#d1d5db", transition: "color .15s, transform .1s", transform: hovered || starred ? "scale(1.1)" : "scale(1)" }}
+      >
+        {starred ? "★" : "☆"}
+      </button>
+
+      {/* Title row */}
+      <div style={{ paddingRight: 36 }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#111827", letterSpacing: "-.01em", lineHeight: 1.3 }}>{job.title}</h3>
+        {locations.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {locations.map(l => (
+              <span key={l} style={{ fontSize: 12.5, color: "#6b7280", background: "#f3f4f6", padding: "2px 8px", borderRadius: 6 }}>📍 {l}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Description */}
+      {excerpt && (
+        <p style={{ margin: 0, fontSize: 13.5, color: "#4b5563", lineHeight: 1.65, flexGrow: 1 }}>{excerpt}</p>
+      )}
+
+      {/* Footer */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: "#16a34a", background: "#f0fdf4", padding: "3px 10px", borderRadius: 20 }}>
+          {job.openings} {job.openings === 1 ? "opening" : "openings"}
+        </span>
         <button
           onClick={() => onApply(job)}
-          style={{
-            padding: "9px 20px",
-            borderRadius: 8,
-            border: "none",
-            background: accentColor || "#111827",
-            color: "#fff",
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
+          style={{ padding: "9px 22px", borderRadius: 10, border: "none", background: applied ? "#f3f4f6" : accent, color: applied ? "#6b7280" : fg, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "background .15s, transform .1s", transform: hovered && !applied ? "scale(1.02)" : "scale(1)" }}
         >
-          Apply →
+          {applied ? "Apply again" : "Apply →"}
         </button>
       </div>
     </div>
@@ -309,87 +199,172 @@ const JobCard = ({ job, accentColor, onApply }) => {
 // ── Portal Screen ─────────────────────────────────────────────────────────────
 
 window.PortalScreen = ({ slug }) => {
-  const [portalData, setPortalData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [selectedJob, setSelectedJob] = useState(null);
+  const [portalData,   setPortalData]  = useState(null);
+  const [loading,      setLoading]     = useState(true);
+  const [loadError,    setLoadError]   = useState("");
+  const [selectedJob,  setSelectedJob] = useState(null);
+  const [q,            setQ]           = useState("");
+  const [locFilter,    setLocFilter]   = useState("all");
+  const [showStarred,  setShowStarred] = useState(false);
+  const [applied,      setApplied]     = useState(() => loadSet(STORAGE_KEY_APPLIED(slug)));
+  const [starred,      setStarred]     = useState(() => loadSet(STORAGE_KEY_STARRED(slug)));
 
   useEffect(() => {
     if (!slug) return;
-    window._baseFetch(`${window.API_BASE}/public/organizations/${slug}/jobs`)
-      .then((response) => {
-        if (!response.ok) throw new Error("Portal not found");
-        return response.json();
-      })
-      .then((data) => { setPortalData(data); setLoading(false); })
-      .catch((err) => { setLoadError(err.message); setLoading(false); });
+    fetch(`${window.API_BASE}/public/organizations/${slug}/jobs`)
+      .then(r => { if (!r.ok) throw new Error("Portal not found"); return r.json(); })
+      .then(d => { setPortalData(d); setLoading(false); })
+      .catch(err => { setLoadError(err.message); setLoading(false); });
   }, [slug]);
 
-  const accentColor = portalData?.branding?.primary_color || "#111827";
-  const bgColor = portalData?.branding?.bg_color || "#f9fafb";
-
-  const rootStyle = {
-    minHeight: "100vh",
-    background: bgColor,
-    fontFamily: "ui-sans-serif, system-ui, sans-serif",
+  const markApplied = (id) => {
+    setApplied(prev => { const next = new Set(prev); next.add(id); saveSet(STORAGE_KEY_APPLIED(slug), next); return next; });
   };
 
-  const headerStyle = {
-    background: accentColor,
-    color: "#fff",
-    padding: "40px 24px",
-    textAlign: "center",
+  const toggleStar = (id) => {
+    setStarred(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      saveSet(STORAGE_KEY_STARRED(slug), next);
+      return next;
+    });
   };
 
-  if (loading) {
-    return (
-      <div style={rootStyle}>
-        <div style={{ textAlign: "center", padding: "80px 24px", color: "#6b7280" }}>
-          Loading…
-        </div>
-      </div>
-    );
-  }
+  const accent  = portalData?.branding?.primary_color || "#4F46E5";
+  const bgColor = portalData?.branding?.background_color || "#f8faff";
+  const logo    = portalData?.branding?.logo_url;
+  const fg      = onAccent(accent);
 
-  if (loadError || !portalData) {
-    return (
-      <div style={rootStyle}>
-        <div style={{ textAlign: "center", padding: "80px 24px" }}>
-          <h2 style={{ color: "#111827", marginBottom: 8 }}>Portal not found</h2>
-          <p style={{ color: "#6b7280" }}>{loadError || "This organization's job portal is unavailable."}</p>
-        </div>
+  const allLocations = useMemo(() => {
+    if (!portalData) return [];
+    const set = new Set();
+    portalData.jobs.forEach(j => { if (j.location) j.location.split(",").forEach(l => set.add(l.trim())); });
+    return [...set].filter(Boolean).sort();
+  }, [portalData]);
+
+  const filteredJobs = useMemo(() => {
+    if (!portalData) return [];
+    return portalData.jobs.filter(j => {
+      if (showStarred && !starred.has(j.id)) return false;
+      if (q) {
+        const ql = q.toLowerCase();
+        if (!(j.title || "").toLowerCase().includes(ql) && !(j.description || "").toLowerCase().includes(ql)) return false;
+      }
+      if (locFilter !== "all") {
+        const locs = (j.location || "").split(",").map(l => l.trim());
+        if (!locs.includes(locFilter)) return false;
+      }
+      return true;
+    });
+  }, [portalData, q, locFilter, showStarred, starred]);
+
+  const containerStyle = { minHeight: "100vh", background: bgColor, fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif" };
+
+  if (loading) return (
+    <div style={containerStyle}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 12 }}>
+        <div style={{ width: 36, height: 36, border: `3px solid ${accent}`, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <span style={{ color: "#6b7280", fontSize: 14 }}>Loading…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
-    );
-  }
+    </div>
+  );
+
+  if (loadError || !portalData) return (
+    <div style={containerStyle}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 8, padding: 24 }}>
+        <div style={{ fontSize: 40, marginBottom: 8 }}>🔍</div>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Portal not found</h2>
+        <p style={{ color: "#6b7280", margin: 0 }}>{loadError || "This organization's job portal is unavailable."}</p>
+      </div>
+    </div>
+  );
+
+  const starredCount = portalData.jobs.filter(j => starred.has(j.id)).length;
 
   return (
-    <div style={rootStyle}>
-      <div style={headerStyle}>
-        <h1 style={{ margin: "0 0 8px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>
+    <div style={containerStyle}>
+
+      {/* ── Hero header ───────────────────────────────────────── */}
+      <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${mix(accent, -40)} 100%)`, padding: "60px 24px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        {/* Decorative blobs */}
+        <div style={{ position: "absolute", top: -60, right: -60, width: 220, height: 220, borderRadius: "50%", background: "rgba(255,255,255,.08)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: -40, left: -40, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,.06)", pointerEvents: "none" }} />
+
+        {logo && <img src={logo} alt="Logo" style={{ maxHeight: 52, maxWidth: 180, marginBottom: 20, display: "block", margin: "0 auto 20px", objectFit: "contain" }} />}
+
+        <h1 style={{ margin: "0 0 10px", fontSize: 36, fontWeight: 800, color: fg, letterSpacing: "-.03em", lineHeight: 1.1 }}>
           {portalData.org_name}
         </h1>
-        <p style={{ margin: 0, opacity: 0.85, fontSize: 15 }}>Open positions</p>
+        <p style={{ margin: "0 0 28px", color: fg, opacity: .8, fontSize: 16, fontWeight: 400 }}>
+          {filteredJobs.length === portalData.jobs.length
+            ? `${portalData.jobs.length} open position${portalData.jobs.length !== 1 ? "s" : ""}`
+            : `${filteredJobs.length} of ${portalData.jobs.length} positions`}
+        </p>
+
+        {/* Search bar */}
+        <div style={{ maxWidth: 480, margin: "0 auto", position: "relative" }}>
+          <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: .5, pointerEvents: "none" }}>🔍</span>
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Search positions…"
+            style={{ width: "100%", padding: "14px 16px 14px 44px", borderRadius: 12, border: "none", fontSize: 15, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "rgba(255,255,255,.92)", boxShadow: "0 4px 20px rgba(0,0,0,.12)" }}
+          />
+        </div>
       </div>
 
-      <div style={{ maxWidth: 860, margin: "0 auto", padding: "40px 24px" }}>
-        {portalData.jobs.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "#6b7280", fontSize: 15 }}>
-            No open positions at this time. Check back later!
+      {/* ── Filter bar ────────────────────────────────────────── */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "12px 24px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "center", position: "sticky", top: 0, zIndex: 10, boxShadow: "0 1px 8px rgba(0,0,0,.06)" }}>
+        {allLocations.length > 0 && (
+          <select
+            value={locFilter}
+            onChange={e => setLocFilter(e.target.value)}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 13.5, outline: "none", fontFamily: "inherit", background: "#fff", cursor: "pointer" }}
+          >
+            <option value="all">All locations</option>
+            {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        )}
+
+        <button
+          onClick={() => setShowStarred(v => !v)}
+          style={{ padding: "8px 16px", borderRadius: 8, border: `1.5px solid ${showStarred ? "#f59e0b" : "#e5e7eb"}`, background: showStarred ? "#fffbeb" : "#fff", fontSize: 13.5, cursor: "pointer", fontFamily: "inherit", color: showStarred ? "#92400e" : "#374151", fontWeight: showStarred ? 600 : 400, transition: "all .15s", display: "flex", alignItems: "center", gap: 6 }}
+        >
+          ★ Favourites{starredCount > 0 ? ` (${starredCount})` : ""}
+        </button>
+
+        {applied.size > 0 && (
+          <span style={{ fontSize: 13, color: "#16a34a", background: "#f0fdf4", padding: "6px 14px", borderRadius: 8, fontWeight: 500 }}>
+            ✓ Applied to {applied.size} position{applied.size !== 1 ? "s" : ""}
+          </span>
+        )}
+
+        {(q || locFilter !== "all" || showStarred) && (
+          <button onClick={() => { setQ(""); setLocFilter("all"); setShowStarred(false); }} style={{ padding: "8px 14px", borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#6b7280" }}>
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* ── Job grid ──────────────────────────────────────────── */}
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 24px 80px" }}>
+        {filteredJobs.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "80px 0", color: "#6b7280" }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>📭</div>
+            <p style={{ fontSize: 16, margin: 0 }}>No positions match your filters.</p>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-              gap: 20,
-            }}
-          >
-            {portalData.jobs.map((job) => (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
+            {filteredJobs.map(job => (
               <JobCard
                 key={job.id}
                 job={job}
-                accentColor={accentColor}
-                onApply={(selectedJob) => setSelectedJob(selectedJob)}
+                accentColor={accent}
+                applied={applied.has(job.id)}
+                starred={starred.has(job.id)}
+                onApply={setSelectedJob}
+                onToggleStar={toggleStar}
               />
             ))}
           </div>
@@ -400,7 +375,9 @@ window.PortalScreen = ({ slug }) => {
         <ApplyModal
           job={selectedJob}
           orgSlug={slug}
+          accentColor={accent}
           onClose={() => setSelectedJob(null)}
+          onApplied={(id) => { markApplied(id); setSelectedJob(null); }}
         />
       )}
     </div>

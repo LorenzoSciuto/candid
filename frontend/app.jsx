@@ -630,7 +630,7 @@ const OrgSetupWizard = ({ user, onComplete }) => {
                   { id: "openai", label: "OpenAI", models: ["gpt-4o", "gpt-4o-mini"] },
                   { id: "anthropic", label: "Anthropic", models: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"] },
                   { id: "gemini", label: "Gemini", models: ["gemini-2.0-flash", "gemini-1.5-pro"] },
-                  { id: "groq", label: "Groq", models: ["llama-3.3-70b-versatile"] },
+                  { id: "groq", label: "Groq", models: ["llama-3.3-70b-versatile", "meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.1-8b-instant", "qwen/qwen3-32b"] },
                 ].map(p => (
                   <button key={p.id} onClick={() => { setAiProvider(p.id); setAiModel(p.models[0]); }}
                     className="btn btn-sm" style={{ border: `1.5px solid ${aiProvider === p.id ? "var(--ink)" : "var(--border)"}`, background: aiProvider === p.id ? "var(--surface)" : "var(--bg-sunken)" }}>

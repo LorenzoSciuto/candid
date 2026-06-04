@@ -1,6 +1,8 @@
+import json
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from sqlmodel import Session, select
 
 from candid.database import Database
@@ -9,6 +11,13 @@ from candid.models import Candidate, Interview
 from candid.schemas import InterviewCreate, InterviewProcess, InterviewSummarize, InterviewUpdate
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.transcription_service import TranscriptionService
+
+
+def _append_activity(candidate: Candidate, event_type: str, note: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    log = json.loads(candidate.activity_log or "[]")
+    log.append({"type": event_type, "at": now, "note": note})
+    candidate.activity_log = json.dumps(log)
 
 
 class InterviewsRouter:
@@ -74,10 +83,11 @@ class InterviewsRouter:
         def upload_audio(
             interview_id: str,
             file: UploadFile,
+            background_tasks: BackgroundTasks,
             session: Session = Depends(db.get_session),
             user: UserCtx = Depends(require_org),
         ):
-            return self._upload_audio(session, user.org_id, interview_id, file)
+            return self._upload_audio(session, user.org_id, interview_id, file, background_tasks)
 
         @self.router.get("/{interview_id}/transcript")
         def get_transcript(
@@ -98,6 +108,14 @@ class InterviewsRouter:
         session.add(interview)
         session.commit()
         session.refresh(interview)
+        if interview.candidate_id:
+            candidate = session.get(Candidate, interview.candidate_id)
+            if candidate and candidate.org_id == org_id:
+                label = interview.title or interview.type or "Interview"
+                _append_activity(candidate, "interview_created", f"Interview scheduled: {label}")
+                session.add(candidate)
+                session.commit()
+                session.refresh(interview)
         return interview
 
     def _update(self, session, org_id, interview_id, body: InterviewUpdate) -> Interview:
@@ -135,6 +153,14 @@ class InterviewsRouter:
         session.add(interview)
         session.commit()
         session.refresh(interview)
+        if interview.candidate_id:
+            candidate = session.get(Candidate, interview.candidate_id)
+            if candidate and candidate.org_id == org_id:
+                label = interview.title or interview.type or "Interview"
+                _append_activity(candidate, "interview_processed", f"Interview transcript processed with AI: {label}")
+                session.add(candidate)
+                session.commit()
+                session.refresh(interview)
         return interview
 
     def _summarize(self, session, org_id, interview_id, body: InterviewSummarize) -> dict:
@@ -146,7 +172,7 @@ class InterviewsRouter:
             raise HTTPException(502, f"AI error: {exc}") from exc
         return {"bullets": result.get("bullets", []), "summary": result.get("summary", "")}
 
-    def _upload_audio(self, session, org_id, interview_id, file: UploadFile) -> dict:
+    def _upload_audio(self, session, org_id, interview_id, file: UploadFile, background_tasks: BackgroundTasks) -> dict:
         interview = self._fetch(session, org_id, interview_id)
         if self._transcription_service is None:
             raise HTTPException(503, "Transcription service not configured")
@@ -157,8 +183,18 @@ class InterviewsRouter:
         session.add(interview)
         session.commit()
         session.refresh(interview)
-        self._transcription_service.process_interview_audio(session, interview)
+        background_tasks.add_task(
+            self._run_transcription_pipeline,
+            interview_id=interview_id,
+            org_id=org_id,
+        )
         return {"status": "processing"}
+
+    def _run_transcription_pipeline(self, interview_id: str, org_id: str) -> None:
+        with self._db.get_session_direct() as session:
+            interview = session.get(Interview, interview_id)
+            if interview:
+                self._transcription_service.process_interview_audio(session, interview, org_id)
 
     def _get_transcript(self, session, org_id, interview_id) -> dict:
         interview = self._fetch(session, org_id, interview_id)

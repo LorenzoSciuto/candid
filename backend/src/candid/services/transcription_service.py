@@ -7,7 +7,6 @@ from sqlmodel import Session
 
 from candid.models import Interview
 from candid.prompts import Prompts
-from candid.services.ai_engine import AIEngine
 
 
 @dataclasses.dataclass
@@ -21,9 +20,9 @@ class TranscriptionService:
     _AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
     _FFMPEG_TIMEOUT_SECONDS = 120
 
-    def __init__(self, upload_dir: Path, ai_engine: AIEngine) -> None:
+    def __init__(self, upload_dir: Path, ai_engine_factory) -> None:
         self._upload_dir = upload_dir
-        self._ai_engine = ai_engine
+        self._ai_engine_factory = ai_engine_factory
 
     def save_audio_file(self, interview_id: str, file_data: bytes, filename: str) -> Path:
         destination_dir = self._upload_dir / interview_id
@@ -42,17 +41,29 @@ class TranscriptionService:
             return self._transcribe_with_groq(audio_path, api_key, model)
         return self._transcribe_with_openai(audio_path, api_key, model)
 
-    def evaluate_transcript(self, transcript_text: str, interview_context: str) -> dict:
+    def evaluate_transcript(self, transcript_text: str, interview_context: str, session: Session, org_id: str) -> dict:
+        engine = self._ai_engine_factory.from_session(session, org_id)
         prompt = Prompts.TRANSCRIPT_EVALUATION.format(
             interview_context=interview_context,
             transcript_text=transcript_text,
         )
-        return self._parse_evaluation_response(prompt)
+        raw = engine._call(prompt)
+        try:
+            parsed = json.loads(raw.strip())
+        except Exception:
+            parsed = {}
+        return {
+            "strengths": parsed.get("strengths", []),
+            "concerns": parsed.get("concerns", []),
+            "recommendation": parsed.get("recommendation", ""),
+            "score": parsed.get("score", 0),
+            "summary": parsed.get("summary", ""),
+        }
 
-    def process_interview_audio(self, session: Session, interview: Interview) -> None:
+    def process_interview_audio(self, session: Session, interview: Interview, org_id: str) -> None:
         self._mark_processing(session, interview)
         try:
-            self._execute_pipeline(session, interview)
+            self._execute_pipeline(session, interview, org_id)
         except Exception as pipeline_exception:
             self._mark_failed(session, interview, pipeline_exception)
 
@@ -96,20 +107,6 @@ class TranscriptionService:
             duration_seconds=float(getattr(transcription, "duration", 0.0) or 0.0),
         )
 
-    def _parse_evaluation_response(self, prompt: str) -> dict:
-        raw = self._ai_engine._call(prompt)
-        try:
-            parsed = json.loads(raw.strip())
-        except Exception:
-            parsed = {}
-        return {
-            "strengths": parsed.get("strengths", []),
-            "concerns": parsed.get("concerns", []),
-            "recommendation": parsed.get("recommendation", ""),
-            "score": parsed.get("score", 0),
-            "summary": parsed.get("summary", ""),
-        }
-
     def _build_interview_context(self, interview: Interview) -> str:
         parts = []
         if interview.title:
@@ -120,21 +117,23 @@ class TranscriptionService:
             parts.append(f"Date: {interview.date}")
         return "; ".join(parts) if parts else "No additional context"
 
-    def _execute_pipeline(self, session: Session, interview: Interview) -> None:
+    def _execute_pipeline(self, session: Session, interview: Interview, org_id: str) -> None:
         input_path = Path(interview.audio_file_path)
         audio_path = self.extract_audio(input_path)
-        transcription_result = self._run_transcription(audio_path, interview)
+        transcription_result = self._run_transcription(audio_path, session, org_id)
         evaluation_result = self.evaluate_transcript(
             transcript_text=transcription_result.text,
             interview_context=self._build_interview_context(interview),
+            session=session,
+            org_id=org_id,
         )
         self._persist_results(session, interview, transcription_result, evaluation_result)
 
-    def _run_transcription(self, audio_path: Path, interview: Interview) -> TranscriptionResult:
+    def _run_transcription(self, audio_path: Path, session: Session, org_id: str) -> TranscriptionResult:
         import os
         provider = os.environ.get("DEFAULT_PROVIDER", "openai")
         model = "whisper-1" if provider == "openai" else "whisper-large-v3"
-        api_key = os.environ.get("OPENAI_API_KEY", "") if provider == "openai" else os.environ.get("GROQ_API_KEY", "")
+        api_key = self._ai_engine_factory.resolve_api_key(session, org_id, provider)
         return self.transcribe(audio_path, api_key, provider, model)
 
     def _persist_results(

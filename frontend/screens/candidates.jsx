@@ -1,7 +1,5 @@
 // Candidates list screen — table with filters, API-backed
 
-const SOURCES = ["Referral", "LinkedIn", "Inbound", "Job board"];
-
 const mapCandidate = (c) => ({
   id: c.id, first: c.first_name, last: c.last_name, email: c.email, phone: c.phone,
   role: c.current_role || c.job_title, experience: c.years_of_experience,
@@ -9,6 +7,7 @@ const mapCandidate = (c) => ({
   appliedAt: c.applied_at, score: c.score,
   hasAI: c.has_ai || false, aiScore: c.ai_score ?? null,
   evalAvg: c.eval_avg ?? null,
+  jdTitle: c.jd_title ?? null, jdId: c.job_description_id ?? null,
 });
 
 // ── Styled delete / destructive confirm ────────────────────────────────────────
@@ -46,8 +45,11 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
   const [experience, setExperience] = useState("");
   const [source, setSource] = useState("");
   const [status, setStatus] = useState("new");
+  const [jdId, setJdId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const allJds = (window.CANDID_DATA.JDS || []);
 
   const save = async () => {
     if (!first.trim() || !last.trim()) { setError("First and last name are required."); return; }
@@ -63,6 +65,7 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
           current_role: role || null, location: location || null,
           years_of_experience: experience !== "" ? parseInt(experience) : null,
           source: source || null, status,
+          job_description_id: jdId || null,
         }),
       });
       if (res.ok) {
@@ -122,9 +125,16 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
             <label className="label">{t('candidates.form.source')}</label>
             <select className="select" value={source} onChange={e => setSource(e.target.value)}>
               <option value="">—</option>
-              {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+              {(window.CANDID_DATA.SOURCES || []).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+        </div>
+        <div>
+          <label className="label">{t('candidates.form.position')}</label>
+          <select className="select" value={jdId} onChange={e => setJdId(e.target.value)}>
+            <option value="">—</option>
+            {allJds.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+          </select>
         </div>
         <div>
           <label className="label">{t('candidates.form.stage')}</label>
@@ -415,7 +425,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
         {!showArchived && (
           <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...stages]} />
         )}
-        <FilterPill label={t('candidates.source')} value={source} onChange={setSource} options={[{ id: "all", label: t('candidates.anySource') }, ...SOURCES.map(s => ({ id: s, label: s }))]} />
+        <FilterPill label={t('candidates.source')} value={source} onChange={setSource} options={[{ id: "all", label: t('candidates.anySource') }, ...(window.CANDID_DATA.SOURCES || []).map(s => ({ id: s, label: s }))]} />
         <FilterPill label={t('candidates.experience')} value={exp} onChange={setExp} options={[
           { id: "all", label: t('candidates.exp.any') },
           { id: "junior", label: t('candidates.exp.junior') },

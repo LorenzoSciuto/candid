@@ -10,7 +10,7 @@ from sqlmodel.pool import StaticPool
 from candid.config import Settings
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org, require_user
-from candid.services.ai_engine import AIEngine, AIEngineFactory
+from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailService
@@ -75,10 +75,9 @@ def notification_service() -> NotificationService:
 
 
 @pytest.fixture(scope="session")
-def transcription_service(tmp_path_factory: pytest.TempPathFactory, crypto: CryptoService) -> TranscriptionService:
+def transcription_service(tmp_path_factory: pytest.TempPathFactory, ai_factory: AIEngineFactory) -> TranscriptionService:
     upload_dir = tmp_path_factory.mktemp("uploads")
-    ai_engine = AIEngine(provider="openai", model="gpt-4o", api_key="test-key")
-    return TranscriptionService(upload_dir=upload_dir, ai_engine=ai_engine)
+    return TranscriptionService(upload_dir=upload_dir, ai_engine_factory=ai_factory)
 
 
 @pytest.fixture(scope="session")

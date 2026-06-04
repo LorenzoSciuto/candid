@@ -48,7 +48,7 @@ class Application:
         self._notification_service = NotificationService()
         self._transcription_service = TranscriptionService(
             upload_dir=Path("uploads/audio"),
-            ai_engine=self._ai_factory._create_engine_from_environment(),
+            ai_engine_factory=self._ai_factory,
         )
         self._email = EmailService(
             smtp_host=self._settings.smtp_host,

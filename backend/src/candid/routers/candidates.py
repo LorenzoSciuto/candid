@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org
-from candid.models import Candidate, Evaluation, Interview
+from candid.models import Candidate, Evaluation, Interview, JobDescription
 from candid.schemas import CandidateCreate, CandidateUpdate
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.email_service import EmailService
@@ -154,6 +154,11 @@ class CandidatesRouter:
             for e in session.exec(select(Evaluation).where(Evaluation.org_id == org_id)).all()
         }
 
+        jd_map: dict[str, str] = {
+            jd.id: jd.title
+            for jd in session.exec(select(JobDescription).where(JobDescription.org_id == org_id)).all()
+        }
+
         result = []
         for c in candidates:
             d = _safe_dump(c)
@@ -162,9 +167,13 @@ class CandidatesRouter:
             if c.ai_pre_analysis:
                 try:
                     pre = json.loads(c.ai_pre_analysis)
-                    role_fits = pre.get("role_fits") or []
                     d["has_ai"] = True
-                    d["ai_score"] = max((rf["score"] for rf in role_fits), default=None)
+                    overall = pre.get("overall_score")
+                    role_fits = pre.get("role_fits") or []
+                    if overall is not None:
+                        d["ai_score"] = round(float(overall), 1)
+                    elif role_fits:
+                        d["ai_score"] = max((rf["score"] for rf in role_fits), default=None)
                 except Exception:
                     pass
             d["eval_avg"] = None
@@ -182,6 +191,7 @@ class CandidatesRouter:
                             pass
                 if scores:
                     d["eval_avg"] = round(sum(scores) / len(scores), 1)
+            d["jd_title"] = jd_map.get(c.job_description_id) if c.job_description_id else None
             result.append(d)
         return result
 

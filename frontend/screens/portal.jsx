@@ -30,11 +30,7 @@ const onAccent = (hex) => luminance(hex || "#111") > 0.45 ? "#111827" : "#ffffff
 // ── Apply Modal ───────────────────────────────────────────────────────────────
 
 const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
-  const [firstName, setFirstName] = useState("");
-  const [lastName,  setLastName]  = useState("");
-  const [email,     setEmail]     = useState("");
-  const [phone,     setPhone]     = useState("");
-  const [cvText,    setCvText]    = useState("");
+  const [cvText,     setCvText]    = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]    = useState("");
   const [success,    setSuccess]  = useState(false);
@@ -42,16 +38,14 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
   const accent = accentColor || "#111827";
   const fg     = onAccent(accent);
 
-  const valid = firstName.trim() && lastName.trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
-
   const submit = async () => {
-    if (!valid) return;
+    if (!cvText.trim()) return;
     setSubmitting(true); setError("");
     try {
       const res = await fetch(`${window.API_BASE}/public/organizations/${orgSlug}/jobs/${job.id}/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), phone: phone.trim() || null, cv_text: cvText.trim() || null }),
+        body: JSON.stringify({ cv_text: cvText.trim() }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Submission failed");
       setSuccess(true);
@@ -60,15 +54,11 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
     setSubmitting(false);
   };
 
-  const inp = { width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid #e5e7eb", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "#fff", transition: "border-color .15s" };
-  const lbl = { display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 5, color: "#6b7280", letterSpacing: ".04em", textTransform: "uppercase" };
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16, backdropFilter: "blur(4px)" }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 540, maxHeight: "92vh", overflowY: "auto", fontFamily: "ui-sans-serif, system-ui, sans-serif", boxShadow: "0 24px 60px rgba(0,0,0,.18)" }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "92vh", overflowY: "auto", fontFamily: "ui-sans-serif, system-ui, sans-serif", boxShadow: "0 24px 60px rgba(0,0,0,.18)" }}>
 
-        {/* Header strip */}
         <div style={{ background: accent, padding: "24px 28px", borderRadius: "16px 16px 0 0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
@@ -84,27 +74,36 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
           {success ? (
             <div style={{ textAlign: "center", padding: "32px 0 16px" }}>
               <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f0fdf4", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 16 }}>✓</div>
-              <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700 }}>Application sent!</h3>
-              <p style={{ color: "#6b7280", margin: "0 0 24px", lineHeight: 1.6 }}>Check your email for a verification code to confirm your application.</p>
-              <button onClick={onClose} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Done</button>
+              <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700 }}>Application submitted!</h3>
+              <p style={{ color: "#6b7280", margin: "0 0 24px", lineHeight: 1.6 }}>We'll be in touch. Thank you for your interest.</p>
+              <button onClick={onClose} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div><label style={lbl}>First name *</label><input style={inp} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Alice" autoFocus /></div>
-                <div><label style={lbl}>Last name *</label><input style={inp} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Smith" /></div>
-              </div>
-              <div><label style={lbl}>Email *</label><input style={inp} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="alice@example.com" /></div>
-              <div><label style={lbl}>Phone <span style={{ textTransform: "none", fontWeight: 400 }}>(optional)</span></label><input style={inp} type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 0100" /></div>
               <div>
-                <label style={lbl}>CV / Resume <span style={{ textTransform: "none", fontWeight: 400 }}>(optional — paste text)</span></label>
-                <textarea style={{ ...inp, resize: "vertical", minHeight: 120, lineHeight: 1.6 }} value={cvText} onChange={e => setCvText(e.target.value)} placeholder="Paste your work experience, skills, education…" />
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#374151" }}>
+                  Your CV / Résumé
+                </label>
+                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b7280", lineHeight: 1.5 }}>
+                  Paste your full CV below — we'll extract your details automatically.
+                </p>
+                <textarea
+                  autoFocus
+                  value={cvText}
+                  onChange={e => setCvText(e.target.value)}
+                  placeholder={"Work experience, education, skills, contact info…\n\nExample:\nJane Smith · jane@example.com · +1 555 0100\nSenior Engineer at Acme Corp (2020–present)\n…"}
+                  style={{ width: "100%", minHeight: 260, padding: "12px 14px", borderRadius: 10, border: "1.5px solid #e5e7eb", fontSize: 13.5, lineHeight: 1.7, resize: "vertical", outline: "none", boxSizing: "border-box", fontFamily: "ui-monospace, monospace", background: "#fafafa" }}
+                />
               </div>
-              {error && <div style={{ color: "#dc2626", fontSize: 13, padding: "10px 14px", background: "#fef2f2", borderRadius: 8, lineHeight: 1.5 }}>{error}</div>}
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+
+              {error && <div style={{ color: "#dc2626", fontSize: 13, padding: "10px 14px", background: "#fef2f2", borderRadius: 8 }}>{error}</div>}
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
+                {submitting && <span style={{ fontSize: 13, color: "#6b7280" }}>Analysing CV…</span>}
                 <button onClick={onClose} style={{ padding: "11px 20px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                <button onClick={submit} disabled={!valid || submitting} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: valid && !submitting ? "pointer" : "not-allowed", opacity: valid && !submitting ? 1 : .55, fontFamily: "inherit", transition: "opacity .15s" }}>
-                  {submitting ? "Sending…" : "Submit application"}
+                <button onClick={submit} disabled={!cvText.trim() || submitting}
+                  style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: cvText.trim() && !submitting ? "pointer" : "not-allowed", opacity: cvText.trim() && !submitting ? 1 : .55, fontFamily: "inherit", transition: "opacity .15s" }}>
+                  {submitting ? "Submitting…" : "Submit application →"}
                 </button>
               </div>
             </div>

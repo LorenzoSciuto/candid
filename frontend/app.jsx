@@ -127,7 +127,7 @@ const HiringPlanModal = ({ onClose, onNavigate }) => {
   const statusColor = (s) => s === "Active" ? "positive" : s === "Draft" ? undefined : "warn";
 
   return (
-    <Modal open title={t('plan.title')} onClose={onClose} width={680}
+    <Modal open title={t('plan.title')} onClose={onClose} width={680} disableBackdropClose={false}
       footer={<Btn onClick={onClose}>{t('common.close')}</Btn>}>
       <div className="col gap-0">
         <div className="text-12 text-muted" style={{ marginBottom: 14 }}>{t('plan.sub')}</div>

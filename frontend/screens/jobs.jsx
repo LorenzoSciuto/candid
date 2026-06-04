@@ -151,7 +151,7 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
         <div className="row gap-8">
           {window.CANDID_ORG?.slug && (
             <Btn icon={<Icons.ArrowRight size={14} />} onClick={() => {
-              const base = window.location.href.split("#")[0];
+              const base = window.location.href.split("#")[0].replace(/\/index\.html$/, "/");
               const url = `${base}#portal/${window.CANDID_ORG.slug}`;
               navigator.clipboard?.writeText(url).catch(() => {});
               window.open(url, "_blank");
@@ -282,7 +282,7 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
               <button className="btn btn-ghost btn-sm row gap-6" style={{ width: "100%", justifyContent: "flex-start" }}
                 onClick={() => {
                   setMenuOpen(null);
-                  const base = window.location.href.split("#")[0];
+                  const base = window.location.href.split("#")[0].replace(/\/index\.html$/, "/");
                   const url = `${base}#portal/${window.CANDID_ORG.slug}`;
                   navigator.clipboard?.writeText(url).catch(() => {});
                   window.open(url, "_blank");

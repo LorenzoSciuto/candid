@@ -12,7 +12,7 @@ PORT="${PORT:-8080}"
 cd "${FRONTEND_DIR}"
 
 if [[ -f "${CERT_DIR}/localhost.pem" && -f "${CERT_DIR}/localhost-key.pem" ]]; then
-  echo "→  Candid frontend → https://localhost:${PORT}/index.html"
+  echo "→  Candid frontend → https://localhost:${PORT}/"
   echo "   (HTTPS mode — Web Speech API enabled)"
   echo ""
   exec python3 - "${PORT}" "${CERT_DIR}/localhost.pem" "${CERT_DIR}/localhost-key.pem" <<'PYEOF'
@@ -33,7 +33,7 @@ except KeyboardInterrupt:
     pass
 PYEOF
 else
-  echo "→  Candid frontend → http://localhost:${PORT}/index.html"
+  echo "→  Candid frontend → http://localhost:${PORT}/"
   echo "   (Chrome recommended — Live Room requires Web Speech API)"
   echo "   Tip: run ./scripts/gen-certs.sh to enable HTTPS"
   echo ""

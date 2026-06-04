@@ -14,6 +14,7 @@ from candid.services.ai_engine import AIEngine, AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailService
+from candid.services.notification_service import NotificationService
 from candid.services.transcription_service import TranscriptionService
 
 TEST_ORG_ID = "org-test"
@@ -69,6 +70,11 @@ def email_service() -> EmailService:
 
 
 @pytest.fixture(scope="session")
+def notification_service() -> NotificationService:
+    return NotificationService()
+
+
+@pytest.fixture(scope="session")
 def transcription_service(tmp_path_factory: pytest.TempPathFactory, crypto: CryptoService) -> TranscriptionService:
     upload_dir = tmp_path_factory.mktemp("uploads")
     ai_engine = AIEngine(provider="openai", model="gpt-4o", api_key="test-key")
@@ -83,6 +89,7 @@ def client(
     ai_factory: AIEngineFactory,
     extractor: CVExtractor,
     email_service: EmailService,
+    notification_service: NotificationService,
     transcription_service: TranscriptionService,
 ) -> TestClient:
     from candid.routers.ai import AIRouter
@@ -93,6 +100,7 @@ def client(
     from candid.routers.evaluations import EvaluationsRouter
     from candid.routers.interviews import InterviewsRouter
     from candid.routers.job_descriptions import JobDescriptionsRouter
+    from candid.routers.notifications import NotificationsRouter
     from candid.routers.organizations import OrganizationsRouter
     from candid.routers.quick_add import QuickAddRouter
     from candid.routers.performance_reviews import PerformanceReviewsRouter
@@ -110,7 +118,7 @@ def client(
     app.dependency_overrides[require_org] = lambda: _TEST_USER
 
     for router in [
-        CandidatesRouter(db, ai_factory, email_service).router,
+        CandidatesRouter(db, notification_service, ai_factory, email_service).router,
         AnalysisRouter(db, ai_factory, extractor).router,
         InterviewsRouter(db, ai_factory, transcription_service).router,
         EvaluationsRouter(db).router,
@@ -121,7 +129,8 @@ def client(
         PerformanceReviewsRouter(db, ai_factory).router,
         JobDescriptionsRouter(db, ai_factory).router,
         AIRouter(db, ai_factory).router,
-        OrganizationsRouter(db, email_service, settings).router,
+        OrganizationsRouter(db, email_service, settings, notification_service).router,
+        NotificationsRouter(db).router,
     ]:
         app.include_router(router)
 
@@ -132,13 +141,14 @@ def client(
 def clean_tables(db: Database) -> None:
     from candid.models import (
         Candidate, Employee, Evaluation, Interview, JobDescription,
-        Membership, OrgApiKey, OrgConfig, Organization, PerformanceReview,
+        Membership, Notification, OrgApiKey, OrgConfig, Organization, PerformanceReview,
         Role, User, Invitation,
     )
     from sqlmodel import select
 
     with Session(db._engine) as session:
         for model in (
+            Notification,
             Invitation, Membership,
             Evaluation, Interview, PerformanceReview, JobDescription, Employee, Candidate,
             OrgApiKey, OrgConfig, Role, Organization, User,

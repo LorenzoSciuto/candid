@@ -31,14 +31,18 @@ def upgrade() -> None:
         'notification',
         sa.Column('id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column('org_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column('notification_type', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column('message', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column('reference_id', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column('user_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column('category', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column('title', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column('body', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column('entity_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column('entity_type', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column('is_read', sa.Boolean(), nullable=False),
         sa.Column('created_at', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index(op.f('ix_notification_org_id'), 'notification', ['org_id'], unique=False)
+    op.create_index(op.f('ix_notification_user_id'), 'notification', ['user_id'], unique=False)
 
     # performance_review table
     op.create_table(
@@ -64,6 +68,7 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_performance_review_org_id'), table_name='performance_review')
     op.drop_index(op.f('ix_performance_review_employee_id'), table_name='performance_review')
     op.drop_table('performance_review')
+    op.drop_index(op.f('ix_notification_user_id'), table_name='notification')
     op.drop_index(op.f('ix_notification_org_id'), table_name='notification')
     op.drop_table('notification')
     op.drop_column('employee', 'reminder_created_at')

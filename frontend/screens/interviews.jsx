@@ -17,7 +17,12 @@ const addDays = (date, n) => {
   return d;
 };
 
-const fmtDate = (date) => date.toISOString().slice(0, 10);
+const fmtDate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 

@@ -313,10 +313,10 @@ const RejectionModal = ({ candidate, onClose, onRejected }) => {
   );
 };
 
-const CandidateScreen = ({ id, onRoute }) => {
+const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
   const t = window.useT();
   const [c, setC] = useState({ id: null, first: "", last: "", email: null, phone: null, role: null, experience: null, location: null, status: "new", source: null, pre: null, interviews: [], evaluation: null, score: null, cvText: null, jobDescription: null });
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(initialTab || "overview");
   const [loading, setLoading] = useState(true);
   const [hiring, setHiring] = useState(false);
   const [hired, setHired] = useState(false);
@@ -326,6 +326,7 @@ const CandidateScreen = ({ id, onRoute }) => {
   const [rejectOpen, setRejectOpen] = useState(false);
 
   useEffect(() => {
+    onMount && onMount();
     setLoading(true);
     fetch(`${window.API_BASE}/candidates/${id}`)
       .then(r => r.ok ? r.json() : null)
@@ -341,6 +342,15 @@ const CandidateScreen = ({ id, onRoute }) => {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setC(mapCandidate(d)); })
       .catch(() => {});
+  };
+
+  const changeStatus = async (newStatus) => {
+    setC(prev => ({ ...prev, status: newStatus }));
+    await fetch(`${window.API_BASE}/candidates/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    }).catch(() => refreshCandidate());
   };
 
   const fullName = `${c.first} ${c.last}`;
@@ -481,7 +491,7 @@ const CandidateScreen = ({ id, onRoute }) => {
         ))}
       </div>
 
-      {tab === "overview"    && <OverviewTab c={c} onTab={setTab} t={t} />}
+      {tab === "overview"    && <OverviewTab c={c} onTab={setTab} onStatusChange={changeStatus} t={t} />}
       {tab === "cv-analysis" && <CVAnalysisTab c={c} t={t} onRefresh={refreshCandidate} />}
       {tab === "interviews"  && <InterviewsTab c={c} onRoute={onRoute} onRefresh={refreshCandidate} t={t} />}
       {tab === "evaluation"  && <EvaluationTab c={c} onSaved={refreshCandidate} t={t} />}
@@ -533,26 +543,20 @@ const StarScore = ({ score, max = 5, size = 14 }) => {
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 
-const PipelineTracker = ({ status, t }) => {
+const PipelineTracker = ({ status, onStatusChange, t }) => {
   const stages = window.CANDID_DATA.STATUS;
   const myIdx = stages.findIndex(s => s.id === status);
   const currentStage = stages[myIdx];
   return (
     <div className="card card-pad">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
         <span className="weight-600" style={{ fontSize: 13 }}>{t('candidate.overview.pipeline')}</span>
-        {currentStage && (
-          <span className="badge" style={{ background: currentStage.dot + "22", color: currentStage.dot, fontWeight: 600, fontSize: 11 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 999, background: currentStage.dot, display: "inline-block", marginRight: 5, verticalAlign: "middle" }} />
-            {currentStage.label}
-          </span>
+        {onStatusChange && (
+          <span className="text-11 text-muted" style={{ marginLeft: 8 }}>click stage to move</span>
         )}
       </div>
-      {/* Step track */}
       <div style={{ position: "relative", padding: "0 0 8px" }}>
-        {/* Background line */}
         <div style={{ position: "absolute", top: 12, left: 12, right: 12, height: 2, background: "var(--border)", zIndex: 0 }} />
-        {/* Progress line */}
         {myIdx > 0 && (
           <div style={{
             position: "absolute", top: 12, left: 12, height: 2, zIndex: 1,
@@ -566,7 +570,13 @@ const PipelineTracker = ({ status, t }) => {
             const done = i < myIdx;
             const here = i === myIdx;
             return (
-              <div key={s.id} className="col" style={{ alignItems: "center", gap: 8, flex: 1 }}>
+              <div
+                key={s.id}
+                className="col"
+                style={{ alignItems: "center", gap: 8, flex: 1, cursor: onStatusChange && !here ? "pointer" : "default" }}
+                onClick={() => onStatusChange && !here && onStatusChange(s.id)}
+                title={onStatusChange && !here ? `Move to ${s.label}` : undefined}
+              >
                 <div style={{
                   width: 24, height: 24, borderRadius: 999,
                   background: done ? s.dot : here ? s.dot : "var(--surface)",
@@ -596,38 +606,18 @@ const PipelineTracker = ({ status, t }) => {
   );
 };
 
-const OverviewTab = ({ c, onTab, t }) => (
+const OverviewTab = ({ c, onTab, onStatusChange, t }) => (
   <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 20 }}>
     <div className="col gap-16">
 
-      {/* Info strip */}
-      {(c.experience || c.location || c.source || c.score) && (
+      {/* Score strip — only if AI score exists */}
+      {c.score != null && (
         <div className="card" style={{ padding: "12px 16px" }}>
           <div className="row gap-20" style={{ flexWrap: "wrap" }}>
-            {c.score != null && (
-              <div className="col gap-1">
-                <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('candidate.stat.score')}</span>
-                <span className="weight-700" style={{ fontSize: 18, color: "var(--ai)" }}>{Number(c.score).toFixed(1)}</span>
-              </div>
-            )}
-            {c.experience != null && (
-              <div className="col gap-1">
-                <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>Exp.</span>
-                <span className="weight-600 text-13">{c.experience}y</span>
-              </div>
-            )}
-            {c.location && (
-              <div className="col gap-1">
-                <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>Location</span>
-                <span className="text-13">{c.location}</span>
-              </div>
-            )}
-            {c.source && (
-              <div className="col gap-1">
-                <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>Source</span>
-                <span className="text-13">{c.source}</span>
-              </div>
-            )}
+            <div className="col gap-1">
+              <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('candidate.stat.score')}</span>
+              <span className="weight-700" style={{ fontSize: 18, color: "var(--ai)" }}>{Number(c.score).toFixed(1)}</span>
+            </div>
             {c.interviews?.length > 0 && (
               <div className="col gap-1">
                 <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('candidate.stat.interviews')}</span>
@@ -639,48 +629,7 @@ const OverviewTab = ({ c, onTab, t }) => (
       )}
 
       {/* Pipeline */}
-      <PipelineTracker status={c.status} t={t} />
-
-      {/* AI summary */}
-      {c.pre ? (
-        <div className="ai-panel card-pad">
-          <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-            <span className="ai-tag"><Icons.Sparkles size={11} /> {t('candidate.overview.aiSummary')}</span>
-            <button className="link text-12" onClick={() => onTab("cv-analysis")}>{t('candidate.overview.fullAnalysis')}</button>
-          </div>
-          <div className="text-13" style={{ lineHeight: 1.6 }}>
-            {c.pre.overview || c.pre.strengths?.[0] || "AI analysis completed."}
-          </div>
-        </div>
-      ) : (
-        <div className="card card-pad" style={{ textAlign: "center", padding: 40 }}>
-          <Icons.Sparkles size={22} style={{ color: "var(--ai)", marginBottom: 8 }} />
-          <div className="weight-600">{t('candidate.overview.noAnalysis')}</div>
-          <div className="text-13 text-secondary" style={{ marginBottom: 14, marginTop: 4 }}>Go to CV Analysis to upload a CV and run AI analysis.</div>
-          <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => onTab("cv-analysis")}>{t('candidate.overview.runAnalysis')}</Btn>
-        </div>
-      )}
-    </div>
-
-    <div className="col gap-16">
-      {/* Contact */}
-      {(c.email || c.phone) && (
-        <div className="card card-pad col gap-8">
-          <span className="weight-600" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-muted)" }}>Contatti</span>
-          {c.email && (
-            <div className="row gap-8" style={{ alignItems: "center" }}>
-              <Icons.Mail size={13} style={{ color: "var(--ink-muted)", flexShrink: 0 }} />
-              <a href={`mailto:${c.email}`} className="text-13 link" style={{ wordBreak: "break-all" }}>{c.email}</a>
-            </div>
-          )}
-          {c.phone && (
-            <div className="row gap-8" style={{ alignItems: "center" }}>
-              <Icons.Phone size={13} style={{ color: "var(--ink-muted)", flexShrink: 0 }} />
-              <span className="text-13">{c.phone}</span>
-            </div>
-          )}
-        </div>
-      )}
+      <PipelineTracker status={c.status} onStatusChange={onStatusChange} t={t} />
 
       {/* Career history */}
       {c.careerHistory?.length > 0 && (
@@ -714,6 +663,47 @@ const OverviewTab = ({ c, onTab, t }) => (
               );
             })}
           </div>
+        </div>
+      )}
+    </div>
+
+    <div className="col gap-16">
+      {/* Contact */}
+      {(c.email || c.phone) && (
+        <div className="card card-pad col gap-8">
+          <span className="weight-600" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-muted)" }}>Contatti</span>
+          {c.email && (
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <Icons.Mail size={13} style={{ color: "var(--ink-muted)", flexShrink: 0 }} />
+              <a href={`mailto:${c.email}`} className="text-13 link" style={{ wordBreak: "break-all" }}>{c.email}</a>
+            </div>
+          )}
+          {c.phone && (
+            <div className="row gap-8" style={{ alignItems: "center" }}>
+              <Icons.Phone size={13} style={{ color: "var(--ink-muted)", flexShrink: 0 }} />
+              <span className="text-13">{c.phone}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* AI summary */}
+      {c.pre ? (
+        <div className="ai-panel card-pad">
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+            <span className="ai-tag"><Icons.Sparkles size={11} /> {t('candidate.overview.aiSummary')}</span>
+            <button className="link text-12" onClick={() => onTab("cv-analysis")}>{t('candidate.overview.fullAnalysis')}</button>
+          </div>
+          <div className="text-13" style={{ lineHeight: 1.6 }}>
+            {c.pre.overview || c.pre.strengths?.[0] || "AI analysis completed."}
+          </div>
+        </div>
+      ) : (
+        <div className="card card-pad" style={{ textAlign: "center", padding: 40 }}>
+          <Icons.Sparkles size={22} style={{ color: "var(--ai)", marginBottom: 8 }} />
+          <div className="weight-600">{t('candidate.overview.noAnalysis')}</div>
+          <div className="text-13 text-secondary" style={{ marginBottom: 14, marginTop: 4 }}>Go to CV Analysis to upload a CV and run AI analysis.</div>
+          <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => onTab("cv-analysis")}>{t('candidate.overview.runAnalysis')}</Btn>
         </div>
       )}
     </div>
@@ -1060,6 +1050,60 @@ const InterviewCard = ({ interview, onOpenTranscript, onUploadRecording, onRefre
   );
 };
 
+// ── Transcript View Modal ─────────────────────────────────────────────────────
+
+const TranscriptViewModal = ({ interview, onClose, t }) => {
+  const [activeSection, setActiveSection] = useState(
+    interview.cleaned_transcript ? "cleaned" : interview.raw_content ? "raw" : "summary"
+  );
+
+  const sections = [
+    interview.raw_content      && { id: "raw",     label: "Raw transcript" },
+    interview.cleaned_transcript && { id: "cleaned", label: "Cleaned transcript" },
+    interview.summary           && { id: "summary",  label: "Synthesis" },
+  ].filter(Boolean);
+
+  const content = {
+    raw:     interview.raw_content,
+    cleaned: interview.cleaned_transcript,
+    summary: interview.summary,
+  }[activeSection];
+
+  return (
+    <Modal open title={interview.title || interview.type || t('candidate.iv.transcript')} onClose={onClose} width={760}
+      footer={<Btn onClick={onClose}>{t('common.close')}</Btn>}>
+      {sections.length > 1 && (
+        <div className="row gap-4" style={{ marginBottom: 16, borderBottom: "1px solid var(--border-soft)", paddingBottom: 12 }}>
+          {sections.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
+              className={`tab ${activeSection === s.id ? "active" : ""}`}
+              style={{ fontSize: 13 }}
+            >{s.label}</button>
+          ))}
+        </div>
+      )}
+      {content ? (
+        activeSection === "summary" ? (
+          <div className="ai-panel card-pad" style={{ maxHeight: 520, overflowY: "auto" }}>
+            <div className="row gap-6" style={{ marginBottom: 10 }}>
+              <span className="ai-tag"><Icons.Sparkles size={11} /> Synthesis</span>
+            </div>
+            <div className="text-13" style={{ lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{content}</div>
+          </div>
+        ) : (
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.75, whiteSpace: "pre-wrap", color: "var(--ink-secondary)", maxHeight: 520, overflowY: "auto" }}>
+            {content}
+          </div>
+        )
+      ) : (
+        <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('candidate.iv.noTranscript')}</div>
+      )}
+    </Modal>
+  );
+};
+
 // ── Interviews Tab ────────────────────────────────────────────────────────────
 
 const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
@@ -1070,6 +1114,8 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
   const [saving, setSaving] = useState(false);
   const [transcriptInterview, setTranscriptInterview] = useState(null);
   const [uploadError, setUploadError] = useState("");
+
+  useEffect(() => { onRefresh(); }, []);
 
   const addInterview = async () => {
     setSaving(true);
@@ -1144,19 +1190,7 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
       )}
 
       {transcriptInterview && (
-        <Modal open title={transcriptInterview.title || transcriptInterview.type || t('candidate.iv.transcript')} onClose={() => setTranscriptInterview(null)} width={720}
-          footer={<Btn onClick={() => setTranscriptInterview(null)}>{t('common.close')}</Btn>}>
-          {(() => {
-            const text = transcriptInterview.raw_content || transcriptInterview.cleaned_transcript || "";
-            return text ? (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.75, whiteSpace: "pre-wrap", color: "var(--ink-secondary)", maxHeight: 520, overflowY: "auto" }}>
-                {text}
-              </div>
-            ) : (
-              <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('candidate.iv.noTranscript')}</div>
-            );
-          })()}
-        </Modal>
+        <TranscriptViewModal interview={transcriptInterview} onClose={() => setTranscriptInterview(null)} t={t} />
       )}
     </div>
   );

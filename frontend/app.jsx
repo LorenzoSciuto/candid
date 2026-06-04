@@ -998,6 +998,7 @@ const App = () => {
   const [t_tweaks, setTweak] = window.useTweaks(TWEAKS_DEFAULTS);
   const [liveCounts, setLiveCounts] = useState({});
   const [liveInterview, setLiveInterview] = useState(null);
+  const [liveReturnTab, setLiveReturnTab] = useState(null);
   const t_app = window.useT ? window.useT() : k => k;
 
   // Persist locale
@@ -1197,8 +1198,16 @@ const App = () => {
             {route === "interviews"   && <window.InterviewsScreen onRoute={navigate} />}
             {route === "inbox"        && <window.InboxScreen onRoute={navigate} />}
             {route === "reports"      && <window.ReportsScreen />}
-            {route === "liveroom"     && <window.LiveRoomScreen interview={liveInterview} onDone={() => navigate("interviews")} />}
-            {route === "candidate" && candidateId && <window.CandidateScreen id={candidateId} onRoute={navigate} />}
+            {route === "liveroom"     && <window.LiveRoomScreen interview={liveInterview} onDone={() => {
+              if (liveInterview?.candidateId) {
+                setCandidateId(liveInterview.candidateId);
+                setLiveReturnTab("interviews");
+                navigate("candidate");
+              } else {
+                navigate("interviews");
+              }
+            }} />}
+            {route === "candidate" && candidateId && <window.CandidateScreen id={candidateId} onRoute={navigate} initialTab={liveReturnTab} onMount={() => setLiveReturnTab(null)} />}
             {route === "settings"     && <window.SettingsScreen user={user} onLocaleChange={setLocale} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />}
           </div>
         </div>

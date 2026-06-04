@@ -24,6 +24,7 @@ from candid.routers.job_descriptions import JobDescriptionsRouter
 from candid.routers.organizations import OrganizationsRouter
 from candid.routers.notifications import NotificationsRouter
 from candid.routers.public_applications import PublicApplicationsRouter
+from candid.routers.public_jobs import PublicJobsRouter
 from candid.routers.quick_add import QuickAddRouter
 from candid.routers.roles import RolesRouter
 from candid.services.ai_engine import AIEngineFactory
@@ -136,6 +137,7 @@ class Application:
     def _mount_routers(self, fastapi_app: FastAPI) -> None:
         # Public routers — no bearer required
         fastapi_app.include_router(AuthRouter(self._settings, self._db).router)
+        fastapi_app.include_router(PublicJobsRouter(self._db).router)
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
         fastapi_app.include_router(

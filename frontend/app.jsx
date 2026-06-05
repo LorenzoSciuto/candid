@@ -1270,6 +1270,9 @@ const PortalEntry = () => {
   if (hash.startsWith("portal/")) {
     return <window.PortalScreen slug={hash.slice("portal/".length)} />;
   }
+  if (hash.startsWith("video/")) {
+    return <window.VideoPortalScreen token={hash.slice("video/".length)} />;
+  }
 
   return (
     <>

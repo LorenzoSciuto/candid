@@ -1,11 +1,15 @@
 from functools import lru_cache
+from typing import Generator
 
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from sqlmodel import Session
 
 from candid.config import Settings
+from candid.database import Database
 from candid.services.auth_service import verify_token
+from candid.services.rls_service import RlsService
 
 _bearer = HTTPBearer(auto_error=True)
 
@@ -13,6 +17,15 @@ _bearer = HTTPBearer(auto_error=True)
 @lru_cache(maxsize=1)
 def _get_settings() -> Settings:
     return Settings()
+
+
+@lru_cache(maxsize=1)
+def _get_database() -> Database:
+    return Database(_get_settings().database_url)
+
+
+def _get_session() -> Generator[Session, None, None]:
+    yield from _get_database().get_session()
 
 
 class UserCtx(BaseModel):
@@ -38,11 +51,19 @@ def require_user(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-def require_org(ctx: UserCtx = Depends(require_user)) -> UserCtx:
-    """Like require_user but rejects wizard/setup tokens that have no org_id."""
+def require_org(
+    ctx: UserCtx = Depends(require_user),
+    session: Session = Depends(_get_session),
+) -> UserCtx:
+    """Like require_user but rejects wizard/setup tokens that have no org_id.
+
+    Also sets the PostgreSQL session variable app.current_org_id so that
+    RLS policies automatically filter every query to the authenticated org.
+    """
     if not ctx.org_id:
         raise HTTPException(
             status_code=403,
             detail="Organization context required — complete org setup first",
         )
+    RlsService().set_org_context(session, ctx.org_id)
     return ctx

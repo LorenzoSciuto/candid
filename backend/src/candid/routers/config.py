@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org
 from candid.models import OrgApiKey, OrgConfig
-from candid.schemas import ApiKeyUpsert, ConfigUpdate, EmailConfigResponse, EmailConfigUpdate
+from candid.schemas import ApiKeyUpsert, ConfigUpdate, EmailConfigResponse, EmailConfigUpdate, PreferencesResponse, PreferencesUpdate
 from candid.services.crypto import CryptoService
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,21 @@ class ConfigRouter:
             user: UserCtx = Depends(require_org),
         ):
             return self._test(session, user.org_id)
+
+        @self.router.get("/preferences", response_model=PreferencesResponse)
+        def get_preferences(
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._get_preferences(session, user.org_id)
+
+        @self.router.put("/preferences", response_model=PreferencesResponse)
+        def save_preferences(
+            body: PreferencesUpdate,
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._save_preferences(session, user.org_id, body)
 
         @self.router.get("/stages")
         def get_stages(
@@ -210,6 +225,22 @@ class ConfigRouter:
         session.add(cfg)
         session.commit()
         return {"ok": True, "stages": stages}
+
+    def _get_preferences(self, session: Session, org_id: str) -> PreferencesResponse:
+        cfg = session.get(OrgConfig, org_id)
+        return PreferencesResponse(date_format=cfg.date_format if cfg else "dd/MM/yyyy")
+
+    def _save_preferences(self, session: Session, org_id: str, body: PreferencesUpdate) -> PreferencesResponse:
+        _VALID_FORMATS = frozenset({"dd/MM/yyyy", "MM/dd/yyyy", "yyyy-MM-dd"})
+        if body.date_format not in _VALID_FORMATS:
+            raise HTTPException(400, f"Unsupported date_format: {body.date_format}")
+        cfg = session.get(OrgConfig, org_id)
+        if not cfg:
+            cfg = OrgConfig(org_id=org_id)
+        cfg.date_format = body.date_format
+        session.add(cfg)
+        session.commit()
+        return PreferencesResponse(date_format=cfg.date_format)
 
     def _get_email(self, session: Session, org_id: str) -> EmailConfigResponse:
         cfg = session.get(OrgConfig, org_id)

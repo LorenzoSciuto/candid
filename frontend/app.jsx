@@ -972,7 +972,8 @@ const VALID_ROUTES = [
 
 const routeFromHash = () => {
   const h = window.location.hash.replace("#", "");
-  return VALID_ROUTES.includes(h) ? h : "pipeline";
+  if (!h || h === "/") return "pipeline";
+  return VALID_ROUTES.includes(h) ? h : "not-found";
 };
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -1011,6 +1012,15 @@ const App = () => {
     fetch(`${window.API_BASE}/organizations/current`)
       .then(r => r.ok ? r.json() : null)
       .then(org => { if (org) window.CANDID_ORG = org; })
+      .catch(() => {});
+  }, [user?.org_id]);
+
+  // Load org preferences (date format etc.)
+  useEffect(() => {
+    if (!user || !user.org_id) return;
+    fetch(`${window.API_BASE}/config/preferences`)
+      .then(r => r.ok ? r.json() : null)
+      .then(prefs => { if (prefs?.date_format) window.CANDID_DATE_FORMAT = prefs.date_format; })
       .catch(() => {});
   }, [user?.org_id]);
 
@@ -1211,6 +1221,7 @@ const App = () => {
             }} />}
             {route === "candidate" && candidateId && <window.CandidateScreen id={candidateId} onRoute={navigate} initialTab={liveReturnTab} onMount={() => setLiveReturnTab(null)} />}
             {route === "settings"     && <window.SettingsScreen user={user} onLocaleChange={setLocale} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />}
+            {route === "not-found"    && <window.NotFoundScreen onRoute={navigate} />}
           </div>
         </div>
 

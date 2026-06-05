@@ -35,8 +35,22 @@ These routes are unauthenticated and exposed to the internet when deployed:
 | `GET /organizations/invitations/accept?token=<token>` | Accept a team invitation (redirects to app) |
 | `GET /public/jobs` | Public job listings for an org (unauthenticated) |
 | `POST /public/applications` | Candidate applies to a job (unauthenticated) |
+| `GET /public/organizations/{slug}/jobs` | Portal API — job list + branding for a given org slug |
+| `POST /public/organizations/{slug}/jobs/{id}/apply` | Portal API — submit application for a specific job |
 
 All other routes require a valid JWT (`Authorization: Bearer <token>`).
+
+### Job portal page
+
+Each organisation has a public-facing job portal hosted at:
+
+```
+http://localhost:8080/index.html#portal/{slug}
+```
+
+Replace `{slug}` with the org's URL slug (chosen during organisation setup, visible in Settings → Team). The portal shows open positions with search and location filters, supports bookmarking, and lets candidates apply directly. It uses the org's branding colours and logo if configured.
+
+Example: `https://your-domain.com/index.html#portal/acme-corp`
 
 ---
 

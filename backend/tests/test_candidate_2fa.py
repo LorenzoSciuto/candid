@@ -12,7 +12,8 @@ from candid.config import Settings
 from candid.database import Database
 from candid.models import Candidate
 from candid.routers.public_applications import PublicApplicationsRouter
-from candid.services.email_service import EmailService
+from candid.services.email_service import EmailServiceFactory
+from candid.services.crypto import CryptoService
 from candid.services.otp_service import OtpService
 
 _TEST_CANDIDATE_EMAIL = "applicant@example.com"
@@ -27,8 +28,9 @@ def otp_service() -> OtpService:
 
 
 @pytest.fixture(scope="module")
-def email_service() -> EmailService:
-    return EmailService(None, 587, None, None, "noreply@test.candid", "http://localhost:8080")
+def email_factory(settings_2fa: Settings) -> EmailServiceFactory:
+    crypto = CryptoService(settings_2fa.fernet_key)
+    return EmailServiceFactory(crypto, settings_2fa.app_url)
 
 
 @pytest.fixture(scope="module")
@@ -57,7 +59,7 @@ def db_2fa() -> Database:
 def public_client(
     db_2fa: Database,
     otp_service: OtpService,
-    email_service: EmailService,
+    email_factory: EmailServiceFactory,
     settings_2fa: Settings,
 ) -> TestClient:
     @asynccontextmanager
@@ -69,7 +71,7 @@ def public_client(
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
     )
     application.include_router(
-        PublicApplicationsRouter(db_2fa, otp_service, email_service, settings_2fa).router
+        PublicApplicationsRouter(db_2fa, otp_service, email_factory, settings_2fa).router
     )
     return TestClient(application)
 
@@ -102,7 +104,7 @@ def seeded_candidate(db_2fa: Database) -> Candidate:
 # ── /request-otp tests ────────────────────────────────────────────────────────
 
 class TestRequestOtp:
-    def test_requestOtp_shouldReturn200_whenEmailMatchesCandidate(
+    def test_request_otp_should_return200_when_email_matches_candidate(
         self, public_client: TestClient, seeded_candidate: Candidate
     ) -> None:
         response = public_client.post(
@@ -113,7 +115,7 @@ class TestRequestOtp:
         assert response.json()["ok"] is True
         assert response.json()["expires_in_minutes"] == 10
 
-    def test_requestOtp_shouldStoreHashedOtp_whenCalled(
+    def test_request_otp_should_store_hashed_otp_when_called(
         self, public_client: TestClient, seeded_candidate: Candidate, db_2fa: Database
     ) -> None:
         public_client.post(
@@ -126,7 +128,7 @@ class TestRequestOtp:
         assert len(refreshed.otp_hash) == 64  # SHA-256 hex digest length
         assert refreshed.otp_expires_at is not None
 
-    def test_requestOtp_shouldReturn400_whenEmailDoesNotMatch(
+    def test_request_otp_should_return400_when_email_does_not_match(
         self, public_client: TestClient, seeded_candidate: Candidate
     ) -> None:
         response = public_client.post(
@@ -135,7 +137,7 @@ class TestRequestOtp:
         )
         assert response.status_code == 400
 
-    def test_requestOtp_shouldReturn404_whenCandidateNotFound(
+    def test_request_otp_should_return404_when_candidate_not_found(
         self, public_client: TestClient
     ) -> None:
         response = public_client.post(
@@ -163,7 +165,7 @@ class TestVerifyOtp:
             session.add(candidate_record)
             session.commit()
 
-    def test_verifyOtp_shouldReturnToken_whenOtpIsCorrectAndNotExpired(
+    def test_verify_otp_should_return_token_when_otp_is_correct_and_not_expired(
         self,
         public_client: TestClient,
         seeded_candidate: Candidate,
@@ -183,7 +185,7 @@ class TestVerifyOtp:
         assert "token" in data
         assert data["candidate_id"] == seeded_candidate.id
 
-    def test_verifyOtp_shouldReturn401_whenOtpIsWrong(
+    def test_verify_otp_should_return401_when_otp_is_wrong(
         self,
         public_client: TestClient,
         seeded_candidate: Candidate,
@@ -198,7 +200,7 @@ class TestVerifyOtp:
         )
         assert response.status_code == 401
 
-    def test_verifyOtp_shouldReturn410_whenOtpIsExpired(
+    def test_verify_otp_should_return410_when_otp_is_expired(
         self,
         public_client: TestClient,
         seeded_candidate: Candidate,
@@ -213,7 +215,7 @@ class TestVerifyOtp:
         )
         assert response.status_code == 410
 
-    def test_verifyOtp_shouldReturn400_whenNoOtpSet(
+    def test_verify_otp_should_return400_when_no_otp_set(
         self, public_client: TestClient, seeded_candidate: Candidate
     ) -> None:
         response = public_client.post(
@@ -222,7 +224,7 @@ class TestVerifyOtp:
         )
         assert response.status_code == 400
 
-    def test_verifyOtp_shouldClearOtpFields_whenSuccessful(
+    def test_verify_otp_should_clear_otp_fields_when_successful(
         self,
         public_client: TestClient,
         seeded_candidate: Candidate,
@@ -242,7 +244,7 @@ class TestVerifyOtp:
         assert refreshed.otp_hash is None
         assert refreshed.otp_expires_at is None
 
-    def test_verifyOtp_shouldUpdateStatusToNew_whenStatusWasPendingOtp(
+    def test_verify_otp_should_update_status_to_new_when_status_was_pending_otp(
         self,
         public_client: TestClient,
         seeded_candidate: Candidate,

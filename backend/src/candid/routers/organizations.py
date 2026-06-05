@@ -25,6 +25,7 @@ from candid.models import (
     User,
 )
 from candid.schemas import InviteRequest
+from candid.services.email_service import EmailServiceFactory
 from candid.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -38,12 +39,12 @@ class OrganizationsRouter:
     def __init__(
         self,
         db: Database,
-        email_service,
+        email_factory: EmailServiceFactory | None = None,
         settings: Settings | None = None,
         notification_service: NotificationService | None = None,
     ) -> None:
         self._db = db
-        self._email = email_service
+        self._email_factory = email_factory
         self._settings = settings or Settings()
         self._notification_service = notification_service or NotificationService()
         self.router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -195,12 +196,21 @@ class OrganizationsRouter:
         session.commit()
 
         try:
-            self._email.send_invitation(
-                to_email=body.email,
-                org_name=org.name,
-                inviter_name=inviter_name,
-                token=token,
-            )
+            email_svc = self._email_factory.from_session(session, ctx.org_id) if self._email_factory else None
+            if email_svc:
+                email_svc.send_invitation(
+                    to_email=body.email,
+                    org_name=org.name,
+                    inviter_name=inviter_name,
+                    token=token,
+                )
+            else:
+                logger.info(
+                    "SMTP not configured — invitation link for %s: %s/index.html#accept-invite?token=%s",
+                    body.email,
+                    self._settings.app_url,
+                    token,
+                )
         except Exception:
             logger.exception("Failed to send invitation email")
 

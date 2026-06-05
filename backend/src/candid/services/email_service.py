@@ -2,6 +2,11 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from sqlmodel import Session
+    from candid.services.crypto import CryptoService
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +22,7 @@ class EmailService:
 
     def send_email(self, to_email: str, subject: str, body: str) -> None:
         if not self._host:
-            raise RuntimeError("SMTP not configured — set SMTP_HOST in .env")
+            raise RuntimeError("SMTP not configured — set it in Settings → Email")
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = self._from
@@ -130,3 +135,80 @@ class EmailService:
   </div>
   <p style="color:#a8a29e;font-size:13px">This code expires in 10 minutes.<br>If you did not request this, you can safely ignore this email.</p>
 </body></html>"""
+
+
+class LoggingEmailService:
+    def __init__(
+        self,
+        email_service: EmailService,
+        session: "Session",
+        org_id: str,
+        candidate_id: Optional[str] = None,
+    ) -> None:
+        self._email_service = email_service
+        self._session = session
+        self._org_id = org_id
+        self._candidate_id = candidate_id
+
+    def send_email(self, to_email: str, subject: str, body: str) -> None:
+        self._email_service.send_email(to_email, subject, body)
+        self._log_sent(to_email, subject, body, "general")
+
+    def send_invitation(self, to_email: str, org_name: str, inviter_name: str, token: str) -> None:
+        self._email_service.send_invitation(to_email, org_name, inviter_name, token)
+        self._log_sent(to_email, f"You've been invited to join {org_name}", "", "invitation")
+
+    def send_otp_email(self, recipient_email: str, otp_code: str, job_title: str) -> None:
+        self._email_service.send_otp_email(recipient_email, otp_code, job_title)
+        self._log_sent(recipient_email, f"Your verification code for {job_title}", "", "otp")
+
+    def _log_sent(self, to_email: str, subject: str, body: str, email_type: str) -> None:
+        from candid.models import EmailLog
+        log_entry = EmailLog(
+            org_id=self._org_id,
+            direction="sent",
+            to_email=to_email,
+            from_email=self._email_service._from,
+            subject=subject,
+            body=body,
+            email_type=email_type,
+            candidate_id=self._candidate_id,
+        )
+        try:
+            self._session.add(log_entry)
+            self._session.commit()
+        except Exception:
+            logger.warning("Failed to log sent email", exc_info=True)
+            self._session.rollback()
+
+
+class EmailServiceFactory:
+    def __init__(self, crypto_service: "CryptoService", app_url: str) -> None:
+        self._crypto_service = crypto_service
+        self._app_url = app_url
+
+    def from_session(
+        self,
+        session: "Session",
+        org_id: str,
+        candidate_id: Optional[str] = None,
+    ) -> Optional[LoggingEmailService]:
+        from candid.models import OrgConfig
+        cfg = session.get(OrgConfig, org_id)
+        if not cfg or not cfg.smtp_host:
+            return None
+        password = None
+        if cfg.smtp_password_encrypted:
+            try:
+                password = self._crypto_service.decrypt(cfg.smtp_password_encrypted)
+            except Exception:
+                pass
+        email_service = EmailService(
+            smtp_host=cfg.smtp_host,
+            smtp_port=cfg.smtp_port,
+            smtp_user=cfg.smtp_user,
+            smtp_password=password,
+            smtp_from=cfg.smtp_from or cfg.smtp_user or "noreply@candid.app",
+            app_url=self._app_url,
+        )
+        return LoggingEmailService(email_service, session, org_id, candidate_id)

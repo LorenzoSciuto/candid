@@ -17,6 +17,7 @@ from candid.config import Settings
 from candid.database import Database
 from candid.dependencies import require_user
 from candid.routers.ai import AIRouter
+from candid.routers.emails import EmailsRouter
 from candid.routers.analysis import AnalysisRouter
 from candid.routers.auth import AuthRouter
 from candid.routers.branding import BrandingRouter
@@ -36,7 +37,7 @@ from candid.routers.roles import RolesRouter
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
-from candid.services.email_service import EmailService
+from candid.services.email_service import EmailServiceFactory
 from candid.services.notification_service import NotificationService
 from candid.services.otp_service import OtpService
 from candid.services.transcription_service import TranscriptionService
@@ -55,14 +56,7 @@ class Application:
             upload_dir=Path("uploads/audio"),
             ai_engine_factory=self._ai_factory,
         )
-        self._email = EmailService(
-            smtp_host=self._settings.smtp_host,
-            smtp_port=self._settings.smtp_port,
-            smtp_user=self._settings.smtp_user,
-            smtp_password=self._settings.smtp_password,
-            smtp_from=self._settings.smtp_from,
-            app_url=self._settings.app_url,
-        )
+        self._email_factory = EmailServiceFactory(self._crypto, self._settings.app_url)
 
     def create(self) -> FastAPI:
         @asynccontextmanager
@@ -152,11 +146,11 @@ class Application:
         # Organizations: individual endpoints declare their own require_user;
         # accept_invitation is intentionally public (invitation token is the proof)
         fastapi_app.include_router(
-            OrganizationsRouter(self._db, self._email, self._settings, self._notification_service).router
+            OrganizationsRouter(self._db, self._email_factory, self._settings, self._notification_service).router
         )
         # Public candidate application OTP flow — unauthenticated
         fastapi_app.include_router(
-            PublicApplicationsRouter(self._db, self._otp, self._email, self._settings).router
+            PublicApplicationsRouter(self._db, self._otp, self._email_factory, self._settings).router
         )
         # Branding: contains both public (/public/...) and auth-protected endpoints;
         # mounted without a global dependency so the public GET remains unauthenticated
@@ -164,9 +158,10 @@ class Application:
 
         auth_dep = [Depends(require_user)]
         for router in [
-            AIRouter(self._db, self._ai_factory, self._email).router,
-            CandidatesRouter(self._db, self._notification_service, self._ai_factory, self._email, self._crypto).router,
+            AIRouter(self._db, self._ai_factory, self._email_factory).router,
+            CandidatesRouter(self._db, self._notification_service, self._ai_factory, self._email_factory).router,
             NotificationsRouter(self._db).router,
+            EmailsRouter(self._db).router,
             AnalysisRouter(self._db, self._ai_factory, self._extractor).router,
             InterviewsRouter(self._db, self._ai_factory, self._transcription_service).router,
             EvaluationsRouter(self._db).router,

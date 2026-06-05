@@ -13,7 +13,7 @@ from candid.dependencies import UserCtx, require_org, require_user
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
-from candid.services.email_service import EmailService
+from candid.services.email_service import EmailServiceFactory
 from candid.services.notification_service import NotificationService
 from candid.services.transcription_service import TranscriptionService
 
@@ -65,8 +65,8 @@ def extractor() -> CVExtractor:
 
 
 @pytest.fixture(scope="session")
-def email_service() -> EmailService:
-    return EmailService(None, 587, None, None, "noreply@test.candid", "http://localhost:8080")
+def email_factory(crypto: CryptoService, settings: Settings) -> EmailServiceFactory:
+    return EmailServiceFactory(crypto, settings.app_url)
 
 
 @pytest.fixture(scope="session")
@@ -87,7 +87,7 @@ def client(
     crypto: CryptoService,
     ai_factory: AIEngineFactory,
     extractor: CVExtractor,
-    email_service: EmailService,
+    email_factory: EmailServiceFactory,
     notification_service: NotificationService,
     transcription_service: TranscriptionService,
 ) -> TestClient:
@@ -95,6 +95,7 @@ def client(
     from candid.routers.analysis import AnalysisRouter
     from candid.routers.candidates import CandidatesRouter
     from candid.routers.config import ConfigRouter
+    from candid.routers.emails import EmailsRouter
     from candid.routers.employees import EmployeesRouter
     from candid.routers.evaluations import EvaluationsRouter
     from candid.routers.interviews import InterviewsRouter
@@ -117,7 +118,7 @@ def client(
     app.dependency_overrides[require_org] = lambda: _TEST_USER
 
     for router in [
-        CandidatesRouter(db, notification_service, ai_factory, email_service).router,
+        CandidatesRouter(db, notification_service, ai_factory, email_factory).router,
         AnalysisRouter(db, ai_factory, extractor).router,
         InterviewsRouter(db, ai_factory, transcription_service).router,
         EvaluationsRouter(db).router,
@@ -128,8 +129,9 @@ def client(
         PerformanceReviewsRouter(db, ai_factory).router,
         JobDescriptionsRouter(db, ai_factory).router,
         AIRouter(db, ai_factory).router,
-        OrganizationsRouter(db, email_service, settings, notification_service).router,
+        OrganizationsRouter(db, email_factory, settings, notification_service).router,
         NotificationsRouter(db).router,
+        EmailsRouter(db).router,
     ]:
         app.include_router(router)
 
@@ -139,7 +141,7 @@ def client(
 @pytest.fixture(autouse=True)
 def clean_tables(db: Database) -> None:
     from candid.models import (
-        Candidate, Employee, Evaluation, Interview, JobDescription,
+        Candidate, EmailLog, Employee, Evaluation, Interview, JobDescription,
         Membership, Notification, OrgApiKey, OrgConfig, Organization, PerformanceReview,
         Role, User, Invitation,
     )
@@ -147,7 +149,7 @@ def clean_tables(db: Database) -> None:
 
     with Session(db._engine) as session:
         for model in (
-            Notification,
+            EmailLog, Notification,
             Invitation, Membership,
             Evaluation, Interview, PerformanceReview, JobDescription, Employee, Candidate,
             OrgApiKey, OrgConfig, Role, Organization, User,

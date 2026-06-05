@@ -10,11 +10,11 @@ from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org
-from candid.models import Candidate, Evaluation, Interview, JobDescription, OrgConfig
+from candid.models import Candidate, Evaluation, Interview, JobDescription
 from candid.routers.config import ConfigRouter
 from candid.schemas import CandidateCreate, CandidateUpdate
 from candid.services.ai_engine import AIEngineFactory
-from candid.services.email_service import EmailService
+from candid.services.email_service import EmailServiceFactory
 from candid.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -47,14 +47,12 @@ class CandidatesRouter:
         db: Database,
         notification_service: NotificationService | None = None,
         ai_engine_factory: Optional[AIEngineFactory] = None,
-        email_service: Optional[EmailService] = None,
-        crypto_service=None,
+        email_factory: Optional[EmailServiceFactory] = None,
     ) -> None:
         self._db = db
         self._notification_service = notification_service or NotificationService()
         self._ai_factory = ai_engine_factory
-        self._fallback_email = email_service
-        self._crypto = crypto_service
+        self._email_factory = email_factory
         self.router = APIRouter(prefix="/candidates", tags=["candidates"])
         self._register()
 
@@ -435,8 +433,8 @@ class CandidatesRouter:
     ) -> bool:
         if not body.send_email or not candidate.email:
             return False
-        email_svc = self._build_email_service(session, org_id)
-        if not email_svc or not email_svc.is_configured():
+        email_svc = self._email_factory.from_session(session, org_id, candidate_id=candidate.id) if self._email_factory else None
+        if not email_svc:
             return False
         try:
             email_svc.send_email(candidate.email, body.subject, body.body)
@@ -444,25 +442,6 @@ class CandidatesRouter:
         except Exception:
             logger.exception("Failed to send rejection email to %s", candidate.email)
             return False
-
-    def _build_email_service(self, session: Session, org_id: str) -> Optional[EmailService]:
-        cfg = session.get(OrgConfig, org_id)
-        if cfg and cfg.smtp_host:
-            password = None
-            if cfg.smtp_password_encrypted and self._crypto:
-                try:
-                    password = self._crypto.decrypt(cfg.smtp_password_encrypted)
-                except Exception:
-                    pass
-            return EmailService(
-                smtp_host=cfg.smtp_host,
-                smtp_port=cfg.smtp_port,
-                smtp_user=cfg.smtp_user,
-                smtp_password=password,
-                smtp_from=cfg.smtp_from or cfg.smtp_user or "noreply@candid.app",
-                app_url="",
-            )
-        return self._fallback_email
 
     @staticmethod
     def _fetch(session, org_id, candidate_id) -> Candidate:

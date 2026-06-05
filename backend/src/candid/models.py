@@ -203,6 +203,20 @@ class Notification(SQLModel, table=True):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class EmailLog(SQLModel, table=True):
+    __tablename__ = "email_log"
+    id: str = Field(default_factory=lambda: _uid("em"), primary_key=True)
+    org_id: str = Field(index=True)
+    direction: str                           # "sent" | "received"
+    to_email: Optional[str] = None
+    from_email: Optional[str] = None
+    subject: str
+    body: str = ""
+    email_type: str = "general"              # "rejection" | "invitation" | "otp" | "general" | "manual"
+    candidate_id: Optional[str] = Field(None, index=True)
+    sent_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class PerformanceReview(SQLModel, table=True):
     __tablename__ = "performance_review"
 

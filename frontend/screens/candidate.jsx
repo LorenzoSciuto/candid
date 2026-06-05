@@ -621,7 +621,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
       {tab === "interviews"  && <InterviewsTab c={c} onRoute={onRoute} onRefresh={refreshCandidate} t={t} />}
       {tab === "evaluation"  && <EvaluationTab c={c} onSaved={refreshCandidate} t={t} />}
       {tab === "activity"    && <ActivityTab c={c} />}
-      {tab === "emails"      && <EmailsTab candidateId={c.id} candidateEmail={c.email} />}
+      {tab === "emails"      && <EmailsTab candidateId={c.id} />}
 
       {scheduleOpen && (
         <window.ScheduleModal
@@ -1610,92 +1610,28 @@ const _relativeTimeEmail = (iso) => {
   return `${days} days ago`;
 };
 
-const LogReceivedEmailModal = ({ candidateId, candidateEmail, onClose, onSaved }) => {
-  const [fromEmail, setFromEmail] = React.useState(candidateEmail || "");
-  const [subject, setSubject]     = React.useState("");
-  const [body, setBody]           = React.useState("");
-  const [saving, setSaving]       = React.useState(false);
-  const [error, setError]         = React.useState(null);
-
-  const handleSave = () => {
-    if (!fromEmail.trim() || !subject.trim()) return;
-    setSaving(true); setError(null);
-    fetch(`${window.API_BASE}/emails/received`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from_email: fromEmail.trim(), subject: subject.trim(), body: body.trim(), candidate_id: candidateId }),
-    })
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(() => { onSaved(); onClose(); })
-      .catch(err => setError(err.message))
-      .finally(() => setSaving(false));
-  };
-
-  return (
-    <Modal title="Log received email" onClose={onClose}>
-      <div className="col gap-12" style={{ padding: "0 0 4px" }}>
-        <label className="col gap-4">
-          <span className="text-13 text-secondary">From *</span>
-          <input className="input" placeholder="sender@example.com" value={fromEmail} onChange={e => setFromEmail(e.target.value)} />
-        </label>
-        <label className="col gap-4">
-          <span className="text-13 text-secondary">Subject *</span>
-          <input className="input" placeholder="Email subject" value={subject} onChange={e => setSubject(e.target.value)} />
-        </label>
-        <label className="col gap-4">
-          <span className="text-13 text-secondary">Body</span>
-          <textarea className="input" rows={4} placeholder="Email content…" style={{ resize: "vertical" }} value={body} onChange={e => setBody(e.target.value)} />
-        </label>
-        {error && <span className="text-13" style={{ color: "var(--error)" }}>{error}</span>}
-        <div className="row gap-8" style={{ justifyContent: "flex-end", marginTop: 4 }}>
-          <Btn onClick={onClose}>Cancel</Btn>
-          <Btn kind="primary" onClick={handleSave} disabled={saving || !fromEmail.trim() || !subject.trim()}>
-            {saving ? "Saving…" : "Log email"}
-          </Btn>
-        </div>
-      </div>
-    </Modal>
-  );
-};
-
-const EmailsTab = ({ candidateId, candidateEmail }) => {
-  const [emails, setEmails]         = React.useState([]);
-  const [counts, setCounts]         = React.useState({ sent: 0, received: 0 });
-  const [loading, setLoading]       = React.useState(true);
-  const [error, setError]           = React.useState(null);
-  const [direction, setDirection]   = React.useState("all");
-  const [showModal, setShowModal]   = React.useState(false);
+const EmailsTab = ({ candidateId }) => {
+  const [emails, setEmails]   = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError]     = React.useState(null);
 
   const load = React.useCallback(() => {
     setLoading(true); setError(null);
-    const query = direction !== "all"
-      ? `?candidate_id=${candidateId}&direction=${direction}`
-      : `?candidate_id=${candidateId}`;
-    fetch(`${window.API_BASE}/emails${query}`)
+    fetch(`${window.API_BASE}/emails?candidate_id=${candidateId}&direction=sent`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(d => {
-        setEmails(d.emails || []);
-        setCounts({ sent: d.sent_count || 0, received: d.received_count || 0 });
-      })
+      .then(d => setEmails(d.emails || []))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [candidateId, direction]);
+  }, [candidateId]);
 
   React.useEffect(() => { load(); }, [load]);
 
   return (
     <div>
-      <div className="row gap-8" style={{ marginBottom: 16, justifyContent: "space-between" }}>
+      <div style={{ marginBottom: 16 }}>
         <span className="text-13 text-secondary">
-          {loading ? "Loading…" : error ? `Error: ${error}` : `${counts.sent} sent · ${counts.received} received`}
+          {loading ? "Loading…" : error ? `Error: ${error}` : `${emails.length} emails sent`}
         </span>
-        <div className="row gap-8">
-          <SegControl
-            value={direction} onChange={setDirection}
-            options={[{ value: "all", label: "All" }, { value: "sent", label: "Sent" }, { value: "received", label: "Received" }]}
-          />
-          <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setShowModal(true)}>Log received</Btn>
-        </div>
       </div>
 
       {loading && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--ink-muted)", fontSize: 13 }}>Loading…</div>}
@@ -1704,46 +1640,30 @@ const EmailsTab = ({ candidateId, candidateEmail }) => {
       {!loading && !error && emails.length === 0 && (
         <div className="card col" style={{ padding: 48, alignItems: "center", gap: 12 }}>
           <Icons.Mail size={28} style={{ color: "var(--ink-muted)" }} />
-          <span className="text-13 text-secondary">No emails yet for this candidate.</span>
-          <Btn kind="primary" onClick={() => setShowModal(true)}>Log received email</Btn>
+          <span className="text-13 text-secondary">No emails sent to this candidate yet.</span>
         </div>
       )}
 
       {!loading && !error && emails.length > 0 && (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          {emails.map((email, index) => {
-            const isSent = email.direction === "sent";
-            const counterparty = isSent ? email.to_email : email.from_email;
-            return (
-              <div key={email.id} className="row gap-14" style={{ padding: "14px 18px", borderBottom: index === emails.length - 1 ? 0 : "1px solid var(--border-soft)", alignItems: "flex-start" }}>
-                <span style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, background: isSent ? "var(--bg-sunken)" : "var(--ai-soft)", color: isSent ? "var(--ink-secondary)" : "var(--ai)" }}>
-                  {isSent ? <Icons.Upload size={14} /> : <Icons.Mail size={14} />}
-                </span>
-                <div className="col" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="row gap-8" style={{ marginBottom: 3, alignItems: "center" }}>
-                    <span className="text-13 weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {email.subject || "(no subject)"}
-                    </span>
-                    <Badge kind="neutral" style={{ marginLeft: "auto", flexShrink: 0 }}>{email.email_type}</Badge>
-                  </div>
-                  <span className="text-12 text-secondary" style={{ marginBottom: 2 }}>
-                    {isSent ? "To: " : "From: "}{counterparty || "—"}
+          {emails.map((email, index) => (
+            <div key={email.id} className="row gap-14" style={{ padding: "14px 18px", borderBottom: index === emails.length - 1 ? 0 : "1px solid var(--border-soft)", alignItems: "flex-start" }}>
+              <span style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, background: "var(--bg-sunken)", color: "var(--ink-secondary)" }}>
+                <Icons.Mail size={14} />
+              </span>
+              <div className="col" style={{ flex: 1, minWidth: 0 }}>
+                <div className="row gap-8" style={{ marginBottom: 3, alignItems: "center" }}>
+                  <span className="text-13 weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {email.subject || "(no subject)"}
                   </span>
-                  <span className="text-12 text-muted">{_relativeTimeEmail(email.sent_at)}</span>
+                  <Badge kind={email.email_type === "rejection" ? "error" : "neutral"} style={{ marginLeft: "auto", flexShrink: 0 }}>{email.email_type}</Badge>
                 </div>
+                <span className="text-12 text-secondary" style={{ marginBottom: 2 }}>To: {email.to_email || "—"}</span>
+                <span className="text-12 text-muted">{_relativeTimeEmail(email.sent_at)}</span>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
-      )}
-
-      {showModal && (
-        <LogReceivedEmailModal
-          candidateId={candidateId}
-          candidateEmail={candidateEmail}
-          onClose={() => setShowModal(false)}
-          onSaved={load}
-        />
       )}
     </div>
   );

@@ -8,7 +8,7 @@ from candid.database import Database
 from candid.dependencies import UserCtx, require_org
 from candid.prompts import Prompts
 from candid.services.ai_engine import AIEngineFactory
-from candid.services.email_service import EmailService
+from candid.services.email_service import EmailServiceFactory
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +29,11 @@ class SendEmailRequest(BaseModel):
 
 
 class AIRouter:
-    def __init__(self, db: Database, ai_factory: AIEngineFactory, email_service: EmailService | None = None) -> None:
+    def __init__(self, db: Database, ai_factory: AIEngineFactory, email_factory: EmailServiceFactory | None = None) -> None:
         self.router = APIRouter(prefix="/ai", tags=["ai"])
         self._db = db
         self._ai_factory = ai_factory
-        self._email = email_service
+        self._email_factory = email_factory
         self._register()
 
     def _register(self) -> None:
@@ -50,9 +50,10 @@ class AIRouter:
         @self.router.post("/send-email")
         def send_email(
             body: SendEmailRequest,
+            session: Session = Depends(db.get_session),
             user: UserCtx = Depends(require_org),
         ):
-            return self._send_email(body)
+            return self._send_email(body, session, user.org_id)
 
     def _rewrite(self, body: RewriteRequest, session: Session, org_id: str) -> dict:
         if not body.text.strip():
@@ -76,13 +77,14 @@ class AIRouter:
             logger.exception("AI rewrite failed")
             raise HTTPException(status_code=500, detail=str(e))
 
-    def _send_email(self, body: SendEmailRequest) -> dict:
+    def _send_email(self, body: SendEmailRequest, session: Session, org_id: str) -> dict:
         if not body.to or not body.subject or not body.body:
             raise HTTPException(400, "to, subject, and body are required")
-        if not self._email or not self._email.is_configured():
-            raise HTTPException(503, "SMTP not configured — set SMTP_HOST in .env")
+        email_svc = self._email_factory.from_session(session, org_id) if self._email_factory else None
+        if not email_svc:
+            raise HTTPException(503, "SMTP not configured — configure it in Settings → Email")
         try:
-            self._email.send_email(body.to, body.subject, body.body)
+            email_svc.send_email(body.to, body.subject, body.body)
             return {"ok": True}
         except Exception as exc:
             logger.exception("Failed to send email to %s", body.to)

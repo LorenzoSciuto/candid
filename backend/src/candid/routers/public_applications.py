@@ -1,14 +1,17 @@
+import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
+logger = logging.getLogger(__name__)
+
 from candid.config import Settings
 from candid.database import Database
 from candid.models import Candidate
 from candid.services.auth_service import create_token
-from candid.services.email_service import EmailService
+from candid.services.email_service import EmailServiceFactory
 from candid.services.otp_service import OtpService
 
 _TOKEN_TTL_HOURS = 24
@@ -29,12 +32,12 @@ class PublicApplicationsRouter:
         self,
         database: Database,
         otp_service: OtpService,
-        email_service: EmailService,
+        email_factory: EmailServiceFactory | None,
         settings: Settings,
     ) -> None:
         self._database = database
         self._otp_service = otp_service
-        self._email_service = email_service
+        self._email_factory = email_factory
         self._settings = settings
         self.router = APIRouter(prefix="/public/applications", tags=["public-applications"])
         self._register()
@@ -63,7 +66,11 @@ class PublicApplicationsRouter:
         self._assert_email_matches(candidate_record, email)
         otp_code = self._generate_and_store_otp(session, candidate_record)
         job_title = candidate_record.job_title or "the position"
-        self._email_service.send_otp_email(email, otp_code, job_title)
+        email_svc = self._email_factory.from_session(session, candidate_record.org_id, candidate_id=candidate_record.id) if self._email_factory else None
+        if email_svc:
+            email_svc.send_otp_email(email, otp_code, job_title)
+        else:
+            logger.info("SMTP not configured — OTP for %s: %s", email, otp_code)
         return {"ok": True, "expires_in_minutes": OtpService._OTP_TTL_MINUTES}
 
     def _verify_otp(self, session: Session, candidate_id: str, otp_code: str) -> dict:

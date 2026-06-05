@@ -5,8 +5,6 @@ const mapCandidate = (c) => ({
   role: c.current_role || c.job_title, experience: c.years_of_experience,
   location: c.location, status: c.status, source: c.source,
   appliedAt: c.applied_at, score: c.score,
-  hasAI: c.has_ai || false, aiScore: c.ai_score ?? null,
-  evalAvg: c.eval_avg ?? null,
   jdTitle: c.jd_title ?? null, jdId: c.job_description_id ?? null,
 });
 
@@ -23,7 +21,7 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
   const [role, setRole] = useState("");
   const [location, setLocation] = useState("");
   const [experience, setExperience] = useState("");
-  const [source, setSource] = useState("");
+  const [source, setSource] = useState("CV Upload");
   const [status, setStatus] = useState("new");
   const [jdId, setJdId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -244,6 +242,68 @@ const HireModal = ({ candidate, onClose, onHired }) => {
   );
 };
 
+// ── Quick Assign Job Modal ────────────────────────────────────────────────────
+
+const QuickAssignJobModal = ({ candidateId, onClose, onAssigned }) => {
+  const t = window.useT();
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/job-descriptions`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { setJobs(data); setLoadingJobs(false); })
+      .catch(() => setLoadingJobs(false));
+  }, []);
+
+  const assign = async () => {
+    if (!selectedJobId) return;
+    setSaving(true);
+    try {
+      await fetch(`${window.API_BASE}/candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_description_id: selectedJobId }),
+      });
+      onAssigned(candidateId);
+    } catch { /* offline */ }
+    setSaving(false);
+  };
+
+  return (
+    <Modal open title={t('assignJob.title')} onClose={onClose} width={480}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn kind="primary" onClick={assign} disabled={saving || !selectedJobId || loadingJobs}>
+            {saving ? t('assignJob.saving') : t('assignJob.confirm')}
+          </Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        {loadingJobs ? (
+          <span className="text-13 text-muted">{t('assignJob.loading')}</span>
+        ) : jobs.length === 0 ? (
+          <span className="text-13 text-muted">{t('assignJob.noJobs')}</span>
+        ) : (
+          <div>
+            <label className="label">Position</label>
+            <select className="select" value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)}>
+              <option value="">{t('assignJob.selectPh')}</option>
+              {jobs.map(j => (
+                <option key={j.id} value={j.id}>{j.title}{j.department ? ` · ${j.department}` : ""}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <p className="text-12 text-muted" style={{ margin: 0 }}>{t('assignJob.hint')}</p>
+      </div>
+    </Modal>
+  );
+};
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 const CandidatesScreen = ({ onOpenCandidate }) => {
@@ -256,11 +316,13 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
   const [exp, setExp] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [view, setView] = useState("table");
-  const [menuOpen, setMenuOpen] = useState(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const [createOpen, setCreateOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [jdFilter, setJdFilter] = useState("all");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [assignJobTarget, setAssignJobTarget] = useState(null);
   const [hireTarget, setHireTarget] = useState(null);
 
   useEffect(() => {
@@ -269,26 +331,12 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
     return () => window.removeEventListener("candid:stages", onStages);
   }, []);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = () => setMenuOpen(null);
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [menuOpen]);
-
   const handleCreated = (raw) => {
     const mapped = mapCandidate(raw);
     setCandidates(prev => [mapped, ...prev]);
     setCreateOpen(false);
     window.refreshCounts?.();
     if (raw.id && !raw.id.startsWith("local-")) onOpenCandidate(raw.id);
-  };
-
-  const openMenu = (e, id) => {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-    setMenuOpen(menuOpen === id ? null : id);
   };
 
   useEffect(() => {
@@ -304,7 +352,6 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "archived" }),
     }).catch(() => {});
-    setMenuOpen(null);
   };
 
   const restoreCandidate = (id) => {
@@ -313,13 +360,11 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "new" }),
     }).catch(() => {});
-    setMenuOpen(null);
   };
 
   const promptDelete = (id) => {
     const c = candidates.find(x => x.id === id);
     setDeleteTarget({ id, name: c ? `${c.first} ${c.last}` : "this candidate" });
-    setMenuOpen(null);
   };
 
   const confirmDelete = () => {
@@ -330,22 +375,40 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
     setDeleteTarget(null);
   };
 
+  const promptReject = (id) => {
+    const c = candidates.find(x => x.id === id);
+    setRejectTarget({ id, name: c ? `${c.first} ${c.last}` : "this candidate" });
+  };
+
+  const confirmReject = () => {
+    if (!rejectTarget) return;
+    setCandidates(prev => prev.map(c => c.id === rejectTarget.id ? { ...c, status: "Rejected" } : c));
+    fetch(`${window.API_BASE}/candidates/${rejectTarget.id}/reject`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: "", body: "", send_email: false }),
+    }).catch(() => {});
+    setRejectTarget(null);
+  };
+
   const promptHire = (id) => {
     const c = candidates.find(x => x.id === id);
     if (c) setHireTarget(c);
-    setMenuOpen(null);
   };
 
   const onHired = (id) => {
-    setCandidates(prev => prev.filter(c => c.id !== id));
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, status: "hired" } : c));
   };
+
+  const TERMINAL_STATUSES_SET = new Set(["hired", "Rejected"]);
 
   const rows = useMemo(() => {
     let r = candidates.filter(c => {
       if (showArchived) {
         if (c.status !== "archived") return false;
+      } else if (showTerminal) {
+        if (!TERMINAL_STATUSES_SET.has(c.status)) return false;
       } else {
-        if (c.status === "archived" || c.status === "hired") return false;
+        if (c.status === "archived" || TERMINAL_STATUSES_SET.has(c.status)) return false;
         if (status !== "all" && c.status !== status) return false;
       }
       if (q && !((c.first + " " + c.last + " " + (c.email || "")).toLowerCase().includes(q.toLowerCase()))) return false;
@@ -353,6 +416,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
       if (exp === "junior" && (c.experience || 0) >= 5) return false;
       if (exp === "mid" && ((c.experience || 0) < 5 || (c.experience || 0) >= 8)) return false;
       if (exp === "senior" && (c.experience || 0) < 8) return false;
+      if (jdFilter !== "all" && c.jdId !== jdFilter) return false;
       return true;
     });
     return r.slice().sort((a, b) => {
@@ -362,17 +426,20 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
       if (sortBy === "exp") return (b.experience || 0) - (a.experience || 0);
       return 0;
     });
-  }, [candidates, q, status, source, exp, sortBy, showArchived]);
+  }, [candidates, q, status, source, exp, sortBy, showArchived, showTerminal, jdFilter]);
 
   const archivedCount = useMemo(() => candidates.filter(c => c.status === "archived").length, [candidates]);
-  const activeFilters = (!showArchived && status !== "all" ? 1 : 0) + (source !== "all" ? 1 : 0) + (exp !== "all" ? 1 : 0) + (q ? 1 : 0);
+  const terminalCount = useMemo(() => candidates.filter(c => TERMINAL_STATUSES_SET.has(c.status)).length, [candidates]);
+  const activeFilters = (!showArchived && !showTerminal && status !== "all" ? 1 : 0) + (source !== "all" ? 1 : 0) + (exp !== "all" ? 1 : 0) + (jdFilter !== "all" ? 1 : 0) + (q ? 1 : 0);
 
   return (
     <div className="page page-wide">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
           <h1 className="page-h1">{t('candidates.title')}</h1>
-          <div className="page-sub">{rows.length} {showArchived ? "archived" : `of ${candidates.filter(c => c.status !== "archived" && c.status !== "hired").length} active`} candidates</div>
+          <div className="page-sub">
+            {showArchived ? `${rows.length} archived` : showTerminal ? `${rows.length} hired / rejected` : `${rows.length} of ${candidates.filter(c => c.status !== "archived" && !TERMINAL_STATUSES_SET.has(c.status)).length} active`} candidates
+          </div>
         </div>
         <div className="row gap-8">
           <SegControl value={view} onChange={setView} options={[{ value: "table", label: "Table" }, { value: "grid", label: "Grid" }]} />
@@ -389,7 +456,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
 
         {/* Archive toggle */}
         <button
-          onClick={() => { setShowArchived(a => !a); setStatus("all"); }}
+          onClick={() => { setShowArchived(a => !a); setShowTerminal(false); setStatus("all"); }}
           style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "5px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer",
@@ -402,10 +469,26 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
           Archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
         </button>
 
-        {!showArchived && (
+        {/* Hired / Rejected toggle */}
+        <button
+          onClick={() => { setShowTerminal(t => !t); setShowArchived(false); setStatus("all"); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "5px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer",
+            border: `1px solid ${showTerminal ? "var(--ink-secondary)" : "var(--border)"}`,
+            background: showTerminal ? "var(--bg-sunken)" : "transparent",
+            color: showTerminal ? "var(--ink)" : "var(--ink-muted)",
+            fontWeight: showTerminal ? 500 : 400,
+          }}>
+          <Icons.UserCheck size={13} />
+          Hired / Rejected{terminalCount > 0 ? ` (${terminalCount})` : ""}
+        </button>
+
+        {!showArchived && !showTerminal && (
           <FilterPill label={t('candidates.stage')} value={status} onChange={setStatus} options={[{ id: "all", label: t('candidates.allStages') }, ...stages]} />
         )}
         <FilterPill label={t('candidates.source')} value={source} onChange={setSource} options={[{ id: "all", label: t('candidates.anySource') }, ...(window.CANDID_DATA.SOURCES || []).map(s => ({ id: s, label: s }))]} />
+        <FilterPill label={t('candidates.col.position')} value={jdFilter} onChange={setJdFilter} options={[{ id: "all", label: t('candidates.anyPosition') }, ...(window.CANDID_DATA.JDS || []).map(j => ({ id: j.id, label: j.title }))]} />
         <FilterPill label={t('candidates.experience')} value={exp} onChange={setExp} options={[
           { id: "all", label: t('candidates.exp.any') },
           { id: "junior", label: t('candidates.exp.junior') },
@@ -421,7 +504,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
           { id: "exp", label: t('candidates.sort.exp') },
         ]} />
         {activeFilters > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={() => { setStatus("all"); setSource("all"); setExp("all"); setQ(""); }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setStatus("all"); setSource("all"); setExp("all"); setJdFilter("all"); setQ(""); }}>
             {t('common.clear')} ({activeFilters})
           </button>
         )}
@@ -429,44 +512,13 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
 
       {view === "table"
         ? <CandidateTable rows={rows} onOpen={onOpenCandidate} t={t}
-            menuOpen={menuOpen} openMenu={openMenu}
             showArchived={showArchived}
-            onArchive={archiveCandidate} onRestore={restoreCandidate} onDelete={promptDelete} />
+            onArchive={archiveCandidate} onRestore={restoreCandidate}
+            onDelete={promptDelete} onReject={promptReject}
+            onHire={promptHire} onAssignJob={(id) => setAssignJobTarget(id)} />
         : <CandidateGrid rows={rows} onOpen={onOpenCandidate} />}
 
       {createOpen && <NewCandidateModal onClose={() => setCreateOpen(false)} onCreated={handleCreated} />}
-
-      {/* Dropdown rendered at page root — escapes table overflow:hidden */}
-      {menuOpen && (() => {
-        const c = candidates.find(r => r.id === menuOpen);
-        if (!c) return null;
-        const isArchived = c.status === "archived";
-        return (
-          <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", top: menuPos.top, right: menuPos.right, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", padding: 4, minWidth: 170, zIndex: 200 }}>
-            {!isArchived && (
-              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
-                onClick={() => promptHire(c.id)}>
-                <Icons.UserCheck size={13} /> Hire → Employees
-              </button>
-            )}
-            {isArchived ? (
-              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
-                onClick={() => restoreCandidate(c.id)}>
-                <Icons.RotateCcw size={13} /> Restore
-              </button>
-            ) : (
-              <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start" }}
-                onClick={() => archiveCandidate(c.id)}>
-                <Icons.Archive size={13} /> Archive
-              </button>
-            )}
-            <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "flex-start", color: "var(--danger)" }}
-              onClick={() => promptDelete(c.id)}>
-              <Icons.X size={13} /> {t('common.delete')}
-            </button>
-          </div>
-        );
-      })()}
 
       {deleteTarget && (
         <ConfirmDialog
@@ -475,6 +527,30 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
           confirmLabel={t('candidates.deleteConfirm')}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {rejectTarget && (
+        <ConfirmDialog
+          title={t('candidates.reject.title')}
+          message={`${t('candidates.reject.messagePre')} ${rejectTarget.name} ${t('candidates.reject.messagePost')}`}
+          confirmLabel={t('candidates.reject.confirm')}
+          onConfirm={confirmReject}
+          onCancel={() => setRejectTarget(null)}
+        />
+      )}
+
+      {assignJobTarget && (
+        <QuickAssignJobModal
+          candidateId={assignJobTarget}
+          onClose={() => setAssignJobTarget(null)}
+          onAssigned={(id) => {
+            setAssignJobTarget(null);
+            fetch(`${window.API_BASE}/candidates/${id}`)
+              .then(r => r.ok ? r.json() : null)
+              .then(d => { if (d) setCandidates(prev => prev.map(c => c.id === id ? mapCandidate(d) : c)); })
+              .catch(() => {});
+          }}
         />
       )}
 
@@ -519,46 +595,71 @@ const FilterPill = ({ label, value, onChange, options }) => {
   );
 };
 
-const CandidateTable = ({ rows, onOpen, t, menuOpen, openMenu, showArchived, onArchive, onRestore, onDelete }) => (
+const CANDIDATE_TABLE_TERMINAL = new Set(["Rejected", "hired"]);
+
+const CandidateTable = ({ rows, onOpen, t, showArchived, onArchive, onRestore, onDelete, onReject, onHire, onAssignJob }) => (
   <div className="card" style={{ overflow: "hidden" }}>
     <div style={{ overflowX: "auto" }}>
     <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: 13.5 }}>
       <thead>
         <tr style={{ background: "var(--bg-sunken)", borderBottom: "1px solid var(--border)" }}>
           <Th>{t('candidates.col.candidate')}</Th><Th>{t('candidates.col.stage')}</Th>
+          <Th>{t('candidates.col.position')}</Th>
           <Th>{t('candidates.col.source')}</Th><Th align="right">{t('candidates.col.exp')}</Th>
-          <Th align="right">{t('candidates.col.aiScore')}</Th><Th align="right">{t('candidates.col.evalAvg')}</Th><Th>{t('candidates.col.applied')}</Th><Th width={40}></Th>
+          <Th>{t('candidates.col.applied')}</Th><Th width={160}></Th>
         </tr>
       </thead>
       <tbody>
-        {rows.map(c => (
-          <tr key={c.id} onClick={() => onOpen(c.id)}
-            style={{ borderBottom: "1px solid var(--border-soft)", cursor: "pointer", opacity: showArchived ? 0.75 : 1 }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-hover)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-            <Td><div className="row gap-8"><Avatar name={`${c.first} ${c.last}`} /><div className="col"><span className="weight-500">{c.first} {c.last}</span><span className="text-12 text-muted">{c.email || "—"}</span></div></div></Td>
-            <Td><StatusBadge status={c.status} /></Td>
-            <Td><span className="text-13 text-secondary">{c.source || "—"}</span></Td>
-            <Td align="right"><span className="text-mono text-12">{c.experience != null ? `${c.experience}y` : "—"}</span></Td>
-            <Td align="right">
-              {c.hasAI && c.aiScore != null
-                ? <span className="row gap-4" style={{ justifyContent: "flex-end", alignItems: "center" }}><span className="badge ai" style={{ fontSize: 9, padding: "1px 4px" }}>AI</span><span className="text-mono text-13 weight-500">{Number(c.aiScore).toFixed(1)}</span></span>
-                : c.hasAI ? <span className="badge ai" style={{ fontSize: 9 }}><span className="dot" /> done</span>
-                : <span className="text-muted text-12">—</span>}
-            </Td>
-            <Td align="right">
-              {c.evalAvg != null
-                ? <span className="row gap-4" style={{ justifyContent: "flex-end", alignItems: "center" }}><Icons.Star size={10} style={{ color: "var(--warn)" }} fill="currentColor" stroke="none" /><span className="text-mono text-13 weight-500">{c.evalAvg.toFixed(1)}</span></span>
-                : <span className="text-muted text-12">—</span>}
-            </Td>
-            <Td><span className="text-mono text-12 text-muted">{c.appliedAt || "—"}</span></Td>
-            <Td>
-              <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openMenu(e, c.id); }}>
-                <Icons.MoreH size={14} />
-              </button>
-            </Td>
-          </tr>
-        ))}
+        {rows.map(c => {
+          const isArchived = c.status === "archived";
+          const isTerminal = CANDIDATE_TABLE_TERMINAL.has(c.status);
+          const isPrePipeline = !c.jdId && !isTerminal && !isArchived;
+          const isInPipeline = !!c.jdId && !isTerminal;
+          return (
+            <tr key={c.id} onClick={() => onOpen(c.id)}
+              style={{ borderBottom: "1px solid var(--border-soft)", cursor: "pointer", opacity: showArchived ? 0.75 : 1 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-hover)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+              <Td><div className="row gap-8"><Avatar name={`${c.first} ${c.last}`} /><div className="col"><span className="weight-500">{c.first} {c.last}</span><span className="text-12 text-muted">{c.email || "—"}</span></div></div></Td>
+              <Td><StatusBadge status={c.status} /></Td>
+              <Td><span className="text-13 text-secondary" style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{c.jdTitle || "—"}</span></Td>
+              <Td><span className="text-13 text-secondary">{c.source || "—"}</span></Td>
+              <Td align="right"><span className="text-mono text-12">{c.experience != null ? `${c.experience}y` : "—"}</span></Td>
+              <Td><span className="text-mono text-12 text-muted">{c.appliedAt ? c.appliedAt.slice(0, 10) : "—"}</span></Td>
+              <Td>
+                <div className="row gap-4" style={{ justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
+                  {isPrePipeline && (
+                    <button className="icon-btn" title={t('candidate.action.assignToJob')} style={{ color: "var(--ai)" }} onClick={() => onAssignJob(c.id)}>
+                      <Icons.Briefcase size={13} />
+                    </button>
+                  )}
+                  {!isTerminal && !isArchived && (
+                    <button className="icon-btn" title={t('candidate.action.hire')} style={{ color: "var(--positive)" }} onClick={() => onHire(c.id)}>
+                      <Icons.UserCheck size={13} />
+                    </button>
+                  )}
+                  {!isTerminal && !isArchived && (
+                    <button className="icon-btn" title="Reject" style={{ color: "var(--danger)" }} onClick={() => onReject(c.id)}>
+                      <Icons.UserX size={13} />
+                    </button>
+                  )}
+                  {isArchived ? (
+                    <button className="icon-btn" title="Restore" onClick={() => onRestore(c.id)}>
+                      <Icons.RotateCcw size={13} />
+                    </button>
+                  ) : !isTerminal && (
+                    <button className="icon-btn" title="Archive" onClick={() => onArchive(c.id)}>
+                      <Icons.Archive size={13} />
+                    </button>
+                  )}
+                  <button className="icon-btn" title="Delete" style={{ color: "var(--danger)" }} onClick={() => onDelete(c.id)}>
+                    <Icons.Trash size={13} />
+                  </button>
+                </div>
+              </Td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
     </div>

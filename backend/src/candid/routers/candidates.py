@@ -10,7 +10,8 @@ from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org
-from candid.models import Candidate, Evaluation, Interview, JobDescription
+from candid.models import Candidate, Evaluation, Interview, JobDescription, OrgConfig
+from candid.routers.config import ConfigRouter
 from candid.schemas import CandidateCreate, CandidateUpdate
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.email_service import EmailService
@@ -47,11 +48,13 @@ class CandidatesRouter:
         notification_service: NotificationService | None = None,
         ai_engine_factory: Optional[AIEngineFactory] = None,
         email_service: Optional[EmailService] = None,
+        crypto_service=None,
     ) -> None:
         self._db = db
         self._notification_service = notification_service or NotificationService()
         self._ai_factory = ai_engine_factory
-        self._email = email_service
+        self._fallback_email = email_service
+        self._crypto = crypto_service
         self.router = APIRouter(prefix="/candidates", tags=["candidates"])
         self._register()
 
@@ -162,20 +165,26 @@ class CandidatesRouter:
         result = []
         for c in candidates:
             d = _safe_dump(c)
-            d["has_ai"] = False
-            d["ai_score"] = None
+            d["has_ai"] = bool(c.ai_pre_analysis)
             if c.ai_pre_analysis:
                 try:
                     pre = json.loads(c.ai_pre_analysis)
-                    d["has_ai"] = True
+                    role_fits = [rf for rf in (pre.get("role_fits") or []) if rf.get("score") is not None]
                     overall = pre.get("overall_score")
-                    role_fits = pre.get("role_fits") or []
-                    if overall is not None:
-                        d["ai_score"] = round(float(overall), 1)
-                    elif role_fits:
-                        d["ai_score"] = max((rf["score"] for rf in role_fits), default=None)
+                    if role_fits:
+                        d["ai_score"] = round(max(float(rf["score"]) for rf in role_fits), 1)
+                    elif overall is not None:
+                        d["ai_score"] = round(float(overall) / 2, 1)
+                    elif c.score is not None:
+                        d["ai_score"] = round(float(c.score), 1)
+                    else:
+                        d["ai_score"] = None
                 except Exception:
-                    pass
+                    d["ai_score"] = round(float(c.score), 1) if c.score is not None else None
+            elif c.score is not None:
+                d["ai_score"] = round(float(c.score), 1)
+            else:
+                d["ai_score"] = None
             d["eval_avg"] = None
             ev = evals.get(c.id)
             if ev:
@@ -268,11 +277,30 @@ class CandidatesRouter:
             result["activity_log"] = json.loads(candidate.activity_log)
         result["analysis_at"] = candidate.analysis_at
 
+        if candidate.ai_pre_analysis:
+            try:
+                pre = json.loads(candidate.ai_pre_analysis)
+                role_fits = [rf for rf in (pre.get("role_fits") or []) if rf.get("score") is not None]
+                overall = pre.get("overall_score")
+                if role_fits:
+                    result["score"] = round(max(float(rf["score"]) for rf in role_fits), 2)
+                elif overall is not None:
+                    result["score"] = round(float(overall) / 2, 2)
+            except Exception:
+                pass
+
+        if candidate.job_description_id:
+            jd = session.get(JobDescription, candidate.job_description_id)
+            result["jd_title"] = jd.title if jd else None
+        else:
+            result["jd_title"] = None
+
         return result
 
     def _update(self, session, user: UserCtx, candidate_id, body: CandidateUpdate) -> dict:
         candidate = self._fetch(session, user.org_id, candidate_id)
-        data = body.model_dump(exclude_none=True)
+        data = body.model_dump(exclude_unset=True)
+        data = self._apply_pipeline_entry_transition(session, user, candidate, data)
         if "status" in data and data["status"] != candidate.status:
             now = datetime.now(timezone.utc).isoformat()
             history = json.loads(candidate.status_history or "[]")
@@ -287,6 +315,29 @@ class CandidatesRouter:
         session.commit()
         session.refresh(candidate)
         return _safe_dump(candidate)
+
+    def _apply_pipeline_entry_transition(
+        self, session: Session, user: UserCtx, candidate: Candidate, data: dict
+    ) -> dict:
+        job_is_being_assigned = (
+            "job_description_id" in data
+            and data["job_description_id"] is not None
+            and candidate.job_description_id is None
+        )
+        if not job_is_being_assigned:
+            return data
+        if candidate.status != "new" or "status" in data:
+            return data
+        cfg = session.get(OrgConfig, user.org_id)
+        stages = []
+        if cfg and cfg.stages_json:
+            try:
+                stages = json.loads(cfg.stages_json)
+            except Exception:
+                pass
+        first_stage = ConfigRouter.first_pipeline_stage(stages)
+        data = {**data, "status": first_stage}
+        return data
 
     def _delete(self, session, org_id, candidate_id) -> None:
         candidate = self._fetch(session, org_id, candidate_id)
@@ -356,7 +407,7 @@ class CandidatesRouter:
     ) -> dict:
         candidate = self._fetch(session, user.org_id, candidate_id)
         self._apply_rejection_status(session, candidate, user)
-        email_sent = self._maybe_send_rejection_email(candidate, body)
+        email_sent = self._maybe_send_rejection_email(session, user.org_id, candidate, body)
         if body.send_email and not email_sent:
             return {"ok": True, "email_sent": False, "reason": "SMTP not configured"}
         return {"ok": True, "email_sent": email_sent}
@@ -379,19 +430,39 @@ class CandidatesRouter:
         session.commit()
         session.refresh(candidate)
 
-    def _maybe_send_rejection_email(self, candidate: Candidate, body: RejectRequest) -> bool:
-        if not body.send_email:
+    def _maybe_send_rejection_email(
+        self, session: Session, org_id: str, candidate: Candidate, body: RejectRequest
+    ) -> bool:
+        if not body.send_email or not candidate.email:
             return False
-        if not self._email or not self._email.is_configured():
-            return False
-        if not candidate.email:
+        email_svc = self._build_email_service(session, org_id)
+        if not email_svc or not email_svc.is_configured():
             return False
         try:
-            self._email.send_email(candidate.email, body.subject, body.body)
+            email_svc.send_email(candidate.email, body.subject, body.body)
             return True
         except Exception:
             logger.exception("Failed to send rejection email to %s", candidate.email)
             return False
+
+    def _build_email_service(self, session: Session, org_id: str) -> Optional[EmailService]:
+        cfg = session.get(OrgConfig, org_id)
+        if cfg and cfg.smtp_host:
+            password = None
+            if cfg.smtp_password_encrypted and self._crypto:
+                try:
+                    password = self._crypto.decrypt(cfg.smtp_password_encrypted)
+                except Exception:
+                    pass
+            return EmailService(
+                smtp_host=cfg.smtp_host,
+                smtp_port=cfg.smtp_port,
+                smtp_user=cfg.smtp_user,
+                smtp_password=password,
+                smtp_from=cfg.smtp_from or cfg.smtp_user or "noreply@candid.app",
+                app_url="",
+            )
+        return self._fallback_email
 
     @staticmethod
     def _fetch(session, org_id, candidate_id) -> Candidate:

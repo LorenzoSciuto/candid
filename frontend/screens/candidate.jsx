@@ -19,7 +19,8 @@ const mapCandidate = (c) => ({
   cvText: c.cv_text,
   cvFilename: c.cv_filename,
   hasCvFile: c.has_cv_file || false,
-  jobDescription: c.job_description,
+  jobDescriptionId: c.job_description_id || null,
+  jdTitle: c.jd_title || null,
   pre: c.ai_pre_analysis || null,
   analysisAt: c.analysis_at || null,
   activityLog: c.activity_log || [],
@@ -212,12 +213,14 @@ const EditCandidateModal = ({ candidate, onClose, onSaved }) => {
             </select>
           </div>
         </div>
-        <div>
-          <label className="label">{t('candidates.form.stage')}</label>
-          <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
-            {statuses.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </div>
+        {!isPrePipeline(candidate) && (
+          <div>
+            <label className="label">{t('candidates.form.stage')}</label>
+            <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
+              {statuses.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -233,7 +236,6 @@ const RejectionModal = ({ candidate, onClose, onRejected }) => {
   const [draftError, setDraftError] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
-  const [drafted, setDrafted] = useState(false);
 
   const draftRejection = async () => {
     setDrafting(true);
@@ -248,7 +250,6 @@ const RejectionModal = ({ candidate, onClose, onRejected }) => {
       const data = await res.json();
       setSubject(data.subject);
       setBody(data.body);
-      setDrafted(true);
     } catch {
       setDraftError("AI unavailable — check provider settings.");
     }
@@ -279,37 +280,104 @@ const RejectionModal = ({ candidate, onClose, onRejected }) => {
         <>
           {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
-          <Btn onClick={() => reject(false)} disabled={sending || !drafted}>
+          <Btn onClick={() => reject(false)} disabled={sending}>
             Reject without email
           </Btn>
-          <Btn kind="danger" icon={<Icons.Mail size={14} />} onClick={() => reject(true)} disabled={sending || !drafted || !candidate.email}>
+          <Btn kind="danger" icon={<Icons.Mail size={14} />} onClick={() => reject(true)} disabled={sending || !body.trim() || !candidate.email}>
             {sending ? "Sending…" : "Send & Reject"}
           </Btn>
         </>
       }>
       <div className="col gap-12">
-        {!drafted ? (
-          <div className="col gap-12" style={{ alignItems: "center", padding: "24px 0" }}>
-            {draftError && <div className="text-12" style={{ color: "var(--danger)" }}>{draftError}</div>}
-            <Btn kind="ai" icon={<Icons.Sparkles size={14} />} onClick={draftRejection} disabled={drafting}>
-              {drafting ? "Drafting…" : "Draft rejection email with AI"}
-            </Btn>
-          </div>
-        ) : (
-          <>
-            {!candidate.email && (
-              <div className="text-12" style={{ color: "var(--warn)" }}>No email address on file — email will not be sent.</div>
-            )}
-            <div>
-              <label className="label">Subject</label>
-              <input className="input" value={subject} onChange={e => setSubject(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Body</label>
-              <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} />
-            </div>
-          </>
+        {!candidate.email && (
+          <div className="text-12" style={{ color: "var(--warn)" }}>No email address on file — email will not be sent.</div>
         )}
+        <div>
+          <label className="label">Subject</label>
+          <input className="input" value={subject} onChange={e => setSubject(e.target.value)} />
+            </div>
+            <div>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <label className="label" style={{ margin: 0 }}>Body</label>
+                <div className="row gap-8" style={{ alignItems: "center" }}>
+                  {draftError && <span className="text-12" style={{ color: "var(--danger)" }}>{draftError}</span>}
+                  <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 12 }}
+                    onClick={draftRejection} disabled={drafting}>
+                    {drafting
+                      ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> generating…</span>
+                      : <><Icons.Sparkles size={12} /> Generate with AI</>}
+                  </button>
+                </div>
+              </div>
+              <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} placeholder="Write a rejection email or use AI to generate one." />
+            </div>
+      </div>
+    </Modal>
+  );
+};
+
+const TERMINAL_STATUSES = new Set(["Rejected", "hired"]);
+const isPrePipeline = (c) => !c.jobDescriptionId && !TERMINAL_STATUSES.has(c.status);
+const isInPipeline  = (c) => !!c.jobDescriptionId && !TERMINAL_STATUSES.has(c.status);
+const isTerminal    = (c) => TERMINAL_STATUSES.has(c.status);
+
+// ── Assign Job Modal ──────────────────────────────────────────────────────────
+
+const AssignJobModal = ({ candidateId, onClose, onAssigned }) => {
+  const t = window.useT();
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/job-descriptions`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { setJobs(data); setLoadingJobs(false); })
+      .catch(() => setLoadingJobs(false));
+  }, []);
+
+  const assign = async () => {
+    if (!selectedJobId) return;
+    setSaving(true);
+    try {
+      await fetch(`${window.API_BASE}/candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_description_id: selectedJobId }),
+      });
+      onAssigned();
+    } catch { /* offline */ }
+    setSaving(false);
+  };
+
+  return (
+    <Modal open title={t('assignJob.title')} onClose={onClose} width={480}
+      footer={
+        <>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
+          <Btn kind="primary" onClick={assign} disabled={saving || !selectedJobId || loadingJobs}>
+            {saving ? t('assignJob.saving') : t('assignJob.confirm')}
+          </Btn>
+        </>
+      }>
+      <div className="col gap-12">
+        {loadingJobs ? (
+          <span className="text-13 text-muted">{t('assignJob.loading')}</span>
+        ) : jobs.length === 0 ? (
+          <span className="text-13 text-muted">{t('assignJob.noJobs')}</span>
+        ) : (
+          <div>
+            <label className="label">Position</label>
+            <select className="select" value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)}>
+              <option value="">{t('assignJob.selectPh')}</option>
+              {jobs.map(j => (
+                <option key={j.id} value={j.id}>{j.title}{j.department ? ` · ${j.department}` : ""}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <p className="text-12 text-muted" style={{ margin: 0 }}>{t('assignJob.hint')}</p>
       </div>
     </Modal>
   );
@@ -317,15 +385,17 @@ const RejectionModal = ({ candidate, onClose, onRejected }) => {
 
 const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
   const t = window.useT();
-  const [c, setC] = useState({ id: null, first: "", last: "", email: null, phone: null, role: null, experience: null, location: null, status: "new", source: null, pre: null, interviews: [], evaluation: null, score: null, cvText: null, jobDescription: null });
+  const [c, setC] = useState({ id: null, first: "", last: "", email: null, phone: null, role: null, experience: null, location: null, status: "new", source: null, pre: null, interviews: [], evaluation: null, score: null, cvText: null, jobDescriptionId: null, jdTitle: null });
   const [tab, setTab] = useState(initialTab || "overview");
   const [loading, setLoading] = useState(true);
   const [hiring, setHiring] = useState(false);
   const [hired, setHired] = useState(false);
   const [hireConfirmOpen, setHireConfirmOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [assignJobOpen, setAssignJobOpen] = useState(false);
 
   useEffect(() => {
     onMount && onMount();
@@ -398,6 +468,12 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
               <StatusBadge status={c.status} />
             </div>
             <div className="text-13 text-secondary">{c.role}{c.location && ` · ${c.location}`}</div>
+            {c.jdTitle && (
+              <div className="row gap-6 mt-4" style={{ alignItems: "center" }}>
+                <Icons.Briefcase size={13} style={{ color: "var(--ai)" }} />
+                <span className="text-13 weight-500" style={{ color: "var(--ai)" }}>{c.jdTitle}</span>
+              </div>
+            )}
             <div className="row gap-12 mt-8">
               {c.email && <span className="row gap-6 text-12 text-secondary"><Icons.Mail size={12} />{c.email}</span>}
               {c.phone && <span className="row gap-6 text-12 text-secondary"><Icons.Phone size={12} />{c.phone}</span>}
@@ -407,11 +483,21 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
           </div>
         </div>
         <div className="row gap-8">
-          {c.status !== "hired" && <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>}
-          <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
-          <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
-          {c.status !== "Rejected" && c.status !== "hired" && (
-            <Btn icon={<Icons.X size={14} />} onClick={() => setRejectOpen(true)}>Reject</Btn>
+          {isTerminal(c) ? (
+            <Btn icon={<Icons.RotateCcw size={14} />} onClick={() => setReactivateOpen(true)}>{t('candidate.action.reactivate')}</Btn>
+          ) : isPrePipeline(c) ? (
+            <>
+              <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
+              <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
+              <Btn kind="primary" icon={<Icons.Briefcase size={14} />} onClick={() => setAssignJobOpen(true)}>{t('candidate.action.assignToJob')}</Btn>
+            </>
+          ) : (
+            <>
+              <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
+              <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
+              <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
+              <Btn icon={<Icons.X size={14} />} onClick={() => setRejectOpen(true)}>{t('candidates.reject.confirm')}</Btn>
+            </>
           )}
           {(c.hasCvFile || c.cvText) && (
             <Btn icon={<Icons.Download size={14} />} onClick={async () => {
@@ -435,55 +521,88 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
               }
             }}>CV</Btn>
           )}
-          {(c.status === "offer" || c.status === "hired") && !hired && (
-            <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={() => setHireConfirmOpen(true)} disabled={hiring || c.status === "hired"}>
-              {hiring ? t('common.saving') : c.status === "hired" ? "Hired ✓" : "Hire → Employees"}
-            </Btn>
-          )}
-          {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to Employees</Badge>}
-          {c.status !== "offer" && c.status !== "hired" && (
-            <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { candidateName: `${c.first} ${c.last}`, candidateId: c.id, title: "Interview", type: "Live" })}>{t('candidate.startInterview')}</Btn>
+          {isInPipeline(c) && (
+            <>
+              {c.status === "offer" && !hired && (
+                <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={() => setHireConfirmOpen(true)} disabled={hiring}>
+                  {hiring ? t('common.saving') : t('candidate.action.hire')}
+                </Btn>
+              )}
+              {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to Employees</Badge>}
+              <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { candidateName: `${c.first} ${c.last}`, candidateId: c.id, title: "Interview", type: "Live" })}>{t('candidate.startInterview')}</Btn>
+            </>
           )}
         </div>
       </div>
 
       {hireConfirmOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 800 }}
-          onClick={() => setHireConfirmOpen(false)}>
-          <div className="card col" style={{ width: 420, padding: 28, gap: 16 }} onClick={e => e.stopPropagation()}>
-            <div className="col gap-6">
-              <span style={{ fontWeight: 600, fontSize: 16 }}>Confirm hire</span>
-              <span className="text-13 text-secondary">
-                Move <strong>{fullName}</strong> to the employee directory?
-                The recruiting record will be preserved as read-only history on their employee profile.
-              </span>
-            </div>
-            <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
-              <Btn onClick={() => setHireConfirmOpen(false)}>{t('common.cancel')}</Btn>
-              <Btn kind="primary" icon={<Icons.UserCheck size={14} />} disabled={hiring}
-                onClick={() => { setHireConfirmOpen(false); convertToEmployee(); }}>
-                {hiring ? t('common.saving') : "Hire → Employees"}
-              </Btn>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title={t('candidate.hire.title')}
+          message={`${t('candidate.hire.messagePre')} ${fullName} ${t('candidate.hire.messagePost')}`}
+          confirmLabel={t('candidate.hire.confirm')}
+          onConfirm={() => { setHireConfirmOpen(false); convertToEmployee(); }}
+          onCancel={() => setHireConfirmOpen(false)}
+        />
+      )}
+
+      {reactivateOpen && (
+        <ConfirmDialog
+          title={t('candidate.reactivate.title')}
+          message={`${t('candidate.reactivate.messagePre')} ${fullName} ${t('candidate.reactivate.messagePost')}`}
+          confirmLabel={t('candidate.reactivate.confirm')}
+          onConfirm={async () => {
+            setReactivateOpen(false);
+            await fetch(`${window.API_BASE}/candidates/${id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "new", job_description_id: null }),
+            }).catch(() => {});
+            refreshCandidate();
+          }}
+          onCancel={() => setReactivateOpen(false)}
+        />
       )}
 
       {c.status === "hired" && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--success-soft, #f0fdf4)", border: "1px solid var(--success, #22c55e)", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "var(--success-dark, #15803d)", fontSize: 13 }}>
           <Icons.Check size={15} />
-          <span>This candidate has been hired and moved to the employee directory. This record is preserved as recruiting history and <strong>cannot be edited</strong>.</span>
+          <span>{t('candidate.banner.hired')} <strong>{t('candidate.banner.reactivateSuffix')}</strong></span>
         </div>
       )}
 
-      {c.score != null && (
-        <div className="card" style={{ padding: 0, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
-          <Stat label={t('candidate.stat.score')} value={c.score?.toFixed(1)} unit="/ 5" />
-          <Stat label={t('candidate.stat.interviews')} value={String((c.interviews || []).length)} sub="completed" />
-          <Stat label={t('candidate.stat.recommendation')} value={c.evaluation?.final_recommendation || t('common.pending')} mono={false} />
-          <Stat label={t('candidate.stat.stage')} value={window.CANDID_DATA.STATUS.find(s => s.id === c.status)?.label || c.status} small />
+      {c.status === "Rejected" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--danger-soft, #fef2f2)", border: "1px solid var(--danger, #ef4444)", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "var(--danger, #dc2626)", fontSize: 13 }}>
+          <Icons.X size={15} />
+          <span>{t('candidate.banner.rejected')} <strong>{t('candidate.banner.reactivateSuffix')}</strong></span>
         </div>
       )}
+
+      {isPrePipeline(c) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--info-soft, #eff6ff)", border: "1px solid var(--info, #3b82f6)", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "var(--info-dark, #1d4ed8)", fontSize: 13 }}>
+          <Icons.Briefcase size={15} />
+          <span>{t('candidate.banner.prePipeline')} <strong>{t('candidate.banner.assignSuffix')}</strong></span>
+        </div>
+      )}
+
+      {(() => {
+        const evalScores = [];
+        if (c.evaluation) {
+          for (const skillMap of [c.evaluation.human_skills, c.evaluation.technical_skills]) {
+            if (skillMap) Object.values(skillMap).forEach(v => { if (typeof v === "number" && v > 0) evalScores.push(v); });
+          }
+        }
+        const evalAvg = evalScores.length > 0 ? evalScores.reduce((a, b) => a + b, 0) / evalScores.length : null;
+        if (c.score == null && evalAvg == null) return null;
+        return (
+          <div className="card" style={{ padding: 0, display: "grid", gridTemplateColumns: `repeat(${c.score != null && evalAvg != null ? 5 : 4}, 1fr)`, marginBottom: 20 }}>
+            {c.score != null && <Stat label={t('candidate.stat.score')} value={c.score.toFixed(1)} unit="/ 5" />}
+            {evalAvg != null && <Stat label={t('candidate.stat.evalAvg')} value={evalAvg.toFixed(1)} unit="/ 5" />}
+            <Stat label={t('candidate.stat.interviews')} value={String((c.interviews || []).length)} sub="completed" />
+            <Stat label={t('candidate.stat.recommendation')} value={c.evaluation?.final_recommendation || t('common.pending')} mono={false} />
+            <Stat label={t('candidate.stat.stage')} value={window.CANDID_DATA.STATUS.find(s => s.id === c.status)?.label || c.status} small />
+          </div>
+        );
+      })()}
 
       <div className="tabs">
         {TABS.map(tb => (
@@ -493,7 +612,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
         ))}
       </div>
 
-      {tab === "overview"    && <OverviewTab c={c} onTab={setTab} onStatusChange={changeStatus} t={t} />}
+      {tab === "overview"    && <OverviewTab c={c} onTab={setTab} onStatusChange={isInPipeline(c) ? changeStatus : null} t={t} />}
       {tab === "cv-analysis" && <CVAnalysisTab c={c} t={t} onRefresh={refreshCandidate} />}
       {tab === "interviews"  && <InterviewsTab c={c} onRoute={onRoute} onRefresh={refreshCandidate} t={t} />}
       {tab === "evaluation"  && <EvaluationTab c={c} onSaved={refreshCandidate} t={t} />}
@@ -512,6 +631,13 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
           candidate={c}
           onClose={() => setRejectOpen(false)}
           onRejected={() => { setC(prev => ({ ...prev, status: "Rejected" })); refreshCandidate(); }}
+        />
+      )}
+      {assignJobOpen && (
+        <AssignJobModal
+          candidateId={id}
+          onClose={() => setAssignJobOpen(false)}
+          onAssigned={() => { setAssignJobOpen(false); refreshCandidate(); }}
         />
       )}
     </div>
@@ -549,6 +675,7 @@ const PipelineTracker = ({ status, onStatusChange, t }) => {
   const stages = window.CANDID_DATA.STATUS;
   const myIdx = stages.findIndex(s => s.id === status);
   const currentStage = stages[myIdx];
+
   return (
     <div className="card card-pad">
       <div style={{ marginBottom: 16 }}>
@@ -612,26 +739,8 @@ const OverviewTab = ({ c, onTab, onStatusChange, t }) => (
   <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 20 }}>
     <div className="col gap-16">
 
-      {/* Score strip — only if AI score exists */}
-      {c.score != null && (
-        <div className="card" style={{ padding: "12px 16px" }}>
-          <div className="row gap-20" style={{ flexWrap: "wrap" }}>
-            <div className="col gap-1">
-              <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('candidate.stat.score')}</span>
-              <span className="weight-700" style={{ fontSize: 18, color: "var(--ai)" }}>{Number(c.score).toFixed(1)}</span>
-            </div>
-            {c.interviews?.length > 0 && (
-              <div className="col gap-1">
-                <span className="text-10 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>{t('candidate.stat.interviews')}</span>
-                <span className="weight-600 text-13">{c.interviews.length}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Pipeline */}
-      <PipelineTracker status={c.status} onStatusChange={onStatusChange} t={t} />
+      {/* Pipeline — only for in-pipeline candidates */}
+      {isInPipeline(c) && <PipelineTracker status={c.status} onStatusChange={onStatusChange} t={t} />}
 
       {/* Career history */}
       {c.careerHistory?.length > 0 && (

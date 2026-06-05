@@ -355,6 +355,17 @@ const JdTd = ({ children, align = "left" }) => (
 
 // ── JD Create/Edit Modal ──────────────────────────────────────────────────────
 
+const SALARY_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "SEK", "NOK", "DKK", "CAD", "AUD", "JPY"];
+
+const fmtSalaryRange = (min, max, currency) => {
+  const sym = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF", SEK: "kr", NOK: "kr", DKK: "kr", CAD: "CA$", AUD: "A$", JPY: "¥" }[currency] || currency || "";
+  const fmt = (n) => n >= 1000 ? `${sym}${(n / 1000).toFixed(0)}k` : `${sym}${n}`;
+  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
+  if (min) return `from ${fmt(min)}`;
+  if (max) return `up to ${fmt(max)}`;
+  return null;
+};
+
 const JdModal = ({ jd, onClose, onSaved }) => {
   const t = window.useT();
   const isEdit = !!jd;
@@ -366,10 +377,12 @@ const JdModal = ({ jd, onClose, onSaved }) => {
   );
   const [status, setStatus] = useState(jd?.status || "Draft");
   const [openings, setOpenings] = useState(jd?.openings || 1);
-  // owners: string[] — serialized as comma-separated string to backend
   const [owners, setOwners] = useState(() =>
     jd?.owner ? jd.owner.split(",").map(s => s.trim()).filter(Boolean) : []
   );
+  const [salaryMin, setSalaryMin] = useState(jd?.salary_min ? String(jd.salary_min) : "");
+  const [salaryMax, setSalaryMax] = useState(jd?.salary_max ? String(jd.salary_max) : "");
+  const [salaryCurrency, setSalaryCurrency] = useState(jd?.salary_currency || (window.getCurrency ? window.getCurrency() : "EUR"));
   const [saving, setSaving] = useState(false);
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState("");
@@ -392,6 +405,9 @@ const JdModal = ({ jd, onClose, onSaved }) => {
       location: selectedLocations.length > 0 ? selectedLocations.join(", ") : null,
       status, openings: parseInt(openings) || 1,
       owner: owners.length > 0 ? owners.join(", ") : null,
+      salary_min: salaryMin ? parseInt(salaryMin) : null,
+      salary_max: salaryMax ? parseInt(salaryMax) : null,
+      salary_currency: salaryCurrency,
     };
     try {
       const url = isEdit ? `${window.API_BASE}/job-descriptions/${jd.id}` : `${window.API_BASE}/job-descriptions`;
@@ -468,6 +484,18 @@ const JdModal = ({ jd, onClose, onSaved }) => {
         </div>
 
         <div>
+          <label className="label">{t('jobs.modal.salaryRange')} <span className="text-11 text-muted">(optional)</span></label>
+          <div className="row gap-8" style={{ alignItems: "center" }}>
+            <input className="input" type="number" min={0} value={salaryMin} onChange={e => setSalaryMin(e.target.value)} placeholder={t('jobs.modal.salaryMin')} style={{ flex: 1 }} />
+            <span className="text-12 text-muted">–</span>
+            <input className="input" type="number" min={0} value={salaryMax} onChange={e => setSalaryMax(e.target.value)} placeholder={t('jobs.modal.salaryMax')} style={{ flex: 1 }} />
+            <select className="select" value={salaryCurrency} onChange={e => setSalaryCurrency(e.target.value)} style={{ width: 80 }}>
+              {SALARY_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div>
           <label className="label">{t('jobs.modal.owner')}</label>
           <OwnerSelect value={owners} onChange={setOwners} />
         </div>
@@ -498,6 +526,7 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
   const statusKind = jd.status === "Active" ? "positive" : jd.status === "Draft" ? undefined : "warn";
   const owners = jd.owner ? jd.owner.split(",").map(s => s.trim()).filter(Boolean) : [];
   const roleName = roles[jd.role_id]?.name;
+  const salaryLabel = fmtSalaryRange(jd.salary_min, jd.salary_max, jd.salary_currency);
 
   return (
     <Modal open title={jd.title} onClose={onClose} width={640} disableBackdropClose={false}
@@ -522,6 +551,11 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
             <Icons.Users size={12} style={{ color: "var(--ink-muted)" }} />
             {jd.openings || 1} opening{(jd.openings || 1) !== 1 ? "s" : ""}
           </span>
+          {salaryLabel && (
+            <span className="badge text-13" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {salaryLabel}
+            </span>
+          )}
           {owners.length > 0 && (
             <div className="row gap-4">
               {owners.slice(0, 3).map(n => <Avatar key={n} name={n} />)}

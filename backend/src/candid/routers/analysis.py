@@ -93,10 +93,13 @@ class AnalysisRouter:
                 c.ai_pre_analysis = json.dumps(result)
                 c.cv_text = body.cv_text
                 c.analysis_at = datetime.now(timezone.utc).isoformat()
+                role_fits = result.get("role_fits") or []
+                if role_fits:
+                    c.score = round(max(float(rf["score"]) for rf in role_fits if rf.get("score") is not None), 2)
+                elif result.get("overall_score") is not None:
+                    c.score = round(float(result["overall_score"]) / 2, 2)
                 if body.job_title:
                     c.job_title = body.job_title
-                if body.job_description:
-                    c.job_description = body.job_description
                 if result.get("career_history"):
                     c.career_history = json.dumps(result["career_history"])
                 extracted = result.get("extracted") or {}

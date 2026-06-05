@@ -18,6 +18,7 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
         {[
           { id: "ai",           label: t('settings.tab.ai') },
           { id: "pipeline",     label: "Pipeline" },
+          { id: "email",        label: "Email" },
           { id: "branding",     label: "Branding" },
           { id: "locale",       label: t('settings.tab.locale') },
           { id: "profile",      label: t('settings.tab.profile') },
@@ -31,6 +32,7 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
 
       {tab === "ai"           && <AISettings t={t} />}
       {tab === "pipeline"     && <PipelineSettings t={t} />}
+      {tab === "email"        && <EmailSettings t={t} />}
       {tab === "branding"     && <BrandingSettings t={t} />}
       {tab === "locale"       && <LocaleSettings t={t} locale={locale} onChange={handleLocale} />}
       {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />}
@@ -1039,5 +1041,106 @@ const IntegrationsSettings = () => (
     ))}
   </div>
 );
+
+// ── Email (SMTP) Settings ─────────────────────────────────────────────────────
+
+const EmailSettings = ({ t }) => {
+  const [host, setHost] = useState("");
+  const [port, setPort] = useState("587");
+  const [user, setUser] = useState("");
+  const [password, setPassword] = useState("");
+  const [from, setFrom] = useState("");
+  const [passwordSet, setPasswordSet] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+
+  useEffect(() => {
+    fetch(`${window.API_BASE}/config/email`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        setHost(d.smtp_host || "");
+        setPort(String(d.smtp_port || 587));
+        setUser(d.smtp_user || "");
+        setFrom(d.smtp_from || "");
+        setPasswordSet(d.smtp_password_set || false);
+      })
+      .catch(() => {});
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setSaveMsg("");
+    const body = {
+      smtp_host: host || null,
+      smtp_port: parseInt(port) || 587,
+      smtp_user: user || null,
+      smtp_from: from || null,
+      smtp_password: password || null,
+    };
+    try {
+      const res = await fetch(`${window.API_BASE}/config/email`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      setPasswordSet(d.smtp_password_set || false);
+      setPassword("");
+      setSaveMsg("Saved ✓");
+      setTimeout(() => setSaveMsg(""), 2500);
+    } catch {
+      setSaveMsg("Save failed");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="col gap-16">
+      <div className="card card-pad col gap-16">
+        <div className="col gap-4">
+          <span className="weight-600">Outgoing email (SMTP)</span>
+          <span className="text-12 text-secondary">Used to send rejection emails. Each organization can configure its own sender.</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
+          <div>
+            <label className="label">SMTP host</label>
+            <input className="input" value={host} onChange={e => setHost(e.target.value)} placeholder="smtp.gmail.com" />
+          </div>
+          <div>
+            <label className="label">Port</label>
+            <input className="input" type="number" value={port} onChange={e => setPort(e.target.value)} placeholder="587" />
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Username</label>
+          <input className="input" type="email" value={user} onChange={e => setUser(e.target.value)} placeholder="sender@yourcompany.com" />
+        </div>
+
+        <div>
+          <label className="label">
+            Password
+            {passwordSet && !password && <span className="text-11 text-muted" style={{ marginLeft: 6 }}>(set — leave blank to keep)</span>}
+          </label>
+          <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={passwordSet ? "••••••••" : "App password or SMTP password"} />
+        </div>
+
+        <div>
+          <label className="label">From address</label>
+          <input className="input" type="email" value={from} onChange={e => setFrom(e.target.value)} placeholder="recruiting@yourcompany.com" />
+          <span className="text-11 text-muted" style={{ marginTop: 4, display: "block" }}>Shown as the sender on rejection emails. Defaults to username if blank.</span>
+        </div>
+
+        <div className="row gap-8" style={{ alignItems: "center" }}>
+          <Btn kind="primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
+          {saveMsg && <span className="text-12" style={{ color: saveMsg.includes("✓") ? "var(--positive)" : "var(--danger)" }}>{saveMsg}</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 window.SettingsScreen = SettingsScreen;

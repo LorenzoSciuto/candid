@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from candid.database import Database
 from candid.dependencies import UserCtx, require_org
 from candid.models import OrgApiKey, OrgConfig
-from candid.schemas import ApiKeyUpsert, ConfigUpdate
+from candid.schemas import ApiKeyUpsert, ConfigUpdate, EmailConfigResponse, EmailConfigUpdate
 from candid.services.crypto import CryptoService
 
 logger = logging.getLogger(__name__)
@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 _PROVIDERS = ("openai", "anthropic", "gemini", "groq")
 
 DEFAULT_STAGES = [
-    {"id": "new",       "label": "New",           "dot": "#6366f1"},
-    {"id": "screening", "label": "Screening",      "dot": "#3b82f6"},
-    {"id": "eval",      "label": "In Evaluation",  "dot": "#f59e0b"},
-    {"id": "final",     "label": "Final Round",    "dot": "#8b5cf6"},
-    {"id": "offer",     "label": "Offer",          "dot": "#10b981"},
+    {"id": "screening", "label": "Screening",     "dot": "#3b82f6"},
+    {"id": "eval",      "label": "In Evaluation", "dot": "#f59e0b"},
+    {"id": "final",     "label": "Final Round",   "dot": "#8b5cf6"},
+    {"id": "offer",     "label": "Offer",         "dot": "#10b981"},
 ]
+
+_EXTERNAL_STATUSES = frozenset({"new", "hired", "Rejected"})
 
 
 class StagesUpdate(BaseModel):
@@ -75,6 +76,21 @@ class ConfigRouter:
             user: UserCtx = Depends(require_org),
         ):
             self._delete_key(session, user.org_id, provider)
+
+        @self.router.get("/email", response_model=EmailConfigResponse)
+        def get_email_config(
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._get_email(session, user.org_id)
+
+        @self.router.put("/email", response_model=EmailConfigResponse)
+        def save_email_config(
+            body: EmailConfigUpdate,
+            session: Session = Depends(db.get_session),
+            user: UserCtx = Depends(require_org),
+        ):
+            return self._save_email(session, user.org_id, body)
 
         @self.router.post("/test")
         def test_config(
@@ -176,6 +192,13 @@ class ConfigRouter:
                 pass
         return DEFAULT_STAGES
 
+    @staticmethod
+    def first_pipeline_stage(stages: list) -> str:
+        for stage in stages:
+            if stage.get("id") not in _EXTERNAL_STATUSES:
+                return stage["id"]
+        return "screening"
+
     def _save_stages(self, session: Session, org_id: str, stages: list) -> dict:
         for stage in stages:
             if not stage.get("id") or not stage.get("label"):
@@ -187,6 +210,38 @@ class ConfigRouter:
         session.add(cfg)
         session.commit()
         return {"ok": True, "stages": stages}
+
+    def _get_email(self, session: Session, org_id: str) -> EmailConfigResponse:
+        cfg = session.get(OrgConfig, org_id)
+        if not cfg:
+            return EmailConfigResponse()
+        return EmailConfigResponse(
+            smtp_host=cfg.smtp_host,
+            smtp_port=cfg.smtp_port,
+            smtp_user=cfg.smtp_user,
+            smtp_password_set=bool(cfg.smtp_password_encrypted),
+            smtp_from=cfg.smtp_from,
+        )
+
+    def _save_email(self, session: Session, org_id: str, body: EmailConfigUpdate) -> EmailConfigResponse:
+        cfg = session.get(OrgConfig, org_id)
+        if not cfg:
+            cfg = OrgConfig(org_id=org_id)
+        cfg.smtp_host = body.smtp_host
+        cfg.smtp_port = body.smtp_port
+        cfg.smtp_user = body.smtp_user
+        cfg.smtp_from = body.smtp_from
+        if body.smtp_password is not None:
+            cfg.smtp_password_encrypted = self._crypto.encrypt(body.smtp_password) if body.smtp_password else None
+        session.add(cfg)
+        session.commit()
+        return EmailConfigResponse(
+            smtp_host=cfg.smtp_host,
+            smtp_port=cfg.smtp_port,
+            smtp_user=cfg.smtp_user,
+            smtp_password_set=bool(cfg.smtp_password_encrypted),
+            smtp_from=cfg.smtp_from,
+        )
 
     def _test(self, session: Session, org_id: str) -> dict:
         from candid.services.ai_engine import AIEngineFactory

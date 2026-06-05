@@ -336,6 +336,7 @@ const InterviewsScreen = ({ onRoute }) => {
   const candName = (iv) => candidates[iv.candidate_id] || "—";
 
   const upcomingAll = interviews.filter(iv => iv.date && iv.date >= today);
+  const pastAll = interviews.filter(iv => iv.date && iv.date < today).sort((a, b) => b.date.localeCompare(a.date));
 
   const interviewers = useMemo(() => {
     const set = new Set();
@@ -349,7 +350,7 @@ const InterviewsScreen = ({ onRoute }) => {
     return [...set].sort();
   }, [interviews]);
 
-  const displayUpcoming = useMemo(() => upcomingAll.filter(iv => {
+  const applyFilters = (list) => list.filter(iv => {
     if (q) {
       const ql = q.toLowerCase();
       const name = candName(iv).toLowerCase();
@@ -360,7 +361,10 @@ const InterviewsScreen = ({ onRoute }) => {
     if (typeFilter !== "all" && iv.type !== typeFilter) return false;
     if (interviewerFilter !== "all" && iv.interviewer !== interviewerFilter) return false;
     return true;
-  }), [interviews, q, typeFilter, interviewerFilter, candidates]);
+  });
+
+  const displayUpcoming = useMemo(() => applyFilters(upcomingAll), [interviews, q, typeFilter, interviewerFilter, candidates]);
+  const displayPast     = useMemo(() => applyFilters(pastAll),     [interviews, q, typeFilter, interviewerFilter, candidates]);
 
   return (
     <div className="page page-wide">
@@ -406,8 +410,9 @@ const InterviewsScreen = ({ onRoute }) => {
         <WeekView interviews={upcomingAll} candidates={candidates} onRoute={onRoute} />
       ) : (
         <>
-          {displayUpcoming.length > 0 ? (
-            <div className="col gap-8">
+          {displayUpcoming.length > 0 && (
+            <div className="col gap-8" style={{ marginBottom: 24 }}>
+              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 2px", marginBottom: 4 }}>Upcoming</div>
               {displayUpcoming.map(iv => (
                 <div key={iv.id} className="card row" style={{ padding: 14, alignItems: "center", justifyContent: "space-between" }}>
                   <div className="row gap-16" style={{ minWidth: 0 }}>
@@ -434,12 +439,42 @@ const InterviewsScreen = ({ onRoute }) => {
                 </div>
               ))}
             </div>
-          ) : (
-            !loading && (
-              <div className="card card-pad" style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
-                {t('interviews.empty')}
-              </div>
-            )
+          )}
+          {displayPast.length > 0 && (
+            <div className="col gap-8">
+              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 2px", marginBottom: 4 }}>Past</div>
+              {displayPast.map(iv => (
+                <div key={iv.id} className="card row" style={{ padding: 14, alignItems: "center", justifyContent: "space-between", opacity: 0.8 }}>
+                  <div className="row gap-16" style={{ minWidth: 0 }}>
+                    <div style={{ width: 56, textAlign: "center", padding: "6px 8px", background: "var(--bg-sunken)", borderRadius: 6, flexShrink: 0 }}>
+                      <div className="text-mono text-12 text-muted">{iv.date}</div>
+                      {iv.time && <div className="text-mono text-11 text-muted">{iv.time}</div>}
+                    </div>
+                    <div className="col" style={{ minWidth: 0 }}>
+                      <div className="row gap-8">
+                        <span className="weight-500">{iv.title || iv.type}</span>
+                        <Badge>{iv.type || "Interview"}</Badge>
+                      </div>
+                      <div className="text-12 text-secondary">
+                        {candName(iv)}{iv.interviewer ? ` · with ${iv.interviewer}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="row gap-8">
+                    {iv.raw_content || iv.cleaned_transcript ? (
+                      <Btn icon={<Icons.FileText size={14} />} onClick={() => setTranscriptIv(iv)}>Transcript</Btn>
+                    ) : (
+                      <Btn icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>Record</Btn>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {displayUpcoming.length === 0 && displayPast.length === 0 && !loading && (
+            <div className="card card-pad" style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
+              {t('interviews.empty')}
+            </div>
           )}
         </>
       )}

@@ -116,6 +116,15 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
 
 // ── Job Card ──────────────────────────────────────────────────────────────────
 
+const fmtPortalSalary = (min, max, currency) => {
+  const sym = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF", SEK: "kr", NOK: "kr", DKK: "kr", CAD: "CA$", AUD: "A$", JPY: "¥" }[currency] || currency || "";
+  const fmt = (n) => n >= 1000 ? `${sym}${(n / 1000).toFixed(0)}k` : `${sym}${n}`;
+  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
+  if (min) return `from ${fmt(min)}`;
+  if (max) return `up to ${fmt(max)}`;
+  return null;
+};
+
 const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) => {
   const [hovered, setHovered] = useState(false);
   const accent = accentColor || "#111827";
@@ -126,6 +135,7 @@ const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) 
     : null;
 
   const locations = job.location ? job.location.split(",").map(l => l.trim()).filter(Boolean) : [];
+  const salaryLabel = fmtPortalSalary(job.salary_min, job.salary_max, job.salary_currency);
 
   return (
     <div
@@ -165,13 +175,16 @@ const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) 
       {/* Title row */}
       <div style={{ paddingRight: 36 }}>
         <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#111827", letterSpacing: "-.01em", lineHeight: 1.3 }}>{job.title}</h3>
-        {locations.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {locations.map(l => (
-              <span key={l} style={{ fontSize: 12.5, color: "#6b7280", background: "#f3f4f6", padding: "2px 8px", borderRadius: 6 }}>📍 {l}</span>
-            ))}
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          {locations.map(l => (
+            <span key={l} style={{ fontSize: 12.5, color: "#6b7280", background: "#f3f4f6", padding: "2px 8px", borderRadius: 6 }}>📍 {l}</span>
+          ))}
+          {salaryLabel && (
+            <span style={{ fontSize: 12.5, color: "#065f46", background: "#d1fae5", padding: "2px 8px", borderRadius: 6, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+              💰 {salaryLabel}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Description */}

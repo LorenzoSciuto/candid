@@ -58,6 +58,11 @@ class OrgConfig(SQLModel, table=True):
     provider: str = "openai"
     model_name: str = "gpt-4o"
     stages_json: Optional[str] = None          # JSON list of {id, label, dot}
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password_encrypted: Optional[str] = None
+    smtp_from: Optional[str] = None
 
 
 class OrgApiKey(SQLModel, table=True):
@@ -87,14 +92,12 @@ class Candidate(SQLModel, table=True):
     cv_text: Optional[str] = None
     cv_filename: Optional[str] = None
     job_title: Optional[str] = None
-    job_description: Optional[str] = None
     # JSON: {overview, strengths[], weaknesses[], questions[], extracted{}, career_history[], role_fits[]}
     ai_pre_analysis: Optional[str] = None
     # JSON: [{title, company, period, description}]
     career_history: Optional[str] = None
     # JSON: [{status, at, by}]
     status_history: Optional[str] = None
-    extra_information: Optional[str] = None
     # ISO timestamp of last AI analysis run
     analysis_at: Optional[str] = None
     # JSON: [{type, at, note}] — append-only audit log
@@ -159,6 +162,9 @@ class JobDescription(SQLModel, table=True):
     status: str = "Draft"
     openings: int = 1
     owner: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_currency: str = "EUR"
 
 
 class Employee(SQLModel, table=True):

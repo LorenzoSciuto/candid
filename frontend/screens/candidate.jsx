@@ -48,7 +48,9 @@ const mapCandidate = (c) => ({
 
 const EmailModal = ({ candidate, onClose }) => {
   const t = window.useT();
-  const [subject, setSubject] = useState(`Re: ${candidate.role || "Opportunity"} at Candid`);
+  const orgName = window.CANDID_ORG?.name || "us";
+  const position = candidate.jdTitle || candidate.role || "the position";
+  const [subject, setSubject] = useState(`Re: ${position} at ${orgName}`);
   const [body, setBody] = useState(`Hi ${candidate.first},\n\n`);
   const [rewriting, setRewriting] = useState(false);
   const [rewriteError, setRewriteError] = useState("");
@@ -396,6 +398,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
   const [editOpen, setEditOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [assignJobOpen, setAssignJobOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   useEffect(() => {
     onMount && onMount();
@@ -496,7 +499,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
             <>
               <Btn icon={<Icons.Edit size={14} />} onClick={() => setEditOpen(true)}>{t('common.edit')}</Btn>
               <Btn icon={<Icons.Mail size={14} />} onClick={() => setEmailOpen(true)}>{t('candidate.email')}</Btn>
-              <Btn icon={<Icons.Calendar size={14} />}>{t('candidate.schedule')}</Btn>
+              <Btn icon={<Icons.Calendar size={14} />} onClick={() => setScheduleOpen(true)}>{t('candidate.schedule')}</Btn>
               <Btn icon={<Icons.X size={14} />} onClick={() => setRejectOpen(true)}>{t('candidates.reject.confirm')}</Btn>
             </>
           )}
@@ -620,6 +623,13 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
       {tab === "activity"    && <ActivityTab c={c} />}
       {tab === "emails"      && <EmailsTab candidateId={c.id} candidateEmail={c.email} />}
 
+      {scheduleOpen && (
+        <window.ScheduleModal
+          initialCandidateId={c.id}
+          onClose={() => setScheduleOpen(false)}
+          onSaved={() => { setScheduleOpen(false); refreshCandidate(); }}
+        />
+      )}
       {emailOpen && <EmailModal candidate={c} onClose={() => setEmailOpen(false)} />}
       {editOpen && (
         <EditCandidateModal

@@ -110,7 +110,6 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
       years_of_experience: parsed?.years_of_experience ? parseInt(parsed.years_of_experience, 10) || null : null,
       location: parsed?.location || null,
       source: parsed?.source || (cvName ? "CV Upload" : "Quick Add"),
-      extra_information: parsed?.summary || null,
       cv_text: text || null,
       cv_filename: cvName || null,
       status: "new",

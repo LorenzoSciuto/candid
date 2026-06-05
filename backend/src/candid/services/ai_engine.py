@@ -152,6 +152,7 @@ class AIEngine:
             "extracted": raw_result.get("extracted_info", raw_result.get("extracted", {})),
             "career_history": raw_result.get("career_history", []),
             "role_fits": raw_result.get("role_fits", []),
+            "overall_score": raw_result.get("overall_score"),
         }
 
     # ── Retry / fallback orchestration ────────────────────────────────────────

@@ -3,6 +3,11 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 from fastapi import Depends, FastAPI
@@ -160,7 +165,7 @@ class Application:
         auth_dep = [Depends(require_user)]
         for router in [
             AIRouter(self._db, self._ai_factory, self._email).router,
-            CandidatesRouter(self._db, self._notification_service, self._ai_factory, self._email).router,
+            CandidatesRouter(self._db, self._notification_service, self._ai_factory, self._email, self._crypto).router,
             NotificationsRouter(self._db).router,
             AnalysisRouter(self._db, self._ai_factory, self._extractor).router,
             InterviewsRouter(self._db, self._ai_factory, self._transcription_service).router,

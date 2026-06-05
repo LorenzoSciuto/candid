@@ -15,7 +15,6 @@ class CandidateCreate(BaseModel):
     location: Optional[str] = None
     status: str = "new"
     source: Optional[str] = None
-    extra_information: Optional[str] = None
     cv_text: Optional[str] = None
     cv_filename: Optional[str] = None
     job_description_id: Optional[str] = None
@@ -32,7 +31,6 @@ class CandidateUpdate(BaseModel):
     status: Optional[str] = None
     source: Optional[str] = None
     score: Optional[float] = None
-    extra_information: Optional[str] = None
     cv_text: Optional[str] = None
     cv_filename: Optional[str] = None
     job_description_id: Optional[str] = None
@@ -106,6 +104,22 @@ class ApiKeyUpsert(BaseModel):
     api_key: str                            # plaintext; backend encrypts
 
 
+class EmailConfigUpdate(BaseModel):
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None    # plaintext; backend encrypts; None = keep existing
+    smtp_from: Optional[str] = None
+
+
+class EmailConfigResponse(BaseModel):
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password_set: bool = False
+    smtp_from: Optional[str] = None
+
+
 class GoogleAuthRequest(BaseModel):
     token: str                              # Google ID token from GIS
 
@@ -168,6 +182,9 @@ class JobDescriptionCreate(BaseModel):
     status: str = "Draft"
     openings: int = 1
     owner: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_currency: str = "EUR"
 
 
 class JobDescriptionUpdate(BaseModel):
@@ -178,6 +195,9 @@ class JobDescriptionUpdate(BaseModel):
     status: Optional[str] = None
     openings: Optional[int] = None
     owner: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_currency: Optional[str] = None
 
 
 class ImproveJDRequest(BaseModel):
@@ -232,6 +252,9 @@ class PublicJobItem(BaseModel):
     description: Optional[str] = None
     requirements: Optional[str] = None
     openings: int
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_currency: str = "EUR"
 
 
 class PublicJobListResponse(BaseModel):

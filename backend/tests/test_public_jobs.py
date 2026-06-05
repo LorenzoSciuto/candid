@@ -63,9 +63,11 @@ def seed_portal_data(portal_db: Database) -> None:
             description="Build scalable APIs.",
             requirements="5+ years Python",
             location="Remote",
-            remote_ok=True,
             status="Active",
             openings=2,
+            salary_min=60000,
+            salary_max=90000,
+            salary_currency="EUR",
         )
         draft_job = JobDescription(
             id="jd-draft-1",
@@ -151,6 +153,16 @@ class TestListPublicJobs:
         response = portal_client.get(f"/public/organizations/{TEST_ORG_SLUG}/jobs")
         assert response.status_code == 200
         assert response.json()["branding"] is None
+
+    def test_listJobs_shouldIncludeSalaryRange_whenSet(
+        self, portal_client: TestClient
+    ) -> None:
+        response = portal_client.get(f"/public/organizations/{TEST_ORG_SLUG}/jobs")
+        assert response.status_code == 200
+        job = response.json()["jobs"][0]
+        assert job["salary_min"] == 60000
+        assert job["salary_max"] == 90000
+        assert job["salary_currency"] == "EUR"
 
 
 # ── POST /public/organizations/{slug}/jobs/{job_id}/apply ─────────────────────

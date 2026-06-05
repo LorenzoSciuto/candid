@@ -98,6 +98,36 @@ class TestDeleteJD:
         assert client.delete("/job-descriptions/nope").status_code == 404
 
 
+class TestSalaryRange:
+    def test_createJD_shouldPersistSalaryRange_whenProvided(self, client: TestClient) -> None:
+        role_id = _make_role(client)
+        resp = client.post("/job-descriptions/", json={
+            "role_id": role_id, "title": "ML Engineer",
+            "salary_min": 70000, "salary_max": 100000, "salary_currency": "USD",
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["salary_min"] == 70000
+        assert data["salary_max"] == 100000
+        assert data["salary_currency"] == "USD"
+
+    def test_updateJD_shouldPatchSalaryRange_whenProvided(self, client: TestClient) -> None:
+        role_id = _make_role(client)
+        created = client.post("/job-descriptions/", json={"role_id": role_id, "title": "Analyst"}).json()
+        resp = client.patch(f"/job-descriptions/{created['id']}", json={"salary_min": 40000, "salary_max": 55000, "salary_currency": "GBP"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["salary_min"] == 40000
+        assert data["salary_max"] == 55000
+        assert data["salary_currency"] == "GBP"
+
+    def test_createJD_shouldDefaultSalaryToNull_whenNotProvided(self, client: TestClient) -> None:
+        role_id = _make_role(client)
+        resp = client.post("/job-descriptions/", json={"role_id": role_id, "title": "Intern"}).json()
+        assert resp["salary_min"] is None
+        assert resp["salary_max"] is None
+
+
 class TestImproveJD:
     def test_returns_improved_text(self, client: TestClient) -> None:
         ai_response = '{"improved_text": "A much better job description."}'

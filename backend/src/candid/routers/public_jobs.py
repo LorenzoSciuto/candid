@@ -169,5 +169,8 @@ class PublicJobsRouter:
             description=job.description,
             requirements=job.requirements,
             openings=job.openings,
+            salary_min=job.salary_min,
+            salary_max=job.salary_max,
+            salary_currency=job.salary_currency,
         )
 

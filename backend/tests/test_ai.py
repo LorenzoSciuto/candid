@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from candid.services.ai_engine import AIEngine
 
-
 class TestRewriteEndpoint:
     def test_rewrite_email_action(self, client: TestClient) -> None:
         ai_response = '{"result": "Hi there, we would love to chat!"}'

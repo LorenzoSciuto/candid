@@ -30,4 +30,5 @@ exec uv run uvicorn candid.app:app \
     --host "${HOST}" \
     --port "${PORT}" \
     --reload \
+    --log-level info \
     "${SSL_ARGS[@]}"

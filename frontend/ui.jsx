@@ -54,6 +54,8 @@ const Icons = {
   EyeOff: (p) => <Icon {...p} d={<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></>} />,
   Archive: (p) => <Icon {...p} d={<><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" rx="1" /><line x1="10" y1="12" x2="14" y2="12" /></>} />,
   RotateCcw: (p) => <Icon {...p} d={<><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.51" /></>} />,
+  Trash: (p) => <Icon {...p} d={<><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2" /></>} />,
+  UserX: (p) => <Icon {...p} d={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="17" y1="8" x2="23" y2="14" /><line x1="23" y1="8" x2="17" y2="14" /></>} />,
   Link: (p) => <Icon {...p} d={<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>} />,
   ExternalLink: (p) => <Icon {...p} d={<><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></>} />,
 };
@@ -100,8 +102,13 @@ const Badge = ({ children, kind, dot, style }) => (
   </span>
 );
 
+const _TERMINAL_BADGE = {
+  hired:    { dot: "#22c55e", label: "Hired" },
+  Rejected: { dot: "#ef4444", label: "Rejected" },
+  archived: { dot: "#94a3b8", label: "Archived" },
+};
 const StatusBadge = ({ status }) => {
-  const s = window.CANDID_DATA.STATUS.find(x => x.id === status);
+  const s = window.CANDID_DATA.STATUS.find(x => x.id === status) || _TERMINAL_BADGE[status];
   if (!s) return null;
   return <Badge dot={s.dot}>{s.label}</Badge>;
 };

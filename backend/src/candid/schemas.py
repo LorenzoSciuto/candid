@@ -304,3 +304,14 @@ class PerformanceReviewUpdate(BaseModel):
     rating: Optional[str] = None
     action_goals: Optional[str] = None
     next_review_date: Optional[str] = None
+
+
+# ── Video Interviews ─────────────────────────────────────────────────────────
+
+class VideoInterviewCreate(BaseModel):
+    candidate_id: str
+    questions: list[str]
+
+
+class CompleteResponseRequest(BaseModel):
+    total_chunks: int

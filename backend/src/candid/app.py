@@ -34,6 +34,7 @@ from candid.routers.public_applications import PublicApplicationsRouter
 from candid.routers.public_jobs import PublicJobsRouter
 from candid.routers.quick_add import QuickAddRouter
 from candid.routers.roles import RolesRouter
+from candid.routers.video_interviews import PublicVideoRouter, VideoInterviewsRouter
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
@@ -41,6 +42,7 @@ from candid.services.email_service import EmailServiceFactory
 from candid.services.notification_service import NotificationService
 from candid.services.otp_service import OtpService
 from candid.services.transcription_service import TranscriptionService
+from candid.services.video_interview_service import VideoInterviewService
 
 
 class Application:
@@ -52,6 +54,7 @@ class Application:
         self._ai_factory = AIEngineFactory(self._crypto)
         self._otp = OtpService()
         self._notification_service = NotificationService()
+        self._video_interview_service = VideoInterviewService()
         self._transcription_service = TranscriptionService(
             upload_dir=Path("uploads/audio"),
             ai_engine_factory=self._ai_factory,
@@ -152,6 +155,9 @@ class Application:
         fastapi_app.include_router(
             PublicApplicationsRouter(self._db, self._otp, self._email_factory, self._settings).router
         )
+        fastapi_app.include_router(
+            PublicVideoRouter(self._db, self._video_interview_service).router
+        )
         # Branding: contains both public (/public/...) and auth-protected endpoints;
         # mounted without a global dependency so the public GET remains unauthenticated
         fastapi_app.include_router(BrandingRouter(self._db).router)
@@ -171,6 +177,7 @@ class Application:
             JobDescriptionsRouter(self._db, self._ai_factory).router,
             EmployeesRouter(self._db).router,
             PerformanceReviewsRouter(self._db, self._ai_factory).router,
+            VideoInterviewsRouter(self._db, self._video_interview_service).router,
         ]:
             fastapi_app.include_router(router, dependencies=auth_dep)
 

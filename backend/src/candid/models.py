@@ -231,3 +231,33 @@ class PerformanceReview(SQLModel, table=True):
     action_goals: Optional[str] = None        # JSON array of goal strings
     next_review_date: Optional[str] = None    # ISO date
     created_at: str = Field(default_factory=lambda: date.today().isoformat())
+
+
+# ── Video Interview Portal ────────────────────────────────────────────────────
+
+class VideoInterview(SQLModel, table=True):
+    __tablename__ = "video_interview"
+
+    id: str = Field(default_factory=lambda: _uid("vi"), primary_key=True)
+    org_id: str = Field(index=True)
+    candidate_id: str = Field(index=True)
+    invite_token: str = Field(unique=True, index=True)
+    questions: str  # JSON list of question strings
+    status: str = Field(default="pending")  # pending | in_progress | completed | expired
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    expires_at: str
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class VideoResponse(SQLModel, table=True):
+    __tablename__ = "video_response"
+
+    id: str = Field(default_factory=lambda: _uid("vr"), primary_key=True)
+    video_interview_id: str = Field(index=True)
+    question_index: int
+    status: str = Field(default="recording")  # recording | uploading | complete
+    total_chunks: Optional[int] = None
+    received_chunks: int = Field(default=0)
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    completed_at: Optional[str] = None

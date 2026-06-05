@@ -1,5 +1,7 @@
 import logging
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -26,6 +28,7 @@ class SendEmailRequest(BaseModel):
     to: str
     subject: str
     body: str
+    candidate_id: Optional[str] = None
 
 
 class AIRouter:
@@ -80,7 +83,7 @@ class AIRouter:
     def _send_email(self, body: SendEmailRequest, session: Session, org_id: str) -> dict:
         if not body.to or not body.subject or not body.body:
             raise HTTPException(400, "to, subject, and body are required")
-        email_svc = self._email_factory.from_session(session, org_id) if self._email_factory else None
+        email_svc = self._email_factory.from_session(session, org_id, candidate_id=body.candidate_id) if self._email_factory else None
         if not email_svc:
             raise HTTPException(503, "SMTP not configured — configure it in Settings → Email")
         try:

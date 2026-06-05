@@ -89,7 +89,7 @@ const EmailModal = ({ candidate, onClose }) => {
       const res = await fetch(`${window.API_BASE}/ai/send-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: candidate.email, subject, body }),
+        body: JSON.stringify({ to: candidate.email, subject, body, candidate_id: candidate.id }),
       });
       if (res.status === 503) {
         window.open(`mailto:${candidate.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);

@@ -63,6 +63,7 @@ class OrgConfig(SQLModel, table=True):
     smtp_user: Optional[str] = None
     smtp_password_encrypted: Optional[str] = None
     smtp_from: Optional[str] = None
+    date_format: str = Field(default="dd/MM/yyyy")
 
 
 class OrgApiKey(SQLModel, table=True):

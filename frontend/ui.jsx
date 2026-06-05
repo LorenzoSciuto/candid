@@ -355,4 +355,63 @@ const Tooltip = ({ text, children }) => {
   );
 };
 
-Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, ConfirmDialog, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, Tooltip, useContext, useApiData });
+// ── Date formatting ────────────────────────────────────────────────────────────
+
+window.CANDID_DATE_FORMAT = window.CANDID_DATE_FORMAT || "dd/MM/yyyy";
+
+window.formatDate = (iso) => {
+  if (!iso) return "";
+  const dateObj = new Date(iso);
+  if (isNaN(dateObj.getTime())) return iso;
+  const fmt = window.CANDID_DATE_FORMAT || "dd/MM/yyyy";
+  const dayPart    = String(dateObj.getDate()).padStart(2, "0");
+  const monthPart  = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const yearPart   = String(dateObj.getFullYear());
+  return fmt.replace("dd", dayPart).replace("MM", monthPart).replace("yyyy", yearPart);
+};
+
+window.formatDateTime = (iso) => {
+  if (!iso) return "";
+  const dateObj = new Date(iso);
+  if (isNaN(dateObj.getTime())) return iso;
+  const hours   = String(dateObj.getHours()).padStart(2, "0");
+  const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+  return `${window.formatDate(iso)} ${hours}:${minutes}`;
+};
+
+// ── Email detail modal ─────────────────────────────────────────────────────────
+
+const EmailDetailModal = ({ email, onClose }) => {
+  if (!email) return null;
+  const EMAIL_TYPE_COLOR = { rejection: "error", invitation: "neutral", otp: "neutral", general: "neutral" };
+  return (
+    <Modal open={!!email} onClose={onClose} title={email.subject || "(no subject)"} width={580}>
+      <div className="col gap-10">
+        <div className="row gap-8" style={{ alignItems: "center" }}>
+          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>To</span>
+          <span className="text-13">{email.to_email || "—"}</span>
+        </div>
+        <div className="row gap-8" style={{ alignItems: "center" }}>
+          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>Date</span>
+          <span className="text-13">{window.formatDateTime(email.sent_at)}</span>
+        </div>
+        <div className="row gap-8" style={{ alignItems: "center" }}>
+          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>Type</span>
+          <Badge kind={EMAIL_TYPE_COLOR[email.email_type] || "neutral"}>{email.email_type}</Badge>
+        </div>
+        <hr style={{ border: "none", borderTop: "1px solid var(--border-soft)", margin: "6px 0" }} />
+        <div style={{
+          background: "var(--bg-sunken)", borderRadius: 8, padding: "14px 16px",
+          fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--ink)",
+          maxHeight: 360, overflowY: "auto",
+        }}>
+          {email.body
+            ? email.body
+            : <span style={{ color: "var(--ink-muted)", fontStyle: "italic" }}>(no body stored)</span>}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, ConfirmDialog, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, Tooltip, useContext, useApiData, EmailDetailModal });

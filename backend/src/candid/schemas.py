@@ -120,6 +120,14 @@ class EmailConfigResponse(BaseModel):
     smtp_from: Optional[str] = None
 
 
+class PreferencesUpdate(BaseModel):
+    date_format: str = "dd/MM/yyyy"
+
+
+class PreferencesResponse(BaseModel):
+    date_format: str = "dd/MM/yyyy"
+
+
 class GoogleAuthRequest(BaseModel):
     token: str                              # Google ID token from GIS
 

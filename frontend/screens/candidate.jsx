@@ -1611,9 +1611,10 @@ const _relativeTimeEmail = (iso) => {
 };
 
 const EmailsTab = ({ candidateId }) => {
-  const [emails, setEmails]   = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError]     = React.useState(null);
+  const [emails, setEmails]               = React.useState([]);
+  const [loading, setLoading]             = React.useState(true);
+  const [error, setError]                 = React.useState(null);
+  const [selectedEmail, setSelectedEmail] = React.useState(null);
 
   const load = React.useCallback(() => {
     setLoading(true); setError(null);
@@ -1647,7 +1648,11 @@ const EmailsTab = ({ candidateId }) => {
       {!loading && !error && emails.length > 0 && (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           {emails.map((email, index) => (
-            <div key={email.id} className="row gap-14" style={{ padding: "14px 18px", borderBottom: index === emails.length - 1 ? 0 : "1px solid var(--border-soft)", alignItems: "flex-start" }}>
+            <div
+              key={email.id} className="row gap-14"
+              style={{ padding: "14px 18px", borderBottom: index === emails.length - 1 ? 0 : "1px solid var(--border-soft)", alignItems: "flex-start", cursor: "pointer" }}
+              onClick={() => setSelectedEmail(email)}
+            >
               <span style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, background: "var(--bg-sunken)", color: "var(--ink-secondary)" }}>
                 <Icons.Mail size={14} />
               </span>
@@ -1665,6 +1670,8 @@ const EmailsTab = ({ candidateId }) => {
           ))}
         </div>
       )}
+
+      <window.EmailDetailModal email={selectedEmail} onClose={() => setSelectedEmail(null)} />
     </div>
   );
 };

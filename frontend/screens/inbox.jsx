@@ -147,8 +147,8 @@ const EMAIL_TYPE_BADGE = {
   general:    "neutral",
 };
 
-const EmailRow = ({ email }) => (
-  <div className="card row" style={{ padding: 14, gap: 14, alignItems: "flex-start" }}>
+const EmailRow = ({ email, onClick }) => (
+  <div className="card row" style={{ padding: 14, gap: 14, alignItems: "flex-start", cursor: "pointer" }} onClick={onClick}>
     <span style={{ width: 36, height: 36, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, background: "var(--bg-sunken)", color: "var(--ink-secondary)" }}>
       <Icons.Mail size={15} />
     </span>
@@ -169,9 +169,10 @@ const EmailRow = ({ email }) => (
 
 const EmailsPane = () => {
   const t = window.useT ? window.useT() : k => k;
-  const [emails, setEmails] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+  const [emails, setEmails]             = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+  const [selectedEmail, setSelectedEmail] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true); setError(null);
@@ -202,9 +203,11 @@ const EmailsPane = () => {
       )}
       {!loading && !error && emails.length > 0 && (
         <div className="col gap-8">
-          {emails.map(email => <EmailRow key={email.id} email={email} />)}
+          {emails.map(email => <EmailRow key={email.id} email={email} onClick={() => setSelectedEmail(email)} />)}
         </div>
       )}
+
+      <window.EmailDetailModal email={selectedEmail} onClose={() => setSelectedEmail(null)} />
     </div>
   );
 };

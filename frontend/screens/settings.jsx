@@ -393,6 +393,55 @@ const LOCALES = [
   { id: "de", label: "Deutsch", flag: "🇩🇪" },
 ];
 
+const DATE_FORMATS = [
+  { id: "dd/MM/yyyy", label: "DD/MM/YYYY", example: "05/06/2026" },
+  { id: "MM/dd/yyyy", label: "MM/DD/YYYY", example: "06/05/2026" },
+  { id: "yyyy-MM-dd", label: "YYYY-MM-DD", example: "2026-06-05" },
+];
+
+const DateFormatSettings = ({ t }) => {
+  const [dateFormat, setDateFormat] = React.useState(window.CANDID_DATE_FORMAT || "dd/MM/yyyy");
+  const [saved, setSaved]           = React.useState(false);
+
+  const handleSelect = async (formatId) => {
+    setDateFormat(formatId);
+    window.CANDID_DATE_FORMAT = formatId;
+    try {
+      await fetch(`${window.API_BASE}/config/preferences`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date_format: formatId }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <div className="card card-pad col gap-12">
+      <div className="col">
+        <span className="weight-600">Date format</span>
+        <span className="text-12 text-secondary">How dates appear across the app.</span>
+      </div>
+      <div className="row gap-10" style={{ flexWrap: "wrap" }}>
+        {DATE_FORMATS.map(fmt => (
+          <button key={fmt.id} onClick={() => handleSelect(fmt.id)} className="col" style={{
+            padding: "12px 18px", border: `1px solid ${dateFormat === fmt.id ? "var(--ink)" : "var(--border)"}`,
+            borderRadius: 8, background: dateFormat === fmt.id ? "var(--surface)" : "var(--bg-sunken)",
+            boxShadow: dateFormat === fmt.id ? "var(--shadow-sm)" : "none", cursor: "pointer",
+            alignItems: "flex-start", gap: 4, minWidth: 130,
+          }}>
+            <span className="weight-500" style={{ fontSize: 13 }}>{fmt.label}</span>
+            <span className="text-12 text-muted">{fmt.example}</span>
+            {dateFormat === fmt.id && <span style={{ marginTop: 4, width: 14, height: 14, borderRadius: 999, background: "var(--ink)", color: "white", display: "grid", placeItems: "center" }}><Icons.Check size={9} /></span>}
+          </button>
+        ))}
+      </div>
+      {saved && <span className="text-12" style={{ color: "var(--success)" }}>Saved</span>}
+    </div>
+  );
+};
+
 const LocaleSettings = ({ t, locale, onChange }) => (
   <div className="col gap-16">
     <div className="card card-pad col gap-12">
@@ -415,6 +464,7 @@ const LocaleSettings = ({ t, locale, onChange }) => (
         ))}
       </div>
     </div>
+    <DateFormatSettings t={t} />
   </div>
 );
 

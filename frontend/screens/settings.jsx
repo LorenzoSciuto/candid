@@ -157,7 +157,14 @@ const BrandingSettings = ({ t }) => {
               <div style={{ position: "relative", flexShrink: 0 }}>
                 <img src={logoUrl} alt="Logo" style={{ maxHeight: 52, maxWidth: 160, borderRadius: 8, border: "1px solid var(--border)", padding: 6, background: "#fff", display: "block" }}
                   onError={e => { e.target.style.display = "none"; }} />
-                <button onClick={() => setLogoUrl("")}
+                <button onClick={async () => {
+                    setLogoUrl("");
+                    await fetch(`${window.API_BASE}/organizations/current/branding`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ logo_url: null }),
+                    }).catch(() => {});
+                  }}
                   style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "var(--danger)", color: "#fff", border: "none", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>×</button>
               </div>
             )}

@@ -30,7 +30,7 @@ const onAccent = (hex) => luminance(hex || "#111") > 0.45 ? "#111827" : "#ffffff
 // ── Apply Modal ───────────────────────────────────────────────────────────────
 
 const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
-  const [cvText,     setCvText]    = useState("");
+  const [cvFile,     setCvFile]    = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]    = useState("");
   const [success,    setSuccess]  = useState(false);
@@ -39,13 +39,14 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
   const fg     = onAccent(accent);
 
   const submit = async () => {
-    if (!cvText.trim()) return;
+    if (!cvFile) return;
     setSubmitting(true); setError("");
     try {
+      const formData = new FormData();
+      formData.append("cv_file", cvFile);
       const res = await fetch(`${window.API_BASE}/public/organizations/${orgSlug}/jobs/${job.id}/apply`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cv_text: cvText.trim() }),
+        body: formData,
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Submission failed");
       setSuccess(true);
@@ -54,10 +55,16 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
     setSubmitting(false);
   };
 
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0] || e.target.files?.[0];
+    if (file) { setCvFile(file); setError(""); }
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16, backdropFilter: "blur(4px)" }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "92vh", overflowY: "auto", fontFamily: "ui-sans-serif, system-ui, sans-serif", boxShadow: "0 24px 60px rgba(0,0,0,.18)" }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, fontFamily: "ui-sans-serif, system-ui, sans-serif", boxShadow: "0 24px 60px rgba(0,0,0,.18)" }}>
 
         <div style={{ background: accent, padding: "24px 28px", borderRadius: "16px 16px 0 0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -79,21 +86,34 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
               <button onClick={onClose} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#374151" }}>
-                  Your CV / Résumé
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#374151" }}>Upload your CV</label>
+                <label
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleFileDrop}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    gap: 10, padding: "36px 24px", borderRadius: 12,
+                    border: `2px dashed ${cvFile ? accent : "#d1d5db"}`,
+                    background: cvFile ? `${accent}0d` : "#fafafa",
+                    cursor: "pointer", textAlign: "center", transition: "border-color .15s, background .15s",
+                  }}>
+                  <input type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: "none" }} onChange={handleFileDrop} />
+                  {cvFile ? (
+                    <>
+                      <span style={{ fontSize: 28 }}>📄</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{cvFile.name}</span>
+                      <span style={{ fontSize: 12, color: "#6b7280" }}>{(cvFile.size / 1024).toFixed(0)} KB — click to replace</span>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 32 }}>📤</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>Drop your CV here or click to browse</span>
+                      <span style={{ fontSize: 12, color: "#9ca3af" }}>PDF, Word (.docx), or plain text — max 5 MB</span>
+                    </>
+                  )}
                 </label>
-                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b7280", lineHeight: 1.5 }}>
-                  Paste your full CV below — we'll extract your details automatically.
-                </p>
-                <textarea
-                  autoFocus
-                  value={cvText}
-                  onChange={e => setCvText(e.target.value)}
-                  placeholder={"Work experience, education, skills, contact info…\n\nExample:\nJane Smith · jane@example.com · +1 555 0100\nSenior Engineer at Acme Corp (2020–present)\n…"}
-                  style={{ width: "100%", minHeight: 260, padding: "12px 14px", borderRadius: 10, border: "1.5px solid #e5e7eb", fontSize: 13.5, lineHeight: 1.7, resize: "vertical", outline: "none", boxSizing: "border-box", fontFamily: "ui-monospace, monospace", background: "#fafafa" }}
-                />
               </div>
 
               {error && <div style={{ color: "#dc2626", fontSize: 13, padding: "10px 14px", background: "#fef2f2", borderRadius: 8 }}>{error}</div>}
@@ -101,9 +121,9 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
                 {submitting && <span style={{ fontSize: 13, color: "#6b7280" }}>Analysing CV…</span>}
                 <button onClick={onClose} style={{ padding: "11px 20px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                <button onClick={submit} disabled={!cvText.trim() || submitting}
-                  style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: cvText.trim() && !submitting ? "pointer" : "not-allowed", opacity: cvText.trim() && !submitting ? 1 : .55, fontFamily: "inherit", transition: "opacity .15s" }}>
-                  {submitting ? "Submitting…" : "Submit application →"}
+                <button onClick={submit} disabled={!cvFile || submitting}
+                  style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: cvFile && !submitting ? "pointer" : "not-allowed", opacity: cvFile && !submitting ? 1 : .55, fontFamily: "inherit", transition: "opacity .15s" }}>
+                  {submitting ? "Submitting…" : "Apply →"}
                 </button>
               </div>
             </div>

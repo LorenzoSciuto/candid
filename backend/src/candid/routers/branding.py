@@ -82,8 +82,13 @@ class BrandingRouter:
 
     def _merge_branding(self, organization_record: Organization, body: BrandingUpdate) -> dict:
         existing_config = self._parse_branding_config(organization_record)
-        incoming_fields = body.model_dump(exclude_none=True)
-        return {**existing_config, **incoming_fields}
+        merged = {**existing_config}
+        for field_name, field_value in body.model_dump(exclude_unset=True).items():
+            if field_value is None:
+                merged.pop(field_name, None)
+            else:
+                merged[field_name] = field_value
+        return merged
 
     def _build_branding_response(self, organization_record: Organization) -> dict:
         branding_configuration = self._parse_branding_config(organization_record)

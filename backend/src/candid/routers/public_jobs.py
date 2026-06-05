@@ -1,24 +1,25 @@
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session, select
 
 from candid.database import Database
 from candid.models import Candidate, JobDescription, Organization
 from candid.schemas import (
-    PortalApplicationRequest,
     PortalApplicationResponse,
     PublicJobItem,
     PublicJobListResponse,
 )
 from candid.services.ai_engine import AIEngineFactory
+from candid.services.cv_extractor import CVExtractor
 
 
 class PublicJobsRouter:
     def __init__(self, database: Database, ai_engine_factory: Optional[AIEngineFactory] = None) -> None:
         self._db = database
         self._ai_factory = ai_engine_factory
+        self._extractor = CVExtractor()
         self.router = APIRouter(prefix="/public", tags=["public"])
         self._register()
 
@@ -40,13 +41,13 @@ class PublicJobsRouter:
             response_model=PortalApplicationResponse,
             status_code=201,
         )
-        def apply_for_job(
+        async def apply_for_job(
             org_slug: str,
             job_id: str,
-            body: PortalApplicationRequest,
+            cv_file: UploadFile = File(...),
             session: Session = Depends(database.get_session),
         ) -> PortalApplicationResponse:
-            return self._apply(session, org_slug, job_id, body)
+            return await self._apply(session, org_slug, job_id, cv_file)
 
     # ── Implementations ────────────────────────────────────────────────────────
 
@@ -63,22 +64,27 @@ class PublicJobsRouter:
             jobs=[self._to_public_job_item(job) for job in active_jobs],
         )
 
-    def _apply(
+    async def _apply(
         self,
         session: Session,
         org_slug: str,
         job_id: str,
-        body: PortalApplicationRequest,
+        cv_file: UploadFile,
     ) -> PortalApplicationResponse:
         organization_record = self._fetch_org_by_slug(session, org_slug)
-        job_description_record = self._fetch_active_job(
-            session, organization_record.id, job_id
-        )
-        parsed = self._parse_cv(session, organization_record.id, body.cv_text or "")
+        job_description_record = self._fetch_active_job(session, organization_record.id, job_id)
+        cv_text = self._extract_cv_text(cv_file.filename or "", await cv_file.read())
+        parsed = self._parse_cv(session, organization_record.id, cv_text)
         candidate = self._create_portal_candidate(
-            session, organization_record.id, job_description_record, body, parsed
+            session, organization_record.id, job_description_record, cv_text, parsed
         )
         return PortalApplicationResponse(ok=True, candidate_id=candidate.id)
+
+    def _extract_cv_text(self, filename: str, file_bytes: bytes) -> str:
+        try:
+            return self._extractor.extract(filename, file_bytes)
+        except Exception:
+            return ""
 
     def _parse_cv(self, session: Session, org_id: str, cv_text: str) -> dict:
         if not cv_text.strip() or self._ai_factory is None:
@@ -124,7 +130,7 @@ class PublicJobsRouter:
         session: Session,
         org_id: str,
         job_description_record: "JobDescription",
-        body: PortalApplicationRequest,
+        cv_text: str,
         parsed: dict,
     ) -> Candidate:
         first_name = parsed.get("first_name") or "Unknown"
@@ -140,7 +146,7 @@ class PublicJobsRouter:
             current_role=parsed.get("current_role") or None,
             years_of_experience=parsed.get("years_of_experience") or None,
             location=parsed.get("location") or None,
-            cv_text=body.cv_text,
+            cv_text=cv_text,
             status="new",
             source="Portal",
             job_title=job_description_record.title,

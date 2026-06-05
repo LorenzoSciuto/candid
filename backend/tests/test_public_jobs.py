@@ -167,9 +167,11 @@ class TestListPublicJobs:
 
 # ── POST /public/organizations/{slug}/jobs/{job_id}/apply ─────────────────────
 
-_APPLICATION_PAYLOAD = {
-    "cv_text": "Alice Smith — alice@example.com — 8 years of Python backend experience.",
-}
+_CV_CONTENT = b"Alice Smith - alice@example.com - 8 years of Python backend experience."
+
+
+def _cv_file_upload() -> dict:
+    return {"cv_file": ("alice_cv.txt", _CV_CONTENT, "text/plain")}
 
 
 class TestApplyForJob:
@@ -178,7 +180,7 @@ class TestApplyForJob:
     ) -> None:
         response = portal_client.post(
             f"/public/organizations/{TEST_ORG_SLUG}/jobs/jd-active-1/apply",
-            json=_APPLICATION_PAYLOAD,
+            files=_cv_file_upload(),
         )
         assert response.status_code == 201
         data = response.json()
@@ -190,7 +192,7 @@ class TestApplyForJob:
     ) -> None:
         response = portal_client.post(
             "/public/organizations/ghost-org/jobs/jd-active-1/apply",
-            json=_APPLICATION_PAYLOAD,
+            files=_cv_file_upload(),
         )
         assert response.status_code == 404
 
@@ -199,7 +201,7 @@ class TestApplyForJob:
     ) -> None:
         response = portal_client.post(
             f"/public/organizations/{TEST_ORG_SLUG}/jobs/jd-nonexistent/apply",
-            json=_APPLICATION_PAYLOAD,
+            files=_cv_file_upload(),
         )
         assert response.status_code == 404
 
@@ -208,7 +210,7 @@ class TestApplyForJob:
     ) -> None:
         response = portal_client.post(
             f"/public/organizations/{TEST_ORG_SLUG}/jobs/jd-draft-1/apply",
-            json=_APPLICATION_PAYLOAD,
+            files=_cv_file_upload(),
         )
         assert response.status_code == 400
 
@@ -217,7 +219,7 @@ class TestApplyForJob:
     ) -> None:
         response = portal_client.post(
             f"/public/organizations/{TEST_ORG_SLUG}/jobs/jd-active-1/apply",
-            json=_APPLICATION_PAYLOAD,
+            files=_cv_file_upload(),
         )
         assert response.status_code == 201
         candidate_id = response.json()["candidate_id"]

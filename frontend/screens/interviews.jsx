@@ -28,9 +28,9 @@ const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // ── Schedule Modal ────────────────────────────────────────────────────────────
 
-const ScheduleModal = ({ onClose, onSaved }) => {
+const ScheduleModal = ({ onClose, onSaved, initialCandidateId = "" }) => {
   const t = window.useT();
-  const [candidateId, setCandidateId] = useState("");
+  const [candidateId, setCandidateId] = useState(initialCandidateId);
   const [title, setTitle] = useState("");
   const [type, setType] = useState("Video");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -496,3 +496,4 @@ const InterviewsScreen = ({ onRoute }) => {
 };
 
 window.InterviewsScreen = InterviewsScreen;
+window.ScheduleModal = ScheduleModal;

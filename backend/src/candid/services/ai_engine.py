@@ -261,7 +261,7 @@ class AIEngineFactory:
 
     _DEFAULT_PROVIDER_MODELS: dict[str, str] = {
         "openai": "gpt-4o",
-        "anthropic": "claude-3-5-haiku-20241022",
+        "anthropic": "claude-haiku-5-5",
         "gemini": "gemini-2.0-flash",
         "groq": "llama-3.1-8b-instant",
     }

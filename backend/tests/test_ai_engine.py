@@ -35,7 +35,7 @@ class TestAIEngineRetry:
     def test_call_should_not_sleep_after_last_primary_attempt_when_fallback_exists(self) -> None:
         engine = AIEngine(
             "openai", "gpt-4o", "sk-test",
-            fallbacks=[("anthropic", "claude-3-5-haiku-20241022", "sk-anthropic")],
+            fallbacks=[("anthropic", "claude-haiku-5-5", "sk-anthropic")],
         )
         side_effects = [RuntimeError(), RuntimeError(), RuntimeError(), '{"fallback":1}']
         with patch.object(engine, "_call_provider", side_effect=side_effects), \
@@ -58,7 +58,7 @@ class TestAIEngineFallback:
     @staticmethod
     def _create_engine_with_fallback(
         fallback_provider: str = "anthropic",
-        fallback_model: str = "claude-3-5-haiku-20241022",
+        fallback_model: str = "claude-haiku-5-5",
         fallback_api_key: str = "sk-anthropic",
     ) -> AIEngine:
         return AIEngine(
@@ -74,7 +74,7 @@ class TestAIEngineFallback:
             result = engine._call("prompt")
         assert result == '{"fallback":1}'
         fourth_call = mock_call_provider.call_args_list[3]
-        assert fourth_call == call("anthropic", "claude-3-5-haiku-20241022", "sk-anthropic", "prompt")
+        assert fourth_call == call("anthropic", "claude-haiku-5-5", "sk-anthropic", "prompt")
 
     def test_call_should_try_fallback_once_when_fallback_fails(self) -> None:
         engine = self._create_engine_with_fallback()
@@ -89,7 +89,7 @@ class TestAIEngineFallback:
         engine = AIEngine(
             "openai", "gpt-4o", "sk-test",
             fallbacks=[
-                ("anthropic", "claude-3-5-haiku-20241022", "sk-anthropic"),
+                ("anthropic", "claude-haiku-5-5", "sk-anthropic"),
                 ("gemini", "gemini-2.0-flash", "sk-gemini"),
             ],
         )
@@ -109,7 +109,7 @@ class TestAIEngineFallback:
         engine = AIEngine(
             "openai", "gpt-4o", "sk-test",
             fallbacks=[
-                ("anthropic", "claude-3-5-haiku-20241022", "sk-anthropic"),
+                ("anthropic", "claude-haiku-5-5", "sk-anthropic"),
                 ("gemini", "gemini-2.0-flash", "sk-gemini"),
             ],
         )

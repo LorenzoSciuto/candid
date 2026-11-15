@@ -1,107 +1,39 @@
 # Changelog
 
-All notable changes to Candid. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/).
+All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and the project uses [Semantic Versioning](https://semver.org/). From 1.0.0 onwards, every release on
+GitHub also carries notes generated from the Conventional Commits it contains.
 
----
+## [1.0.0] — first public release
 
-## [Unreleased] — develop
-
-### Added
-- Server offline overlay: app detects unreachable backend within 4 s and shows a full-screen error with start command; polls every 5 s and auto-recovers
-- Pipeline: "View all →" link in subtitle navigates to Candidates list
-
-### Fixed
-- `interview` table missing 5 columns (`audio_file_path`, `transcript_raw`, `transcript_status`, `transcript_language`, `ai_evaluation`) — caused 500 + CORS errors on `/interviews`
-- `candidate` table missing `otp_hash`, `otp_expires_at` columns
-- `organization` table missing `branding_config` column
-- Baseline migration updated to add missing columns via guarded ALTER TABLE
-
-### Changed
-- Alembic migrations squashed: 3 incremental scripts → 1 clean baseline (`0001_baseline_schema.py`). All ops guarded with `IF NOT EXISTS`. On an existing DB run `alembic stamp --purge 0001` then `alembic upgrade head`.
-
----
-
-## [previous-unreleased]
+### Features
+- CV upload (PDF/DOCX) with AI analysis: summary, strengths, gaps, interview questions and fit against open positions.
+- Hiring pipeline with per-organisation stages, status history and activity log.
+- Live interview room with in-browser speech-to-text; Whisper transcription of uploaded recordings.
+- Asynchronous video interviews: candidate recording portal plus recruiter invites and playback.
+- Evaluation scorecards, AI-drafted rejection emails and an SMTP mailbox per candidate.
+- Job descriptions, roles with headcount, employee directory and performance reviews.
+- Public, branded job portal with CV applications.
+- Organisations with owner/admin/member roles, email invitations and a notification inbox.
+- OpenAI, Anthropic, Gemini and Groq support with per-organisation keys and automatic fallback.
+- Funnel report with CSV export; organisation-wide date format, currency and locations.
+- Full UI in English, Italian and German; themed 404 page.
 
 ### Security
-- **Fix:** Google OAuth token now validates `aud` claim against `GOOGLE_CLIENT_ID` — prevents tokens issued for other apps from authenticating
-- **Fix:** Evaluation fetch in candidate detail now filters by `org_id` — prevents theoretical cross-tenant data leak
-- **Fix:** CV filename sanitized before use in `Content-Disposition` header — prevents header injection
+- Two-layer tenant isolation: application checks on every client-supplied id plus PostgreSQL Row-Level
+  Security enforced through an unprivileged role, verified against PostgreSQL in CI.
+- Membership and admin role re-checked on every request; no default session secret.
+- Upload size caps, extension allowlists and server-generated file names; rate-limited public endpoints.
+- Verified SMTP TLS, HTML-escaped emails, secrets encrypted at rest, provider errors never echoed to clients.
 
-### Changed
-- Pipeline cards: dates now show human-readable format (`Today`, `Yesterday`, `3d ago`, `Jun 4`) instead of raw ISO timestamp
-- Pipeline cards: AI screening badge no longer truncates; name overflows with ellipsis
-- Test names in `test_ai_engine` and `test_performance_reviews` converted to snake_case
+### Upgrade notes
+- The migration history was squashed into one baseline. Databases created by pre-release checkouts
+  must be recreated (`./scripts/reset-db.sh`).
+- The migrating database user needs `CREATEROLE`, or the `candid_app` role must exist and be granted
+  to it (see README → Deployment notes).
 
----
-
-## [1.8.0] — 2026-05
-
-### Added
-- Async video interview portal: one-time invite link, timed video answers per question, chunked upload
-
-## [1.7.0] — 2026-05
-
-### Added
-- PostgreSQL row-level security (RLS) as defence-in-depth below application `org_id` filters
-
-## [1.6.0] — 2026-05
-
-### Added
-- 2FA OTP flow for candidate-facing public applications (6-digit code, 10-min TTL, SHA-256)
-
-## [1.5.0] — 2026-05
-
-### Added
-- AI-drafted rejection emails: personalised gap analysis, editable before send
-
-## [1.4.0] — 2026-05
-
-### Added
-- Org branding / white-labelling: custom colours, logo, fonts per org for public portal
-
-## [1.3.0] — 2026-05
-
-### Added
-- Inbox notifications: backend model + real events (new applicant, analysis done, invite accepted)
-
-## [1.2.0] — 2026-05
-
-### Added
-- Employee performance reviews: structured review cycles (self-eval + manager feedback + KPIs + AI improve)
-
-## [1.1.0] — 2026-05
-
-### Added
-- AI engine exponential backoff (1 s → 2 s → 4 s) on provider errors
-- Multi-provider fallback chain: primary → fallback providers tried in order until one succeeds
-- `AIEngineFactory.from_session_with_fallbacks` builds fallback chain from all stored org keys
-
-### Fixed
-- `alembic.ini` path resolution in `database.py`
-
-## [1.0.0] — 2026-04
-
-### Added
-- Google OAuth + JWT HS256 (48 h TTL) authentication
-- Multi-tenant org isolation via `require_org` dependency; wizard tokens cannot reach data endpoints
-- Org setup wizard + team invitations (7-day expiry, email delivery)
-- CV upload and AI parsing — PDF (PyMuPDF) + DOCX
-- AI candidate pre-analysis: skills, career score, career history, role fit per active JD
-- Candidate pipeline — Kanban with configurable stages, drag-and-drop, status history
-- Quick Add — paste text → AI extracts candidate fields
-- Live Room — real-time interview transcription via Web Speech API
-- Pre-interview AI briefing
-- Interview scheduling (list + week calendar views)
-- Per-candidate evaluation form (human skills + technical skills + recommendation)
-- Job descriptions CRUD + AI improvement
-- Roles with headcount tracking and AI description improve
-- Employee directory CRUD
-- Reports — hiring funnel analytics
-- AI provider switching at runtime (OpenAI / Anthropic / Gemini / Groq)
-- Encrypted API key storage (Fernet) — keys never stored in plaintext
-- Pipeline stages editor (configurable labels, colors)
-- i18n — EN / IT / DE
-- Alembic migration system (auto-runs `upgrade head` at startup)
-- HTTPS support via generated localhost certs (required for Web Speech API)
-- 156 automated tests (pytest, in-memory SQLite, no external infrastructure)
+### Engineering
+- Layered backend (`commons` / `services` / `routers`) with import rules enforced by tests.
+- Single baseline Alembic migration checked against the models in CI.
+- CI with ruff (including security rules), pytest with coverage, frontend syntax and i18n checks;
+  automatic semantic-version releases from Conventional Commits.

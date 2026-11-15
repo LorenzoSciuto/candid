@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]   # main is covered by the release workflow, which calls this one
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend — lint & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: candid
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: candid
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U candid" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Enables the Row-Level Security tests against a real PostgreSQL.
+      CANDID_TEST_DATABASE_URL: postgresql://candid:ci-only@localhost:5432/candid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: Lint (ruff)
+        run: uv run --with ruff==0.8.4 ruff check src tests alembic
+      - name: Migrations match the models
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+        env:
+          DATABASE_URL: postgresql://candid:ci-only@localhost:5432/candid
+      - name: Tests
+        run: uv run pytest -v --tb=short --cov=candid --cov-report=term-missing:skip-covered
+
+  frontend:
+    name: Frontend — syntax & i18n
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JSX parses
+        run: for f in *.jsx screens/*.jsx; do npx --yes esbuild@0.24.0 --loader:.jsx=jsx "$f" --log-level=error > /dev/null; done
+      - name: Scripts exist and translations are complete
+        run: node tests/check.js

@@ -5,7 +5,7 @@ set -euo pipefail
 CONTAINER="candid-db"
 DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-candid}"
-DB_PASS="${DB_PASS:-password}"
+DB_PASS="${DB_PASS:-password}"   # local development only — never reuse in production
 DB_NAME="${DB_NAME:-candid}"
 PG_IMAGE="postgres:16-alpine"
 
@@ -28,7 +28,7 @@ else
         -e POSTGRES_USER="${DB_USER}" \
         -e POSTGRES_PASSWORD="${DB_PASS}" \
         -e POSTGRES_DB="${DB_NAME}" \
-        -p "${DB_PORT}:5432" \
+        -p "127.0.0.1:${DB_PORT}:5432" \
         "${PG_IMAGE}" > /dev/null
 fi
 

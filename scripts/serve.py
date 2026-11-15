@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Custom static file server with a job-themed 404 page."""
+"""Development static file server for the frontend, with a themed 404 page.
+
+Usage: serve.py PORT [CERT KEY]   (binds to $HOST, default 127.0.0.1)
+"""
+import os
 import ssl
 import sys
 import http.server
@@ -212,7 +216,8 @@ def main():
     cert = sys.argv[2] if len(sys.argv) > 2 else None
     key  = sys.argv[3] if len(sys.argv) > 3 else None
 
-    server = http.server.HTTPServer(("", port), CandidHandler)
+    host = os.environ.get("HOST", "127.0.0.1")   # local only unless explicitly exposed
+    server = http.server.HTTPServer((host, port), CandidHandler)
 
     if cert and key:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

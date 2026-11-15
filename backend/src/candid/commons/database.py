@@ -16,8 +16,9 @@ class Database:
         self._engine = create_engine(url, echo=False)
 
     def migrate(self) -> None:
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         cfg = Config(str(_ALEMBIC_INI))
         cfg.set_main_option("sqlalchemy.url", self._url)

@@ -4,6 +4,19 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 and the project uses [Semantic Versioning](https://semver.org/). From 1.0.0 onwards, every release on
 GitHub also carries notes generated from the Conventional Commits it contains.
 
+## [Unreleased]
+
+### Fixed
+- The Anthropic fallback model pointed to a retired model; it now uses `claude-haiku-5-5`.
+- Removed retired models (Claude 3.5 Sonnet, Gemini 1.5) from the model pickers.
+
+### Changed
+- One AI provider catalog (`CANDID_DATA.AI_PROVIDERS`) shared by the setup wizard and Settings.
+- Removed 46 unused translation keys.
+
+### Documentation
+- Catchier README with project status, a roadmap (`docs/ROADMAP.md`), code of conduct, issue and PR templates.
+
 ## [1.0.0] — first public release
 
 ### Features

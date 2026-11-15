@@ -31,8 +31,16 @@ const SOURCES = [
   "Agency", "CV Upload", "Portal", "Other",
 ];
 
+// AI providers and the models offered in the setup wizard and Settings → AI (first = default).
+const AI_PROVIDERS = [
+  { id: "openai",    name: "OpenAI",    models: ["gpt-4o", "gpt-4o-mini", "gpt-4.1"], keyPlaceholder: "sk-…" },
+  { id: "anthropic", name: "Anthropic", models: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"], keyPlaceholder: "sk-ant-…" },
+  { id: "gemini",    name: "Gemini",    models: ["gemini-2.0-flash"], keyPlaceholder: "AIza…" },
+  { id: "groq",      name: "Groq",      models: ["llama-3.3-70b-versatile", "meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.1-8b-instant", "qwen/qwen3-32b"], keyPlaceholder: "gsk_…" },
+];
+
 window.CANDID_DATA = {
-  STATUS, HUMAN_SKILLS, TECH_SKILLS, SKILL_KEYS, SOURCES, initials,
+  STATUS, HUMAN_SKILLS, TECH_SKILLS, SKILL_KEYS, SOURCES, AI_PROVIDERS, initials,
 };
 
 // Organisation preferences — overwritten from GET /config/preferences after login.

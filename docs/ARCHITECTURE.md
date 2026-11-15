@@ -130,7 +130,7 @@ Deleting an organisation removes its rows and its media files.
 ## 7. Frontend
 
 A static React 18 single-page app with no bundler. Scripts load in a fixed order (see `frontend/README.md`):
-- `data.jsx`: constants and organisation preferences;
+- `data.jsx`: constants, the AI provider/model catalog and organisation preferences;
 - `translations.jsx`: EN/IT/DE and `useT()`;
 - `ui.jsx`: shared primitives;
 - `screens/*.jsx`;

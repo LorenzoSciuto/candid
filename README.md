@@ -2,7 +2,9 @@
 
 # Candid
 
-**An AI-powered recruiting assistant: CV analysis, live interview transcription, async video interviews and a hiring pipeline. Multi-tenant, with organisations isolated down to the database row.**
+### Hire on evidence, not on gut feeling.
+
+**The open-source AI recruiting assistant that reads every CV, listens to every interview and keeps every organisation's data locked to its own rows.**
 
 [![CI](https://github.com/LorenzoSciuto/candid/actions/workflows/release.yml/badge.svg)](https://github.com/LorenzoSciuto/candid/actions/workflows/release.yml)
 [![Release](https://img.shields.io/github/v/release/LorenzoSciuto/candid?sort=semver)](https://github.com/LorenzoSciuto/candid/releases)
@@ -12,11 +14,24 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-RLS-4169E1?logo=postgresql&logoColor=white)
 ![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 
+[Features](#what-it-does) · [Quick start](#quick-start) · [Architecture](#architecture) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
+
 A project by **Wennovate**
 
 </div>
 
 ---
+
+## Why Candid?
+
+Recruiting teams drown in CVs, take interview notes by hand and copy candidates between spreadsheets. Candid puts the whole pre-hire workflow in one place and lets AI do the reading, transcribing and drafting, while **people keep the decisions**.
+
+- **Drop a CV, get a verdict.** Fit score, strengths, gaps and the questions worth asking, matched against every open position.
+- **Interview without typing.** Live speech-to-text in the browser, then an AI summary attached to the candidate.
+- **Interview while you sleep.** Send async video questions; candidates answer from any browser, no account needed.
+- **Your AI, your keys.** OpenAI, Anthropic, Gemini or Groq, per organisation, with automatic fallback.
+- **Multi-tenant for real.** Isolation enforced in the code *and* by PostgreSQL Row-Level Security, tested against a real database in CI.
+- **Zero-build frontend.** Clone, run two scripts, start hiring. No `node_modules`.
 
 ## What it does
 
@@ -184,6 +199,12 @@ candid/
 - **Database role.** On first start, migration `0002` creates the unprivileged `candid_app` role and grants it to the migrating user. That user therefore needs `CREATEROLE`, or a DBA can create `candid_app` (`NOLOGIN`) beforehand and `GRANT candid_app TO <app user>`. The app must run the code and migration versions together: rolling back migration `0002` alone leaves the app without table permissions.
 - **Reverse proxy.** The public apply endpoint is rate-limited per client IP. Behind a proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>`, otherwise every applicant shares the proxy's limit.
 - **Databases created before 1.0.** The migration history was squashed into a single baseline for the first public release. A development database from an earlier checkout must be recreated with `./scripts/reset-db.sh`, which destroys its data.
+
+## Project status
+
+Candid **1.x is feature-complete for a single recruiting team's pre-hire workflow** and runs in production-like setups. It is not yet a turnkey SaaS: there is no container image, sign-in is Google-only, and GDPR tooling (consent, retention, data export) is still on the roadmap. See [docs/ROADMAP.md](docs/ROADMAP.md) for what works, what is missing and what comes next.
+
+> **Responsible use.** Candid scores and summarises candidates, but it never rejects anyone by itself: every stage change and rejection is a human action. AI-assisted hiring is regulated in many jurisdictions (for example as *high-risk* under the EU AI Act), so check your obligations before using it on real applicants.
 
 ## Known limitations
 

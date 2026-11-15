@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in Candid!
+Thanks for your interest in Candid! Please read the [Code of Conduct](CODE_OF_CONDUCT.md); open items are listed in the [roadmap](docs/ROADMAP.md).
 
 ## Workflow
 

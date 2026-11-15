@@ -123,7 +123,7 @@ class TestTranscribe:
         audio_file.write_bytes(b"WAV data")
 
         mock_transcription = MagicMock()
-        mock_transcription.text = "Ciao mondo"
+        mock_transcription.text = "Hello world"
         mock_transcription.language = "it"
         mock_transcription.duration = 3.5
 
@@ -135,7 +135,7 @@ class TestTranscribe:
             result = service.transcribe(audio_file, "test-groq-key", "groq", "whisper-large-v3")
 
         mock_groq_instance.audio.transcriptions.create.assert_called_once()
-        assert result.text == "Ciao mondo"
+        assert result.text == "Hello world"
         assert result.language == "it"
         assert result.duration_seconds == 3.5
 

@@ -59,3 +59,7 @@ coverage.xml
 
 # ── Claude Code worktrees ──────────────────────────────────────────────────────
 .claude/worktrees/
+
+# ── User uploads (CVs, interview audio/video) ──────────────────────────────────
+backend/uploads/
+uploads/

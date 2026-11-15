@@ -1,5 +1,4 @@
 // Reports / analytics
-const PIPELINE_STAGES = window.CANDID_DATA.STATUS;
 
 const ReportsScreen = () => {
   const t = window.useT();
@@ -21,14 +20,9 @@ const ReportsScreen = () => {
   const funnel = useMemo(() => {
     if (!stats) return [];
     const byStatus = stats.by_status || {};
-    return [
-      { stage: "New", n: byStatus.new || 0 },
-      { stage: "Screening", n: byStatus.screening || 0 },
-      { stage: "Pre-Interview", n: byStatus.pre || 0 },
-      { stage: "In Evaluation", n: byStatus.eval || 0 },
-      { stage: "Final Round", n: byStatus.final || 0 },
-      { stage: "Offer", n: byStatus.offer || 0 },
-    ].filter(f => f.n > 0);
+    return (window.CANDID_DATA.STATUS || [])
+      .map(st => ({ stage: st.label, n: byStatus[st.id] || 0 }))
+      .filter(f => f.n > 0);
   }, [stats]);
 
   const sources = useMemo(() => {
@@ -44,6 +38,18 @@ const ReportsScreen = () => {
   const activeJDs = jobs.filter(j => j.status === "Active").length;
   const avgScore = stats?.avg_score;
 
+  const exportCsv = () => {
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const rows = [[t('reports.csv.stage'), t('reports.csv.candidates')], ...funnel.map(f => [f.stage, f.n])];
+    const blob = new Blob([rows.map(r => r.map(esc).join(",")).join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `candid-funnel-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="page page-wide">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
@@ -52,7 +58,7 @@ const ReportsScreen = () => {
           <div className="page-sub">{t('reports.sub')}</div>
         </div>
         <div className="row gap-8">
-          <Btn icon={<Icons.Upload size={14} />}>{t('reports.export')}</Btn>
+          <Btn icon={<Icons.Upload size={14} />} onClick={exportCsv} disabled={funnel.length === 0}>{t('reports.export')}</Btn>
         </div>
       </div>
 
@@ -120,7 +126,7 @@ const ReportsScreen = () => {
             <span className="ai-tag" style={{ display: "inline-flex", marginBottom: 8 }}><Icons.Sparkles size={11} /> {t('reports.insight')}</span>
             <div className="text-13" style={{ lineHeight: 1.55 }}>
               {sources.length > 0 && sources[0].n > 0
-                ? <><strong>{sources[0].source}</strong> is the top source with {sources[0].n} candidates. Consider investing there to accelerate hiring.</>
+                ? <><strong>{sources[0].source}</strong> {t('reports.topSource').replace('{n}', sources[0].n)}</>
                 : t('reports.addCandidates')}
             </div>
           </div>

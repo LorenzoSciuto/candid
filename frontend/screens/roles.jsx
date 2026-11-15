@@ -154,8 +154,8 @@ const RolesScreen = ({ onRoute }) => {
                         {/* Actions */}
                         <td style={{ padding: "12px 16px" }} onClick={e => e.stopPropagation()}>
                           <div className="row gap-4" style={{ justifyContent: "flex-end" }}>
-                            <button className="icon-btn" onClick={() => setEditRole(role)} title="Edit"><Icons.Edit size={14} /></button>
-                            <button className="icon-btn" onClick={() => setDeleteTarget(role)} title="Delete" style={{ color: "var(--ink-muted)" }}><Icons.X size={14} /></button>
+                            <button className="icon-btn" onClick={() => setEditRole(role)} title={t('common.edit')}><Icons.Edit size={14} /></button>
+                            <button className="icon-btn" onClick={() => setDeleteTarget(role)} title={t('common.delete')} style={{ color: "var(--ink-muted)" }}><Icons.X size={14} /></button>
                           </div>
                         </td>
                       </tr>
@@ -211,7 +211,7 @@ const RoleViewModal = ({ role, filled, total, gap, openJds, pct, hiring, onClose
   const t = window.useT();
   return (
     <Modal open title={role.name} onClose={onClose}
-      footer={<><Btn onClick={onClose}>{t('common.cancel')}</Btn><Btn kind="primary" onClick={onEdit}>{t('common.edit') || "Modifica"}</Btn></>}>
+      footer={<><Btn onClick={onClose}>{t('common.cancel')}</Btn><Btn kind="primary" onClick={onEdit}>{t('common.edit')}</Btn></>}>
       <div className="col gap-16">
         {/* Meta row */}
         <div className="row gap-12" style={{ alignItems: "center", flexWrap: "wrap" }}>
@@ -301,7 +301,7 @@ const RoleModal = ({ role, depts, onClose, onSaved }) => {
       const d = await res.json();
       setDesc(d.improved_text);
     } catch {
-      setImproveError("AI unavailable — check provider settings.");
+      setImproveError(t('jobs.ai.unavailable'));
     }
     setImproving(false);
   };

@@ -76,7 +76,7 @@ const EmailModal = ({ candidate, onClose }) => {
       const d = await res.json();
       setBody(d.result);
     } catch {
-      setRewriteError("AI unavailable — check provider settings.");
+      setRewriteError(t('jobs.ai.unavailable'));
     }
     setRewriting(false);
   };
@@ -92,18 +92,18 @@ const EmailModal = ({ candidate, onClose }) => {
         body: JSON.stringify({ to: candidate.email, subject, body, candidate_id: candidate.id }),
       });
       if (res.status === 503) {
-        window.open(`mailto:${candidate.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+        window.open(`mailto:${encodeURIComponent(candidate.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
         onClose();
         return;
       }
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        setSendError(err?.detail || "Send failed");
+        setSendError(err?.detail || t('candidate.email.sendFailed'));
         setSending(false);
         return;
       }
     } catch {
-      setSendError("Backend unreachable");
+      setSendError(t('candidate.email.backendUnreachable'));
       setSending(false);
       return;
     }
@@ -111,37 +111,37 @@ const EmailModal = ({ candidate, onClose }) => {
   };
 
   return (
-    <Modal open title={`Email ${candidate.first} ${candidate.last}`} onClose={onClose}
+    <Modal open title={t('candidate.email.title').replace('{name}', `${candidate.first} ${candidate.last}`)} onClose={onClose}
       width={560}
       footer={
         <>
           {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
           <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={sendEmail} disabled={!candidate.email || sending}>
-            {sending ? "Sending…" : "Send"}
+            {sending ? t('compose.sending') : t('compose.send')}
           </Btn>
         </>
       }>
       <div className="col gap-12">
-        {!candidate.email && <div className="text-12" style={{ color: "var(--warn)" }}>No email address on file for this candidate.</div>}
+        {!candidate.email && <div className="text-12" style={{ color: "var(--warn)" }}>{t('candidate.email.noEmail')}</div>}
         <div>
-          <label className="label">To</label>
-          <input className="input" value={candidate.email || "(no email)"} disabled style={{ opacity: 0.6 }} />
+          <label className="label">{t('compose.to')}</label>
+          <input className="input" value={candidate.email || t('candidate.email.none')} disabled style={{ opacity: 0.6 }} />
         </div>
         <div>
-          <label className="label">Subject</label>
+          <label className="label">{t('compose.subject')}</label>
           <input className="input" value={subject} onChange={e => setSubject(e.target.value)} />
         </div>
         <div>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-            <label className="label" style={{ margin: 0 }}>Body</label>
+            <label className="label" style={{ margin: 0 }}>{t('candidate.email.body')}</label>
             <div className="row gap-8" style={{ alignItems: "center" }}>
               {rewriteError && <span className="text-12" style={{ color: "var(--danger)" }}>{rewriteError}</span>}
               <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 12 }}
                 onClick={rewriteWithAI} disabled={rewriting || !body.trim()}>
                 {rewriting
-                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> rewriting…</span>
-                  : <>✨ Rewrite with AI</>}
+                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> {t('compose.rewriting')}</span>
+                  : <>{t('compose.rewrite')}</>}
               </button>
             </div>
           </div>
@@ -253,7 +253,7 @@ const RejectionModal = ({ candidate, onClose, onRejected }) => {
       setSubject(data.subject);
       setBody(data.body);
     } catch {
-      setDraftError("AI unavailable — check provider settings.");
+      setDraftError(t('jobs.ai.unavailable'));
     }
     setDrafting(false);
   };
@@ -271,47 +271,47 @@ const RejectionModal = ({ candidate, onClose, onRejected }) => {
       onRejected();
       onClose();
     } catch {
-      setSendError("Rejection failed — please try again.");
+      setSendError(t('candidate.reject.failed'));
       setSending(false);
     }
   };
 
   return (
-    <Modal open title={`Reject ${candidate.first} ${candidate.last}`} onClose={onClose} width={560}
+    <Modal open title={t('candidate.reject.title').replace('{name}', `${candidate.first} ${candidate.last}`)} onClose={onClose} width={560}
       footer={
         <>
           {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
           <Btn onClick={() => reject(false)} disabled={sending}>
-            Reject without email
+            {t('candidate.reject.withoutEmail')}
           </Btn>
           <Btn kind="danger" icon={<Icons.Mail size={14} />} onClick={() => reject(true)} disabled={sending || !body.trim() || !candidate.email}>
-            {sending ? "Sending…" : "Send & Reject"}
+            {sending ? t('compose.sending') : t('candidate.reject.sendAndReject')}
           </Btn>
         </>
       }>
       <div className="col gap-12">
         {!candidate.email && (
-          <div className="text-12" style={{ color: "var(--warn)" }}>No email address on file — email will not be sent.</div>
+          <div className="text-12" style={{ color: "var(--warn)" }}>{t('candidate.reject.noEmail')}</div>
         )}
         <div>
-          <label className="label">Subject</label>
+          <label className="label">{t('compose.subject')}</label>
           <input className="input" value={subject} onChange={e => setSubject(e.target.value)} />
             </div>
             <div>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <label className="label" style={{ margin: 0 }}>Body</label>
+                <label className="label" style={{ margin: 0 }}>{t('candidate.email.body')}</label>
                 <div className="row gap-8" style={{ alignItems: "center" }}>
                   {draftError && <span className="text-12" style={{ color: "var(--danger)" }}>{draftError}</span>}
                   <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 12 }}
                     onClick={draftRejection} disabled={drafting}>
                     {drafting
-                      ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> generating…</span>
-                      : <><Icons.Sparkles size={12} /> Generate with AI</>}
+                      ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> {t('roles.modal.generating')}</span>
+                      : <><Icons.Sparkles size={12} /> {t('candidate.ai.generate')}</>}
                   </button>
                 </div>
               </div>
-              <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} placeholder="Write a rejection email or use AI to generate one." />
+              <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} placeholder={t('candidate.reject.bodyPh')} />
             </div>
       </div>
     </Modal>
@@ -370,7 +370,7 @@ const AssignJobModal = ({ candidateId, onClose, onAssigned }) => {
           <span className="text-13 text-muted">{t('assignJob.noJobs')}</span>
         ) : (
           <div>
-            <label className="label">Position</label>
+            <label className="label">{t('candidates.col.position')}</label>
             <select className="select" value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)}>
               <option value="">{t('assignJob.selectPh')}</option>
               {jobs.map(j => (
@@ -456,6 +456,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
     { id: "overview",    label: t('candidate.tab.overview') },
     { id: "cv-analysis", label: t('candidate.tab.cv') },
     { id: "interviews",  label: t('candidate.tab.interviews') },
+    { id: "video",       label: t('candidate.tab.video') },
     { id: "evaluation",  label: t('candidate.tab.evaluation') },
     { id: "activity",    label: t('candidate.tab.activity') },
     { id: "emails",      label: t('candidate.tab.emails') },
@@ -481,7 +482,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
             <div className="row gap-12 mt-8">
               {c.email && <span className="row gap-6 text-12 text-secondary"><Icons.Mail size={12} />{c.email}</span>}
               {c.phone && <span className="row gap-6 text-12 text-secondary"><Icons.Phone size={12} />{c.phone}</span>}
-              {c.experience != null && <span className="row gap-6 text-12 text-secondary"><Icons.Briefcase size={12} />{c.experience}y experience</span>}
+              {c.experience != null && <span className="row gap-6 text-12 text-secondary"><Icons.Briefcase size={12} />{t('candidate.experienceYears').replace('{n}', c.experience)}</span>}
               {c.source && <span className="row gap-6 text-12 text-secondary"><Icons.User size={12} />{c.source}</span>}
             </div>
           </div>
@@ -532,7 +533,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
                   {hiring ? t('common.saving') : t('candidate.action.hire')}
                 </Btn>
               )}
-              {hired && <Badge kind="positive"><Icons.Check size={11} /> Moved to Employees</Badge>}
+              {hired && <Badge kind="positive"><Icons.Check size={11} /> {t('candidate.movedToEmployees')}</Badge>}
               <Btn kind="primary" icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { candidateName: `${c.first} ${c.last}`, candidateId: c.id, title: "Interview", type: "Live" })}>{t('candidate.startInterview')}</Btn>
             </>
           )}
@@ -601,7 +602,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
           <div className="card" style={{ padding: 0, display: "grid", gridTemplateColumns: `repeat(${c.score != null && evalAvg != null ? 5 : 4}, 1fr)`, marginBottom: 20 }}>
             {c.score != null && <Stat label={t('candidate.stat.score')} value={c.score.toFixed(1)} unit="/ 5" />}
             {evalAvg != null && <Stat label={t('candidate.stat.evalAvg')} value={evalAvg.toFixed(1)} unit="/ 5" />}
-            <Stat label={t('candidate.stat.interviews')} value={String((c.interviews || []).length)} sub="completed" />
+            <Stat label={t('candidate.stat.interviews')} value={String((c.interviews || []).length)} sub={t('candidate.stat.completed')} />
             <Stat label={t('candidate.stat.recommendation')} value={c.evaluation?.final_recommendation || t('common.pending')} mono={false} />
             <Stat label={t('candidate.stat.stage')} value={window.CANDID_DATA.STATUS.find(s => s.id === c.status)?.label || c.status} small />
           </div>
@@ -619,6 +620,7 @@ const CandidateScreen = ({ id, onRoute, initialTab, onMount }) => {
       {tab === "overview"    && <OverviewTab c={c} onTab={setTab} onStatusChange={isInPipeline(c) ? changeStatus : null} t={t} />}
       {tab === "cv-analysis" && <CVAnalysisTab c={c} t={t} onRefresh={refreshCandidate} />}
       {tab === "interviews"  && <InterviewsTab c={c} onRoute={onRoute} onRefresh={refreshCandidate} t={t} />}
+      {tab === "video"       && <VideoInterviewsTab c={c} />}
       {tab === "evaluation"  && <EvaluationTab c={c} onSaved={refreshCandidate} t={t} />}
       {tab === "activity"    && <ActivityTab c={c} />}
       {tab === "emails"      && <EmailsTab candidateId={c.id} />}
@@ -693,7 +695,7 @@ const PipelineTracker = ({ status, onStatusChange, t }) => {
       <div style={{ marginBottom: 16 }}>
         <span className="weight-600" style={{ fontSize: 13 }}>{t('candidate.overview.pipeline')}</span>
         {onStatusChange && (
-          <span className="text-11 text-muted" style={{ marginLeft: 8 }}>click stage to move</span>
+          <span className="text-11 text-muted" style={{ marginLeft: 8 }}>{t('candidate.overview.clickStage')}</span>
         )}
       </div>
       <div style={{ position: "relative", padding: "0 0 8px" }}>
@@ -716,7 +718,7 @@ const PipelineTracker = ({ status, onStatusChange, t }) => {
                 className="col"
                 style={{ alignItems: "center", gap: 8, flex: 1, cursor: onStatusChange && !here ? "pointer" : "default" }}
                 onClick={() => onStatusChange && !here && onStatusChange(s.id)}
-                title={onStatusChange && !here ? `Move to ${s.label}` : undefined}
+                title={onStatusChange && !here ? t('candidate.overview.moveTo').replace('{stage}', s.label) : undefined}
               >
                 <div style={{
                   width: 24, height: 24, borderRadius: 999,
@@ -758,8 +760,8 @@ const OverviewTab = ({ c, onTab, onStatusChange, t }) => (
       {c.careerHistory?.length > 0 && (
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Career history</span>
-            <span className="text-12 text-muted">{c.careerHistory.length} position{c.careerHistory.length !== 1 ? "s" : ""}</span>
+            <span className="card-title">{t('candidate.overview.careerHistory')}</span>
+            <span className="text-12 text-muted">{t(c.careerHistory.length !== 1 ? 'candidate.overview.positionsCount' : 'candidate.overview.positionCount').replace('{n}', c.careerHistory.length)}</span>
           </div>
           <div className="col" style={{ padding: "4px 0 8px" }}>
             {c.careerHistory.map((role, i) => {
@@ -794,11 +796,11 @@ const OverviewTab = ({ c, onTab, onStatusChange, t }) => (
       {/* Contact */}
       {(c.email || c.phone) && (
         <div className="card card-pad col gap-8">
-          <span className="weight-600" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-muted)" }}>Contatti</span>
+          <span className="weight-600" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-muted)" }}>{t('candidate.overview.contact')}</span>
           {c.email && (
             <div className="row gap-8" style={{ alignItems: "center" }}>
               <Icons.Mail size={13} style={{ color: "var(--ink-muted)", flexShrink: 0 }} />
-              <a href={`mailto:${c.email}`} className="text-13 link" style={{ wordBreak: "break-all" }}>{c.email}</a>
+              <a href={`mailto:${encodeURIComponent(c.email)}`} className="text-13 link" style={{ wordBreak: "break-all" }}>{c.email}</a>
             </div>
           )}
           {c.phone && (
@@ -818,14 +820,14 @@ const OverviewTab = ({ c, onTab, onStatusChange, t }) => (
             <button className="link text-12" onClick={() => onTab("cv-analysis")}>{t('candidate.overview.fullAnalysis')}</button>
           </div>
           <div className="text-13" style={{ lineHeight: 1.6 }}>
-            {c.pre.overview || c.pre.strengths?.[0] || "AI analysis completed."}
+            {c.pre.overview || c.pre.strengths?.[0] || t('candidate.overview.analysisCompleted')}
           </div>
         </div>
       ) : (
         <div className="card card-pad" style={{ textAlign: "center", padding: 40 }}>
           <Icons.Sparkles size={22} style={{ color: "var(--ai)", marginBottom: 8 }} />
           <div className="weight-600">{t('candidate.overview.noAnalysis')}</div>
-          <div className="text-13 text-secondary" style={{ marginBottom: 14, marginTop: 4 }}>Go to CV Analysis to upload a CV and run AI analysis.</div>
+          <div className="text-13 text-secondary" style={{ marginBottom: 14, marginTop: 4 }}>{t('candidate.overview.goToCv')}</div>
           <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => onTab("cv-analysis")}>{t('candidate.overview.runAnalysis')}</Btn>
         </div>
       )}
@@ -856,7 +858,7 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
       if (!res.ok) throw new Error(await res.text());
       onRefresh && onRefresh();
     } catch (err) {
-      setError(`Analysis failed: ${err.message}`);
+      setError(t('candidate.cv.analysisFailed').replace('{error}', err.message));
     }
     setStage("idle");
   };
@@ -877,7 +879,7 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
       onRefresh && onRefresh(); // update hasCvFile immediately
       await runAnalysis(data.text);
     } catch (err) {
-      setError(`Upload failed: ${err.message}`);
+      setError(t('quickadd.uploadError').replace('{error}', err.message));
       setStage("idle");
     }
   };
@@ -890,25 +892,25 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
       {/* Top bar: overview + run button */}
       <div className="ai-panel card-pad row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div className="col gap-6" style={{ flex: 1 }}>
-          <span className="ai-tag" style={{ display: "inline-flex" }}><Icons.Sparkles size={11} /> AI Overview</span>
+          <span className="ai-tag" style={{ display: "inline-flex" }}><Icons.Sparkles size={11} /> {t('candidate.cv.aiOverview')}</span>
           <div className="text-13" style={{ lineHeight: 1.6 }}>
-            {c.pre?.overview || <span className="text-muted">No analysis yet — upload a CV or run analysis to get started.</span>}
+            {c.pre?.overview || <span className="text-muted">{t('candidate.cv.noAnalysis')}</span>}
           </div>
         </div>
         <div className="col gap-6" style={{ alignItems: "flex-end", flexShrink: 0 }}>
           <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc" style={{ display: "none" }} onChange={handleFileChange} />
           {!displayCvText ? (
             <Btn kind="ai" icon={<Icons.Upload size={14} />} disabled={busy} onClick={() => fileInputRef.current?.click()}>
-              {stage === "uploading" ? "Uploading…" : "Upload CV"}
+              {stage === "uploading" ? t('quickadd.uploading') : t('candidate.cv.upload')}
             </Btn>
           ) : (
             <Btn kind="ai" icon={<Icons.Sparkles size={14} />} disabled={busy} onClick={() => runAnalysis()}>
-              {stage === "analyzing" ? "Analyzing…" : c.pre ? "Re-run analysis" : "Run analysis"}
+              {stage === "analyzing" ? t('candidate.cv.analyzing') : c.pre ? t('candidate.cv.rerun') : t('candidate.cv.run')}
             </Btn>
           )}
           {displayCvText && (
             <button className="text-12 text-muted link" onClick={() => fileInputRef.current?.click()}>
-              {stage === "uploading" ? "Uploading…" : "Replace CV"}
+              {stage === "uploading" ? t('quickadd.uploading') : t('candidate.cv.replace')}
             </button>
           )}
         </div>
@@ -975,7 +977,7 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
               <div className="card">
                 <div className="card-header">
                   <span className="card-title">{t('candidate.cv.cvText')}</span>
-                  <span className="card-sub">{displayCvText.split(/\s+/).filter(Boolean).length} words</span>
+                  <span className="card-sub">{t('candidate.cv.words').replace('{n}', displayCvText.split(/\s+/).filter(Boolean).length)}</span>
                   <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 11, marginLeft: "auto" }}
                     onClick={() => setCvModalOpen(true)}>
                     <Icons.Eye size={11} /> {t('candidate.cv.view')}
@@ -990,9 +992,9 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
         !busy && !displayCvText && (
           <div className="card card-pad" style={{ textAlign: "center", padding: 40 }}>
             <Icons.FileText size={22} style={{ color: "var(--ink-muted)", marginBottom: 8 }} />
-            <div className="weight-500">No CV uploaded</div>
-            <div className="text-13 text-secondary mt-4" style={{ marginBottom: 14 }}>Upload a PDF or DOCX to extract skills, generate analysis, and score against open roles.</div>
-            <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => fileInputRef.current?.click()}>Upload CV</Btn>
+            <div className="weight-500">{t('candidate.cv.noCv')}</div>
+            <div className="text-13 text-secondary mt-4" style={{ marginBottom: 14 }}>{t('candidate.cv.noCvHint')}</div>
+            <Btn kind="ai" icon={<Icons.Upload size={14} />} onClick={() => fileInputRef.current?.click()}>{t('candidate.cv.upload')}</Btn>
           </div>
         )
       )}
@@ -1005,7 +1007,7 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
             onClick={e => e.stopPropagation()}>
             <div className="card-header" style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <span className="card-title">CV — {c.first} {c.last}</span>
-              <span className="card-sub">{displayCvText.split(/\s+/).filter(Boolean).length} words</span>
+              <span className="card-sub">{t('candidate.cv.words').replace('{n}', displayCvText.split(/\s+/).filter(Boolean).length)}</span>
               <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => setCvModalOpen(false)}>
                 <Icons.X size={14} />
               </button>
@@ -1023,12 +1025,13 @@ const CVAnalysisTab = ({ c, t, onRefresh }) => {
 // ── Transcript Status Badge ───────────────────────────────────────────────────
 
 const TranscriptStatusBadge = ({ status }) => {
+  const t = window.useT();
   if (!status) return null;
   const configByStatus = {
-    pending:    { kind: "neutral", label: "Pending" },
-    processing: { kind: "ai",     label: "Processing…" },
-    done:       { kind: "positive", label: "Transcribed" },
-    failed:     { kind: "danger", label: "Failed" },
+    pending:    { kind: "neutral", label: t('common.pending') },
+    processing: { kind: "ai",     label: t('candidate.iv.processing') },
+    done:       { kind: "positive", label: t('candidate.iv.transcribed') },
+    failed:     { kind: "danger", label: t('candidate.iv.failed') },
   };
   const config = configByStatus[status] || { kind: "neutral", label: status };
   return <Badge kind={config.kind}>{config.label}</Badge>;
@@ -1037,6 +1040,7 @@ const TranscriptStatusBadge = ({ status }) => {
 // ── AI Evaluation Card ────────────────────────────────────────────────────────
 
 const AiEvaluationCard = ({ evaluation }) => {
+  const t = window.useT();
   if (!evaluation) return null;
 
   const recommendationColors = {
@@ -1051,7 +1055,7 @@ const AiEvaluationCard = ({ evaluation }) => {
   return (
     <div className="ai-panel col gap-12" style={{ marginTop: 10 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <span className="ai-tag"><Icons.Sparkles size={11} /> AI Evaluation</span>
+        <span className="ai-tag"><Icons.Sparkles size={11} /> {t('candidate.iv.aiEvaluation')}</span>
         <div className="row gap-10" style={{ alignItems: "center" }}>
           {evaluation.recommendation && (
             <span className="text-12 weight-600" style={{ color: recommendationColor, textTransform: "capitalize" }}>
@@ -1076,7 +1080,7 @@ const AiEvaluationCard = ({ evaluation }) => {
 
       {evaluation.strengths?.length > 0 && (
         <div>
-          <div className="text-12 weight-600" style={{ marginBottom: 4, color: "var(--positive)" }}>Strengths</div>
+          <div className="text-12 weight-600" style={{ marginBottom: 4, color: "var(--positive)" }}>{t('candidate.cv.strengths')}</div>
           <ul className="ai-list strengths">
             {evaluation.strengths.map((strength, index) => (
               <li key={index}><span className="marker"><Icons.Check size={11} /></span><span className="text-12">{strength}</span></li>
@@ -1087,7 +1091,7 @@ const AiEvaluationCard = ({ evaluation }) => {
 
       {evaluation.concerns?.length > 0 && (
         <div>
-          <div className="text-12 weight-600" style={{ marginBottom: 4, color: "var(--warn)" }}>Concerns</div>
+          <div className="text-12 weight-600" style={{ marginBottom: 4, color: "var(--warn)" }}>{t('candidate.iv.concerns')}</div>
           <ul className="ai-list weaknesses">
             {evaluation.concerns.map((concern, index) => (
               <li key={index}><span className="marker"><Icons.X size={11} /></span><span className="text-12">{concern}</span></li>
@@ -1127,7 +1131,7 @@ const InterviewCard = ({ interview, onOpenTranscript, onUploadRecording, onRefre
               {interview.transcript_status && <TranscriptStatusBadge status={interview.transcript_status} />}
             </div>
             <span className="text-12 text-muted">
-              {[interview.date, interview.duration && `${interview.duration}`, interview.interviewer && `with ${interview.interviewer}`].filter(Boolean).join(" · ")}
+              {[interview.date, interview.duration && `${interview.duration}`, interview.interviewer && t('interviews.withInterviewer').replace('{name}', interview.interviewer)].filter(Boolean).join(" · ")}
             </span>
             {interview.summary && (
               <span className="text-13 text-secondary" style={{ marginTop: 4, lineHeight: 1.5 }}>{interview.summary}</span>
@@ -1137,7 +1141,7 @@ const InterviewCard = ({ interview, onOpenTranscript, onUploadRecording, onRefre
         <div className="row gap-8">
           <input ref={audioInputRef} type="file" accept=".mp3,.mp4,.wav,.webm,.m4a" style={{ display: "none" }} onChange={handleFileSelected} />
           <Btn icon={<Icons.Upload size={13} />} onClick={() => audioInputRef.current?.click()}>
-            {interview.transcript_status === "processing" ? "Processing…" : "Upload Recording"}
+            {interview.transcript_status === "processing" ? t('candidate.iv.processing') : t('candidate.iv.uploadRecording')}
           </Btn>
           <Btn onClick={() => onOpenTranscript(interview)}>{t('common.open')}</Btn>
         </div>
@@ -1151,7 +1155,7 @@ const InterviewCard = ({ interview, onOpenTranscript, onUploadRecording, onRefre
             onClick={() => setTranscriptExpanded(prev => !prev)}
           >
             <Icons.ChevronRight size={12} style={{ transform: transcriptExpanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
-            Transcript
+            {t('candidate.iv.transcript')}
             {interview.transcript_language && (
               <span className="text-11 text-mono text-muted" style={{ marginLeft: 4 }}>[{interview.transcript_language}]</span>
             )}
@@ -1181,9 +1185,9 @@ const TranscriptViewModal = ({ interview, onClose, t }) => {
   );
 
   const sections = [
-    interview.raw_content      && { id: "raw",     label: "Raw transcript" },
-    interview.cleaned_transcript && { id: "cleaned", label: "Cleaned transcript" },
-    interview.summary           && { id: "summary",  label: "Synthesis" },
+    interview.raw_content      && { id: "raw",     label: t('candidate.iv.rawLabel') },
+    interview.cleaned_transcript && { id: "cleaned", label: t('candidate.iv.cleaned') },
+    interview.summary           && { id: "summary",  label: t('candidate.iv.synthesis') },
   ].filter(Boolean);
 
   const content = {
@@ -1211,7 +1215,7 @@ const TranscriptViewModal = ({ interview, onClose, t }) => {
         activeSection === "summary" ? (
           <div className="ai-panel card-pad" style={{ maxHeight: 520, overflowY: "auto" }}>
             <div className="row gap-6" style={{ marginBottom: 10 }}>
-              <span className="ai-tag"><Icons.Sparkles size={11} /> Synthesis</span>
+              <span className="ai-tag"><Icons.Sparkles size={11} /> {t('candidate.iv.synthesis')}</span>
             </div>
             <div className="text-13" style={{ lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{content}</div>
           </div>
@@ -1265,7 +1269,7 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
       if (!response.ok) throw new Error(await response.text());
       afterUpload && afterUpload();
     } catch (uploadException) {
-      setUploadError(`Upload failed: ${uploadException.message}`);
+      setUploadError(t('quickadd.uploadError').replace('{error}', uploadException.message));
     }
   };
 
@@ -1293,14 +1297,14 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
 
       {upcoming.length > 0 && (
         <div className="col gap-8">
-          <span className="text-11 weight-600 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>Upcoming</span>
+          <span className="text-11 weight-600 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>{t('interviews.upcoming')}</span>
           {renderInterviews(upcoming)}
         </div>
       )}
 
       {past.length > 0 && (
         <div className="col gap-8">
-          <span className="text-11 weight-600 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>Past</span>
+          <span className="text-11 weight-600 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>{t('interviews.past')}</span>
           {renderInterviews(past)}
         </div>
       )}
@@ -1310,7 +1314,7 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
           <span className="weight-500">{t('candidate.iv.addTitle')}</span>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div><label className="label">{t('candidate.iv.title')}</label><input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Recruiter Screen" /></div>
-            <div><label className="label">{t('candidate.iv.interviewer')}</label><input className="input" value={interviewer} onChange={e => setInterviewer(e.target.value)} placeholder="Name" /></div>
+            <div><label className="label">{t('candidate.iv.interviewer')}</label><input className="input" value={interviewer} onChange={e => setInterviewer(e.target.value)} placeholder={t('candidate.iv.interviewerPh')} /></div>
           </div>
           <div><label className="label">{t('candidate.iv.rawLabel')}</label><textarea className="textarea" rows={6} value={rawContent} onChange={e => setRawContent(e.target.value)} placeholder={t('candidate.iv.rawPh')} /></div>
           <div className="row gap-8">
@@ -1333,6 +1337,177 @@ const InterviewsTab = ({ c, onRoute, onRefresh, t }) => {
 
       {transcriptInterview && (
         <TranscriptViewModal interview={transcriptInterview} onClose={() => setTranscriptInterview(null)} t={t} />
+      )}
+    </div>
+  );
+};
+
+// ── Video interviews Tab ──────────────────────────────────────────────────────
+// Recruiter side of async video interviews: the candidate records answers at #video/<token>.
+
+const VIDEO_STATUS_BADGE = { pending: "neutral", in_progress: "warn", completed: "positive", expired: "danger" };
+
+const videoInviteUrl = (iv) => new URL(iv.invite_link, window.location.href.split("#")[0]).href;
+
+// <video> cannot send the bearer token, so the answer is fetched as a blob (the fetch interceptor adds auth).
+const VideoAnswerPlayer = ({ interviewId, response }) => {
+  const t = window.useT();
+  const [src, setSrc] = React.useState(null);
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    let objectUrl = null;
+    fetch(`${window.API_BASE}/video-interviews/${interviewId}/responses/${response.id}/video`)
+      .then(r => { if (!r.ok) throw new Error(); return r.blob(); })
+      .then(blob => { objectUrl = URL.createObjectURL(blob); setSrc(objectUrl); })
+      .catch(() => setFailed(true));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [interviewId, response.id]);
+
+  if (failed) return <span className="text-12 text-muted">{t('candidate.video.noRecording')}</span>;
+  if (!src) return <span className="text-12 text-muted">{t('common.loading')}</span>;
+  return <video src={src} controls preload="metadata" style={{ width: "100%", maxWidth: 560, borderRadius: 8, background: "#000" }} />;
+};
+
+const VideoInterviewCard = ({ interview, candidate }) => {
+  const t = window.useT();
+  const [open, setOpen] = React.useState(false);
+  const [detail, setDetail] = React.useState(null);
+  const [notice, setNotice] = React.useState("");
+  const questions = JSON.parse(interview.questions || "[]");
+  const url = videoInviteUrl(interview);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !detail) {
+      fetch(`${window.API_BASE}/video-interviews/${interview.id}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(setDetail)
+        .catch(() => {});
+    }
+  };
+
+  const flash = (msg) => { setNotice(msg); setTimeout(() => setNotice(""), 2500); };
+
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(url); flash(t('candidate.video.copied')); } catch { flash(url); }
+  };
+
+  const emailLink = async () => {
+    const res = await fetch(`${window.API_BASE}/ai/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: candidate.email,
+        candidate_id: candidate.id,
+        subject: t('candidate.video.emailSubject').replace('{org}', window.CANDID_ORG?.name || "Candid"),
+        body: t('candidate.video.emailBody').replace('{name}', candidate.first).replace('{url}', url),
+      }),
+    }).catch(() => null);
+    flash(res && res.ok ? t('candidate.video.emailSent') : t('candidate.video.emailFailed'));
+  };
+
+  const responseFor = (index) => (detail?.responses || []).find(r => r.question_index === index);
+
+  return (
+    <div className="card card-pad col gap-10">
+      <div className="row gap-10" style={{ alignItems: "center", flexWrap: "wrap" }}>
+        <Icons.Play size={14} />
+        <span className="weight-500">{t('candidate.video.questionsCount').replace('{n}', questions.length)}</span>
+        <Badge kind={VIDEO_STATUS_BADGE[interview.status] || "neutral"}>{t(`candidate.video.status.${interview.status}`)}</Badge>
+        <span className="text-12 text-muted">{t('candidate.video.expires').replace('{date}', window.formatDate ? window.formatDate(interview.expires_at) : interview.expires_at.slice(0, 10))}</span>
+        <div className="row gap-6" style={{ marginLeft: "auto" }}>
+          <Btn size="sm" icon={<Icons.Copy size={12} />} onClick={copyLink}>{t('candidate.video.copyLink')}</Btn>
+          {candidate.email && <Btn size="sm" icon={<Icons.Mail size={12} />} onClick={emailLink}>{t('candidate.video.sendEmail')}</Btn>}
+          <Btn size="sm" icon={open ? <Icons.ChevronDown size={12} /> : <Icons.ChevronRight size={12} />} onClick={toggle}>{t('candidate.video.answers')}</Btn>
+        </div>
+      </div>
+      {notice && <span className="text-12 text-secondary">{notice}</span>}
+      {open && (
+        <div className="col gap-12" style={{ borderTop: "1px solid var(--border-soft)", paddingTop: 12 }}>
+          {questions.map((question, index) => {
+            const response = responseFor(index);
+            return (
+              <div key={index} className="col gap-6">
+                <span className="text-13 weight-500">{index + 1}. {question}</span>
+                {response && response.received_chunks > 0
+                  ? <VideoAnswerPlayer interviewId={interview.id} response={response} />
+                  : <span className="text-12 text-muted">{t('candidate.video.notAnswered')}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const VideoInterviewsTab = ({ c }) => {
+  const t = window.useT();
+  const [items, setItems] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [creating, setCreating] = React.useState(false);
+  const [questionsText, setQuestionsText] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const load = React.useCallback(() => {
+    setLoading(true);
+    fetch(`${window.API_BASE}/video-interviews?candidate_id=${encodeURIComponent(c.id)}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [c.id]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const questions = questionsText.split("\n").map(q => q.trim()).filter(Boolean);
+
+  const create = async () => {
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`${window.API_BASE}/video-interviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_id: c.id, questions }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setCreating(false); setQuestionsText(""); load();
+    } catch (err) {
+      setError(t('candidate.video.createFailed').replace('{error}', err.message));
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="col gap-12">
+      {loading && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--ink-muted)", fontSize: 13 }}>{t('common.loading')}</div>}
+      {!loading && items.map(iv => <VideoInterviewCard key={iv.id} interview={iv} candidate={c} />)}
+
+      {creating ? (
+        <div className="card card-pad col gap-10">
+          <span className="weight-500">{t('candidate.video.newTitle')}</span>
+          <div>
+            <label className="label">{t('candidate.video.questionsLabel')}</label>
+            <textarea className="textarea" rows={5} value={questionsText} onChange={e => setQuestionsText(e.target.value)} placeholder={t('candidate.video.questionsPh')} />
+            <span className="text-12 text-muted">{t('candidate.video.questionsHint')}</span>
+          </div>
+          {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
+          <div className="row gap-8">
+            <Btn onClick={() => setCreating(false)}>{t('common.cancel')}</Btn>
+            <Btn kind="primary" onClick={create} disabled={!questions.length || saving}>{saving ? t('common.saving') : t('candidate.video.create')}</Btn>
+          </div>
+        </div>
+      ) : (
+        <div className="card card-pad row" style={{ justifyContent: "space-between", borderStyle: "dashed", background: "var(--bg-sunken)" }}>
+          <div className="col">
+            <span className="weight-500">{t('candidate.video.add')}</span>
+            <span className="text-12 text-muted">{t('candidate.video.hint')}</span>
+          </div>
+          <Btn kind="primary" icon={<Icons.Play size={14} />} onClick={() => setCreating(true)}>{t('candidate.video.new')}</Btn>
+        </div>
       )}
     </div>
   );
@@ -1421,8 +1596,8 @@ const EvaluationTab = ({ c, onSaved, t }) => {
           <div className="card card-pad col gap-12">
             <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
               <div className="col gap-1">
-                <span className="weight-600" style={{ fontSize: 13 }}>Overall score</span>
-                <span className="text-12 text-secondary">Based on rated dimensions</span>
+                <span className="weight-600" style={{ fontSize: 13 }}>{t('candidate.eval.overall')}</span>
+                <span className="text-12 text-secondary">{t('candidate.eval.overallSub')}</span>
               </div>
               <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", color: overallPct >= 70 ? "var(--positive)" : overallPct >= 45 ? "var(--warn)" : "var(--danger)" }}>
                 {overallAvg.toFixed(1)}<span className="text-14 text-muted weight-400">/5</span>
@@ -1434,13 +1609,13 @@ const EvaluationTab = ({ c, onSaved, t }) => {
             <div className="row gap-16">
               {humanAvg > 0 && (
                 <div className="col gap-1">
-                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Soft</span>
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('candidate.eval.soft')}</span>
                   <span className="text-13 weight-600 text-mono">{humanAvg.toFixed(1)}</span>
                 </div>
               )}
               {techAvg > 0 && (
                 <div className="col gap-1">
-                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>Technical</span>
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('candidate.eval.technicalShort')}</span>
                   <span className="text-13 weight-600 text-mono">{techAvg.toFixed(1)}</span>
                 </div>
               )}
@@ -1460,7 +1635,7 @@ const EvaluationTab = ({ c, onSaved, t }) => {
                   color: recommendation === opt ? recColor[opt] : "var(--ink-secondary)",
                   transition: "all 0.15s",
                 }}>
-                {opt}
+                {t({ "Strong Hire": 'candidate.eval.rec.strongHire', "Lean Hire": 'candidate.eval.rec.leanHire', "Lean No": 'candidate.eval.rec.leanNo', "No Hire": 'candidate.eval.rec.noHire' }[opt])}
               </button>
             ))}
           </div>
@@ -1517,6 +1692,7 @@ const fmtDateTime = (iso) => {
 };
 
 const ActivityTab = ({ c }) => {
+  const t = window.useT();
   const statusLabels = Object.fromEntries((window.CANDID_DATA.STATUS || []).map(s => [s.id, s.label]));
 
   const typeIcon = (type) => {
@@ -1533,7 +1709,7 @@ const ActivityTab = ({ c }) => {
     type: e.type,
     when: e.at,
     what: e.type === "stage"
-      ? `Stage: ${statusLabels[e.note?.replace("Stage moved to ", "")] || e.note}`
+      ? t('candidate.activity.stage').replace('{stage}', statusLabels[e.note?.replace("Stage moved to ", "")] || e.note)
       : e.note,
     who: e.by || null,
     sort: e.at,
@@ -1542,27 +1718,27 @@ const ActivityTab = ({ c }) => {
   const logTypes = new Set((c.activityLog || []).map(e => e.type));
 
   const synthetic = [
-    { type: "system", when: c.appliedAt, what: "Candidate added to pipeline", sort: c.appliedAt || "0000" },
+    { type: "system", when: c.appliedAt, what: t('candidate.activity.added'), sort: c.appliedAt || "0000" },
     // Only show legacy status history entries not already in activity_log
     ...(!logTypes.has("stage") ? (c.statusHistory || []).map(h => ({
       type: "stage",
       when: h.at,
-      what: `Stage: ${statusLabels[h.status] || h.status}`,
+      what: t('candidate.activity.stage').replace('{stage}', statusLabels[h.status] || h.status),
       who: h.by || null,
       sort: h.at,
     })) : []),
     // Only show legacy analysis entry if no activity_log entries for analysis
     ...(!logTypes.has("analysis") && c.pre
-      ? [{ type: "analysis", when: c.analysisAt || c.appliedAt, what: "CV analysis generated", sort: c.analysisAt || c.appliedAt || "0001" }]
+      ? [{ type: "analysis", when: c.analysisAt || c.appliedAt, what: t('candidate.activity.analysis'), sort: c.analysisAt || c.appliedAt || "0001" }]
       : []),
     ...(!logTypes.has("eval") && c.evaluation
-      ? [{ type: "eval", when: c.evaluation.updated_at || c.appliedAt, what: "Evaluation saved", sort: c.evaluation.updated_at || c.appliedAt || "0002" }]
+      ? [{ type: "eval", when: c.evaluation.updated_at || c.appliedAt, what: t('candidate.activity.evalSaved'), sort: c.evaluation.updated_at || c.appliedAt || "0002" }]
       : []),
     ...(c.interviews || []).map(iv => ({
       type: "interview",
       who: iv.interviewer,
       when: iv.date,
-      what: `${iv.title || iv.type || "Interview"} recorded`,
+      what: t('candidate.activity.interviewRecorded').replace('{title}', iv.title || iv.type || t('interviews.interview')),
       sort: iv.date || "0003",
     })),
   ];
@@ -1588,7 +1764,7 @@ const ActivityTab = ({ c }) => {
           </div>
         ))}
         {raw.length === 0 && (
-          <div style={{ padding: "24px 18px", color: "var(--ink-muted)", fontSize: 13 }}>No activity yet.</div>
+          <div style={{ padding: "24px 18px", color: "var(--ink-muted)", fontSize: 13 }}>{t('candidate.activity.empty')}</div>
         )}
       </div>
     </div>
@@ -1597,20 +1773,21 @@ const ActivityTab = ({ c }) => {
 
 // ── Emails Tab ────────────────────────────────────────────────────────────────
 
-const _relativeTimeEmail = (iso) => {
+const _relativeTimeEmail = (iso, t) => {
   if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1)  return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1)  return t('inbox.time.justNow');
+  if (minutes < 60) return t('inbox.time.minutesAgo').replace('{n}', minutes);
   const hours = Math.floor(minutes / 60);
-  if (hours < 24)   return `${hours}h ago`;
+  if (hours < 24)   return t('inbox.time.hoursAgo').replace('{n}', hours);
   const days = Math.floor(hours / 24);
-  if (days === 1)   return "Yesterday";
-  return `${days} days ago`;
+  if (days === 1)   return t('inbox.time.yesterday');
+  return t('inbox.time.daysAgo').replace('{n}', days);
 };
 
 const EmailsTab = ({ candidateId }) => {
+  const t = window.useT();
   const [emails, setEmails]               = React.useState([]);
   const [loading, setLoading]             = React.useState(true);
   const [error, setError]                 = React.useState(null);
@@ -1631,17 +1808,17 @@ const EmailsTab = ({ candidateId }) => {
     <div>
       <div style={{ marginBottom: 16 }}>
         <span className="text-13 text-secondary">
-          {loading ? "Loading…" : error ? `Error: ${error}` : `${emails.length} emails sent`}
+          {loading ? t('common.loading') : error ? t('inbox.error').replace('{error}', error) : t('candidate.emails.sentCount').replace('{n}', emails.length)}
         </span>
       </div>
 
-      {loading && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--ink-muted)", fontSize: 13 }}>Loading…</div>}
-      {!loading && error && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--error)" }}>Failed to load: {error}</div>}
+      {loading && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--ink-muted)", fontSize: 13 }}>{t('common.loading')}</div>}
+      {!loading && error && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--error)" }}>{t('inbox.failedToLoad').replace('{error}', error)}</div>}
 
       {!loading && !error && emails.length === 0 && (
         <div className="card col" style={{ padding: 48, alignItems: "center", gap: 12 }}>
           <Icons.Mail size={28} style={{ color: "var(--ink-muted)" }} />
-          <span className="text-13 text-secondary">No emails sent to this candidate yet.</span>
+          <span className="text-13 text-secondary">{t('candidate.emails.empty')}</span>
         </div>
       )}
 
@@ -1659,12 +1836,12 @@ const EmailsTab = ({ candidateId }) => {
               <div className="col" style={{ flex: 1, minWidth: 0 }}>
                 <div className="row gap-8" style={{ marginBottom: 3, alignItems: "center" }}>
                   <span className="text-13 weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {email.subject || "(no subject)"}
+                    {email.subject || t('inbox.noSubject')}
                   </span>
                   <Badge kind={email.email_type === "rejection" ? "error" : "neutral"} style={{ marginLeft: "auto", flexShrink: 0 }}>{email.email_type}</Badge>
                 </div>
-                <span className="text-12 text-secondary" style={{ marginBottom: 2 }}>To: {email.to_email || "—"}</span>
-                <span className="text-12 text-muted">{_relativeTimeEmail(email.sent_at)}</span>
+                <span className="text-12 text-secondary" style={{ marginBottom: 2 }}>{t('inbox.to').replace('{email}', email.to_email || "—")}</span>
+                <span className="text-12 text-muted">{_relativeTimeEmail(email.sent_at, t)}</span>
               </div>
             </div>
           ))}

@@ -13,14 +13,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Backend base URL — mirrors frontend protocol so HTTP/HTTPS both work -->
-  <script>window.API_BASE = (window.location.protocol === "https:" ? "https" : "http") + "://localhost:8000";</script>
+  <!-- Backend base URL. To point at another backend, define window.CANDID_API_BASE in an inline script above this one,
+       e.g. <script>window.CANDID_API_BASE = "https://api.example.com";</script>
+       Default: localhost:8000, mirroring the page protocol so HTTP/HTTPS both work. -->
+  <script>window.API_BASE = window.CANDID_API_BASE || ((window.location.protocol === "https:" ? "https" : "http") + "://localhost:8000");</script>
 
   <!-- Google OAuth Client ID — set your own from Google Cloud Console -->
   <!-- <script>window.GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID.apps.googleusercontent.com";</script> -->
 
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
   <!-- Google Identity Services — loaded async, login screen waits for it -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -28,25 +30,24 @@
 <body>
   <div id="root"></div>
 
-  <script type="text/babel" src="data.jsx?v=7"></script>
-  <script type="text/babel" src="translations.jsx?v=13"></script>
-  <script type="text/babel" src="ui.jsx?v=13"></script>
-  <script type="text/babel" src="tweaks-panel.jsx?v=3"></script>
-  <script type="text/babel" src="screens/pipeline.jsx?v=7"></script>
-  <script type="text/babel" src="screens/candidates.jsx?v=11"></script>
-  <script type="text/babel" src="screens/jobs.jsx?v=11"></script>
-  <script type="text/babel" src="screens/interviews.jsx?v=9"></script>
-  <script type="text/babel" src="screens/liveroom.jsx?v=4"></script>
-  <script type="text/babel" src="screens/inbox.jsx?v=5"></script>
-  <script type="text/babel" src="screens/reports.jsx?v=4"></script>
-  <script type="text/babel" src="screens/candidate.jsx?v=24"></script>
-  <script type="text/babel" src="screens/roles.jsx?v=8"></script>
-  <script type="text/babel" src="screens/employees.jsx?v=14"></script>
-  <script type="text/babel" src="screens/settings.jsx?v=14"></script>
-  <script type="text/babel" src="screens/quickadd.jsx?v=7"></script>
-  <script type="text/babel" src="screens/portal.jsx?v=5"></script>
-  <script type="text/babel" src="screens/notfound.jsx?v=1"></script>
-  <script type="text/babel" src="screens/videoportal.jsx?v=1"></script>
-  <script type="text/babel" src="app.jsx?v=29"></script>
+  <script type="text/babel" src="data.jsx?v=8"></script>
+  <script type="text/babel" src="translations.jsx?v=17"></script>
+  <script type="text/babel" src="ui.jsx?v=14"></script>
+  <script type="text/babel" src="screens/pipeline.jsx?v=8"></script>
+  <script type="text/babel" src="screens/candidates.jsx?v=13"></script>
+  <script type="text/babel" src="screens/jobs.jsx?v=13"></script>
+  <script type="text/babel" src="screens/interviews.jsx?v=10"></script>
+  <script type="text/babel" src="screens/liveroom.jsx?v=5"></script>
+  <script type="text/babel" src="screens/inbox.jsx?v=6"></script>
+  <script type="text/babel" src="screens/reports.jsx?v=5"></script>
+  <script type="text/babel" src="screens/candidate.jsx?v=26"></script>
+  <script type="text/babel" src="screens/roles.jsx?v=9"></script>
+  <script type="text/babel" src="screens/employees.jsx?v=16"></script>
+  <script type="text/babel" src="screens/settings.jsx?v=18"></script>
+  <script type="text/babel" src="screens/quickadd.jsx?v=8"></script>
+  <script type="text/babel" src="screens/portal.jsx?v=6"></script>
+  <script type="text/babel" src="screens/notfound.jsx?v=2"></script>
+  <script type="text/babel" src="screens/videoportal.jsx?v=3"></script>
+  <script type="text/babel" src="app.jsx?v=31"></script>
 </body>
 </html>

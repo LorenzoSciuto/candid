@@ -9,9 +9,21 @@ class ChunkUploader {
     this._responseId = responseId;
     this._onError = onError;
     this._chunkIndex = 0;
+    this._pending = [];
   }
 
-  async uploadChunk(blob) {
+  // Chunks upload in the background while recording continues; flush() waits for all of them.
+  uploadChunk(blob) {
+    const upload = this._upload(blob);
+    this._pending.push(upload);
+    return upload;
+  }
+
+  flush() {
+    return Promise.all(this._pending);
+  }
+
+  async _upload(blob) {
     const currentIndex = this._chunkIndex++;
     const formData = new FormData();
     formData.append("chunk_index", String(currentIndex));
@@ -26,7 +38,7 @@ class ChunkUploader {
         if (response.ok) return;
       } catch (_) {}
     }
-    this._onError(`Chunk ${currentIndex} failed after 3 attempts`);
+    this._onError(currentIndex);
   }
 
   get totalChunksUploaded() {
@@ -37,6 +49,7 @@ class ChunkUploader {
 // ── HardwareCheckView ─────────────────────────────────────────────────────────
 
 const HardwareCheckView = ({ onReady }) => {
+  const t = window.useT();
   const [stream, setStream] = React.useState(null);
   const [permissionError, setPermissionError] = React.useState("");
   const videoRef = React.useRef(null);
@@ -57,7 +70,7 @@ const HardwareCheckView = ({ onReady }) => {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setStream(mediaStream);
     } catch (error) {
-      setPermissionError("Camera and microphone access are required. Please allow permissions and reload.");
+      setPermissionError(t('videoportal.permission_error'));
     }
   };
 
@@ -72,8 +85,8 @@ const HardwareCheckView = ({ onReady }) => {
 
   return (
     <div style={styles.centerColumn}>
-      <h2 style={styles.heading}>Hardware Check</h2>
-      <p style={styles.subtext}>Make sure your camera and microphone are working before you begin.</p>
+      <h2 style={styles.heading}>{t('videoportal.hardware_check')}</h2>
+      <p style={styles.subtext}>{t('videoportal.hardware_hint')}</p>
 
       {permissionError ? (
         <div style={styles.errorBox}>{permissionError}</div>
@@ -89,7 +102,7 @@ const HardwareCheckView = ({ onReady }) => {
 
       {stream && (
         <button style={styles.primaryButton} onClick={handleReady}>
-          I'm Ready — Start Interview
+          {t('videoportal.ready_start')}
         </button>
       )}
     </div>
@@ -129,6 +142,7 @@ const CountdownTimer = ({ durationSeconds, onExpire }) => {
 // ── InterviewView ─────────────────────────────────────────────────────────────
 
 const InterviewView = ({ interview, currentQuestionIndex, onQuestionComplete }) => {
+  const t = window.useT();
   const [isRecording, setIsRecording] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const [statusMessage, setStatusMessage] = React.useState("");
@@ -147,15 +161,24 @@ const InterviewView = ({ interview, currentQuestionIndex, onQuestionComplete }) 
       `${window.API_BASE}/public/video/${interview.invite_token}/responses/${currentQuestionIndex}`,
       { method: "POST" }
     );
+    if (!fetchResult.ok) throw new Error(`HTTP ${fetchResult.status}`);
     const data = await fetchResult.json();
     responseIdRef.current = data.id;
     return data;
   };
 
   const startRecording = async () => {
-    const response = await initializeResponse();
+    let response;
+    try {
+      response = await initializeResponse();
+    } catch {
+      setStatusMessage(t('videoportal.start_failed'));
+      return;
+    }
     if (response.status === "complete") {
-      setStatusMessage("This question is already recorded.");
+      // Already answered (e.g. after a reload): move on instead of re-recording.
+      setStatusMessage(t('videoportal.already_recorded'));
+      onQuestionComplete();
       return;
     }
 
@@ -163,17 +186,15 @@ const InterviewView = ({ interview, currentQuestionIndex, onQuestionComplete }) 
     const uploader = new ChunkUploader(
       interview.invite_token,
       responseIdRef.current,
-      (errorMessage) => setStatusMessage(errorMessage)
+      (chunkIndex) => setStatusMessage(t('videoportal.chunk_failed').replace('{n}', chunkIndex))
     );
     uploaderRef.current = uploader;
 
     const recorder = new MediaRecorder(mediaStream, { mimeType: "video/webm" });
     mediaRecorderRef.current = recorder;
 
-    recorder.ondataavailable = async (event) => {
-      if (event.data && event.data.size > 0) {
-        await uploader.uploadChunk(event.data);
-      }
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) uploader.uploadChunk(event.data);
     };
 
     recorder.start(5000);
@@ -187,14 +208,16 @@ const InterviewView = ({ interview, currentQuestionIndex, onQuestionComplete }) 
 
     setIsRecording(false);
     setIsUploading(true);
-    setStatusMessage("Uploading…");
+    setStatusMessage(t('videoportal.uploading'));
 
     recorder.stop();
     recorder.stream.getTracks().forEach(track => track.stop());
 
     await new Promise(resolve => { recorder.onstop = resolve; });
 
+    // The final chunk is emitted on stop: wait until every chunk is stored before completing.
     const uploader = uploaderRef.current;
+    await uploader.flush();
     await window._baseFetch(
       `${window.API_BASE}/public/video/${interview.invite_token}/responses/${responseIdRef.current}/complete`,
       {
@@ -216,7 +239,7 @@ const InterviewView = ({ interview, currentQuestionIndex, onQuestionComplete }) 
   return (
     <div style={styles.centerColumn}>
       <div style={styles.progressText}>
-        Question {currentQuestionIndex + 1} of {totalQuestions}
+        {t('videoportal.question_progress').replace('{n}', currentQuestionIndex + 1).replace('{total}', totalQuestions)}
       </div>
 
       <div style={styles.questionBox}>
@@ -238,17 +261,17 @@ const InterviewView = ({ interview, currentQuestionIndex, onQuestionComplete }) 
       <div style={styles.controlRow}>
         {!isRecording && !isUploading && (
           <button style={styles.recordButton} onClick={startRecording}>
-            Start Recording
+            {t('videoportal.start_recording')}
           </button>
         )}
         {isRecording && (
           <button style={styles.stopButton} onClick={stopRecordingAndComplete}>
-            Stop & Submit Answer
+            {t('videoportal.stop_submit')}
           </button>
         )}
         {isUploading && (
           <button style={{ ...styles.primaryButton, opacity: 0.6 }} disabled>
-            Uploading…
+            {t('videoportal.uploading')}
           </button>
         )}
       </div>
@@ -258,19 +281,23 @@ const InterviewView = ({ interview, currentQuestionIndex, onQuestionComplete }) 
 
 // ── CompletionView ─────────────────────────────────────────────────────────────
 
-const CompletionView = () => (
-  <div style={styles.centerColumn}>
-    <div style={styles.completionIcon}>✓</div>
-    <h2 style={styles.heading}>Thank You</h2>
-    <p style={styles.subtext}>
-      Your video interview has been submitted successfully. The recruiting team will be in touch soon.
-    </p>
-  </div>
-);
+const CompletionView = () => {
+  const t = window.useT();
+  return (
+    <div style={styles.centerColumn}>
+      <div style={styles.completionIcon}>✓</div>
+      <h2 style={styles.heading}>{t('videoportal.thank_you')}</h2>
+      <p style={styles.subtext}>
+        {t('videoportal.completion_message')}
+      </p>
+    </div>
+  );
+};
 
 // ── VideoPortalScreen ─────────────────────────────────────────────────────────
 
 const VideoPortalScreen = ({ token }) => {
+  const t = window.useT();
   const [interview, setInterview] = React.useState(null);
   const [loadError, setLoadError] = React.useState("");
   const [view, setView] = React.useState("loading");
@@ -283,14 +310,14 @@ const VideoPortalScreen = ({ token }) => {
   const fetchInterview = async () => {
     try {
       const response = await window._baseFetch(`${window.API_BASE}/public/video/${token}`);
-      if (response.status === 404) { setLoadError("Interview not found."); return; }
-      if (response.status === 410) { setLoadError("This interview link has expired."); return; }
-      if (!response.ok) { setLoadError("Unable to load interview. Please try again."); return; }
+      if (response.status === 404) { setLoadError(t('videoportal.not_found')); return; }
+      if (response.status === 410) { setLoadError(t('videoportal.expired')); return; }
+      if (!response.ok) { setLoadError(t('videoportal.load_failed')); return; }
       const data = await response.json();
       setInterview(data);
       determineInitialView(data);
     } catch (_) {
-      setLoadError("Network error — please check your connection.");
+      setLoadError(t('videoportal.network_error'));
     }
   };
 
@@ -304,9 +331,12 @@ const VideoPortalScreen = ({ token }) => {
     setView("hardware");
   };
 
+  // Resume at the first question without a completed answer.
   const resolveResumeIndex = (data) => {
     const questions = JSON.parse(data.questions);
-    return Math.max(0, questions.length - 1);
+    const answered = new Set(data.answered_questions || []);
+    const next = questions.findIndex((_, index) => !answered.has(index));
+    return next === -1 ? questions.length - 1 : next;
   };
 
   const handleHardwareReady = async () => {
@@ -341,7 +371,7 @@ const VideoPortalScreen = ({ token }) => {
         <div style={styles.card}>
           {loadError
             ? <div style={styles.errorBox}>{loadError}</div>
-            : <div style={styles.subtext}>Loading interview…</div>
+            : <div style={styles.subtext}>{t('videoportal.loading')}</div>
           }
         </div>
       </div>

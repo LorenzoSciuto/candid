@@ -103,14 +103,15 @@ const Badge = ({ children, kind, dot, style }) => (
 );
 
 const _TERMINAL_BADGE = {
-  hired:    { dot: "#22c55e", label: "Hired" },
-  Rejected: { dot: "#ef4444", label: "Rejected" },
-  archived: { dot: "#94a3b8", label: "Archived" },
+  hired:    { dot: "#22c55e", label: "Hired", key: "ui.status.hired" },
+  Rejected: { dot: "#ef4444", label: "Rejected", key: "ui.status.rejected" },
+  archived: { dot: "#94a3b8", label: "Archived", key: "ui.status.archived" },
 };
 const StatusBadge = ({ status }) => {
+  const t = window.useT ? window.useT() : (k) => k;
   const s = window.CANDID_DATA.STATUS.find(x => x.id === status) || _TERMINAL_BADGE[status];
   if (!s) return null;
-  return <Badge dot={s.dot}>{s.label}</Badge>;
+  return <Badge dot={s.dot}>{s.key ? t(s.key) : s.label}</Badge>;
 };
 
 const Avatar = ({ name, size = "", src }) => {
@@ -214,7 +215,7 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout, onSwitchO
               <div className="row gap-10" style={{ alignItems: "center" }}>
                 <Avatar name={user?.name || "User"} src={user?.picture} size="lg" />
                 <div className="col" style={{ minWidth: 0 }}>
-                  <span className="text-13 weight-600" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || "Guest"}</span>
+                  <span className="text-13 weight-600" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || t('ui.guest')}</span>
                   <span className="text-12 text-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email || "—"}</span>
                   {(user?.title || user?.role) && <span className="text-11 text-muted" style={{ marginTop: 1 }}>{user.title || user.role}</span>}
                 </div>
@@ -223,7 +224,7 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout, onSwitchO
             {/* Org section */}
             {(user?.orgs?.length > 0) && (
               <div style={{ padding: "8px 0", borderBottom: "1px solid var(--border-soft)" }}>
-                <div className="text-11 text-muted" style={{ padding: "2px 16px 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Organization</div>
+                <div className="text-11 text-muted" style={{ padding: "2px 16px 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('ui.organization')}</div>
                 {user.orgs.map(org => (
                   <button key={org.id} className="btn btn-ghost" style={{ width: "100%", justifyContent: "space-between", padding: "6px 16px", borderRadius: 0, fontSize: 13 }}
                     onClick={() => { setUserMenuOpen(false); org.id !== user.org_id && onSwitchOrg && onSwitchOrg(org.id); }}>
@@ -238,7 +239,7 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout, onSwitchO
                 ))}
                 <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "flex-start", padding: "6px 16px", borderRadius: 0, fontSize: 13, color: "var(--ink-secondary)" }}
                   onClick={() => { setUserMenuOpen(false); onCreateOrg && onCreateOrg(); }}>
-                  <Icons.Plus size={12} style={{ marginRight: 8 }} /> New organization
+                  <Icons.Plus size={12} style={{ marginRight: 8 }} /> {t('ui.newOrganization')}
                 </button>
               </div>
             )}
@@ -254,7 +255,7 @@ const Sidebar = ({ route, onRoute, counts, onQuickAdd, user, onLogout, onSwitchO
         <div className="user-card" onClick={() => setUserMenuOpen(v => !v)} style={{ cursor: "pointer" }}>
           <Avatar name={user?.name || "User"} src={user?.picture} />
           <div className="col" style={{ minWidth: 0 }}>
-            <span className="text-13 weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || "Guest"}</span>
+            <span className="text-13 weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || t('ui.guest')}</span>
             <span className="text-12 text-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.role || user?.email || "—"}</span>
           </div>
           <Icons.ChevronDown size={12} style={{ color: "var(--ink-muted)", flexShrink: 0, transform: userMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
@@ -279,7 +280,7 @@ const Topbar = ({ crumbs, actions }) => (
   </div>
 );
 
-// ---- RoleSelect / JDSelect — API-backed dropdowns with mock fallback ----
+// ---- RoleSelect — API-backed dropdown, seeded with the roles cached by app.jsx ----
 
 const useApiData = (endpoint, fallback) => {
   const [data, setData] = useState(fallback);
@@ -292,7 +293,9 @@ const useApiData = (endpoint, fallback) => {
   return data;
 };
 
-const RoleSelect = ({ value, onChange, placeholder = "Select role…", style, className }) => {
+const RoleSelect = ({ value, onChange, placeholder, style, className }) => {
+  const t = window.useT();
+  if (placeholder === undefined) placeholder = t('common.selectRole');
   const roles = useApiData("/roles", window.CANDID_DATA.ROLES || []);
   return (
     <select
@@ -303,22 +306,6 @@ const RoleSelect = ({ value, onChange, placeholder = "Select role…", style, cl
     >
       {placeholder && <option value="">{placeholder}</option>}
       {roles.map(r => <option key={r.id} value={r.id}>{r.name}{r.department ? ` · ${r.department}` : ""}</option>)}
-    </select>
-  );
-};
-
-const JDSelect = ({ value, onChange, roleId, placeholder = "Select position…", style, className }) => {
-  const allJds = useApiData(`/job-descriptions${roleId ? `?role_id=${roleId}` : ""}`, window.CANDID_DATA.JDS_DATA || []);
-  const jds = roleId ? allJds.filter(j => j.role_id === roleId) : allJds;
-  return (
-    <select
-      className={className || "select"}
-      value={value || ""}
-      onChange={e => onChange(e.target.value)}
-      style={style}
-    >
-      {placeholder && <option value="">{placeholder}</option>}
-      {jds.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
     </select>
   );
 };
@@ -382,21 +369,22 @@ window.formatDateTime = (iso) => {
 // ── Email detail modal ─────────────────────────────────────────────────────────
 
 const EmailDetailModal = ({ email, onClose }) => {
+  const t = window.useT ? window.useT() : (k) => k;
   if (!email) return null;
   const EMAIL_TYPE_COLOR = { rejection: "error", invitation: "neutral", otp: "neutral", general: "neutral" };
   return (
-    <Modal open={!!email} onClose={onClose} title={email.subject || "(no subject)"} width={580}>
+    <Modal open={!!email} onClose={onClose} title={email.subject || t('inbox.noSubject')} width={580}>
       <div className="col gap-10">
         <div className="row gap-8" style={{ alignItems: "center" }}>
-          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>To</span>
+          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>{t('compose.to')}</span>
           <span className="text-13">{email.to_email || "—"}</span>
         </div>
         <div className="row gap-8" style={{ alignItems: "center" }}>
-          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>Date</span>
+          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>{t('interviews.modal.date')}</span>
           <span className="text-13">{window.formatDateTime(email.sent_at)}</span>
         </div>
         <div className="row gap-8" style={{ alignItems: "center" }}>
-          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>Type</span>
+          <span className="text-13 text-secondary" style={{ minWidth: 48 }}>{t('interviews.modal.type')}</span>
           <Badge kind={EMAIL_TYPE_COLOR[email.email_type] || "neutral"}>{email.email_type}</Badge>
         </div>
         <hr style={{ border: "none", borderTop: "1px solid var(--border-soft)", margin: "6px 0" }} />
@@ -407,11 +395,11 @@ const EmailDetailModal = ({ email, onClose }) => {
         }}>
           {email.body
             ? email.body
-            : <span style={{ color: "var(--ink-muted)", fontStyle: "italic" }}>(no body stored)</span>}
+            : <span style={{ color: "var(--ink-muted)", fontStyle: "italic" }}>{t('ui.email.noBody')}</span>}
         </div>
       </div>
     </Modal>
   );
 };
 
-Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, ConfirmDialog, Rating, SegControl, Sidebar, Topbar, RoleSelect, JDSelect, Tooltip, useContext, useApiData, EmailDetailModal });
+Object.assign(window, { Icons, Icon, Btn, Badge, StatusBadge, Avatar, Modal, ConfirmDialog, Rating, SegControl, Sidebar, Topbar, RoleSelect, Tooltip, useContext, useApiData, EmailDetailModal });

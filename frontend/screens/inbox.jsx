@@ -1,17 +1,17 @@
 // Inbox — notifications + email history
 const { useState, useEffect, useCallback } = React;
 
-const _relativeTime = (isoString) => {
+const _relativeTime = (isoString, t) => {
   if (!isoString) return "";
   const diff = Date.now() - new Date(isoString).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1)  return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1)  return t("inbox.time.justNow");
+  if (minutes < 60) return t("inbox.time.minutesAgo").replace("{n}", minutes);
   const hours = Math.floor(minutes / 60);
-  if (hours < 24)   return `${hours}h ago`;
+  if (hours < 24)   return t("inbox.time.hoursAgo").replace("{n}", hours);
   const days = Math.floor(hours / 24);
-  if (days === 1)   return "Yesterday";
-  return `${days} days ago`;
+  if (days === 1)   return t("inbox.time.yesterday");
+  return t("inbox.time.daysAgo").replace("{n}", days);
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -33,6 +33,7 @@ const NOTIF_STYLE = {
 };
 
 const NotificationRow = ({ notification, onMarkRead }) => {
+  const t = window.useT ? window.useT() : k => k;
   const CategoryIcon = NOTIF_ICON[notification.category] || NOTIF_ICON.system;
   const iconStyle = {
     width: 36, height: 36, borderRadius: 8,
@@ -57,7 +58,7 @@ const NotificationRow = ({ notification, onMarkRead }) => {
           </Badge>
         </div>
         <span className="text-13 text-secondary" style={{ marginBottom: 6 }}>{notification.body}</span>
-        <span className="text-12 text-muted">{_relativeTime(notification.created_at)}</span>
+        <span className="text-12 text-muted">{_relativeTime(notification.created_at, t)}</span>
       </div>
     </div>
   );
@@ -111,22 +112,22 @@ const NotificationsPane = () => {
   return (
     <div>
       <div className="row gap-8" style={{ marginBottom: 16, justifyContent: "space-between" }}>
-        <span className="text-13 text-secondary">{loading ? t("common.loading") : error ? `Error: ${error}` : `${unreadCount} unread`}</span>
+        <span className="text-13 text-secondary">{loading ? t("common.loading") : error ? t("inbox.error").replace("{error}", error) : t("inbox.unreadCount").replace("{n}", unreadCount)}</span>
         <div className="row gap-8">
           <SegControl
             value={filter} onChange={setFilter}
-            options={[{ value: "all", label: "All" }, { value: "unread", label: "Unread" }, { value: "analysis", label: "AI" }]}
+            options={[{ value: "all", label: t("inbox.filter.all") }, { value: "unread", label: t("inbox.filter.unread") }, { value: "analysis", label: "AI" }]}
           />
-          <Btn onClick={handleMarkAllRead} disabled={unreadCount === 0}>Mark all read</Btn>
+          <Btn onClick={handleMarkAllRead} disabled={unreadCount === 0}>{t("inbox.markAllRead")}</Btn>
         </div>
       </div>
 
       {loading && <div className="text-secondary" style={{ padding: 32, textAlign: "center" }}>{t("common.loading")}</div>}
-      {!loading && error && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--error)" }}>Failed to load: {error}</div>}
+      {!loading && error && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--error)" }}>{t("inbox.failedToLoad").replace("{error}", error)}</div>}
       {!loading && !error && visible.length === 0 && (
         <div className="card col" style={{ padding: 48, alignItems: "center", gap: 12 }}>
           <Icons.Inbox size={32} style={{ color: "var(--ink-muted)" }} />
-          <span className="text-secondary">{filter === "unread" ? "No unread notifications." : "No notifications yet."}</span>
+          <span className="text-secondary">{filter === "unread" ? t("inbox.noUnread") : t("inbox.noNotifications")}</span>
         </div>
       )}
       {!loading && !error && visible.length > 0 && (
@@ -147,7 +148,9 @@ const EMAIL_TYPE_BADGE = {
   general:    "neutral",
 };
 
-const EmailRow = ({ email, onClick }) => (
+const EmailRow = ({ email, onClick }) => {
+  const t = window.useT ? window.useT() : k => k;
+  return (
   <div className="card row" style={{ padding: 14, gap: 14, alignItems: "flex-start", cursor: "pointer" }} onClick={onClick}>
     <span style={{ width: 36, height: 36, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, background: "var(--bg-sunken)", color: "var(--ink-secondary)" }}>
       <Icons.Mail size={15} />
@@ -155,17 +158,18 @@ const EmailRow = ({ email, onClick }) => (
     <div className="col" style={{ flex: 1, minWidth: 0 }}>
       <div className="row gap-8" style={{ marginBottom: 4, alignItems: "center" }}>
         <span className="weight-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {email.subject || "(no subject)"}
+          {email.subject || t("inbox.noSubject")}
         </span>
         <Badge kind={EMAIL_TYPE_BADGE[email.email_type] || "neutral"} style={{ marginLeft: "auto", flexShrink: 0 }}>
           {email.email_type}
         </Badge>
       </div>
-      <span className="text-13 text-secondary" style={{ marginBottom: 4 }}>To: {email.to_email || "—"}</span>
-      <span className="text-12 text-muted">{_relativeTime(email.sent_at)}</span>
+      <span className="text-13 text-secondary" style={{ marginBottom: 4 }}>{t("inbox.to").replace("{email}", email.to_email || "—")}</span>
+      <span className="text-12 text-muted">{_relativeTime(email.sent_at, t)}</span>
     </div>
   </div>
-);
+  );
+};
 
 const EmailsPane = () => {
   const t = window.useT ? window.useT() : k => k;
@@ -189,16 +193,16 @@ const EmailsPane = () => {
     <div>
       <div style={{ marginBottom: 16 }}>
         <span className="text-13 text-secondary">
-          {loading ? t("common.loading") : error ? `Error: ${error}` : `${emails.length} sent`}
+          {loading ? t("common.loading") : error ? t("inbox.error").replace("{error}", error) : t("inbox.sentCount").replace("{n}", emails.length)}
         </span>
       </div>
 
       {loading && <div className="text-secondary" style={{ padding: 32, textAlign: "center" }}>{t("common.loading")}</div>}
-      {!loading && error && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--error)" }}>Failed to load: {error}</div>}
+      {!loading && error && <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--error)" }}>{t("inbox.failedToLoad").replace("{error}", error)}</div>}
       {!loading && !error && emails.length === 0 && (
         <div className="card col" style={{ padding: 48, alignItems: "center", gap: 12 }}>
           <Icons.Mail size={32} style={{ color: "var(--ink-muted)" }} />
-          <span className="text-secondary">No emails sent yet.</span>
+          <span className="text-secondary">{t("inbox.noEmails")}</span>
         </div>
       )}
       {!loading && !error && emails.length > 0 && (
@@ -227,8 +231,8 @@ const InboxScreen = ({ onRoute }) => {
         <SegControl
           value={tab} onChange={setTab}
           options={[
-            { value: "notifications", label: "Notifications" },
-            { value: "emails",        label: "Emails" },
+            { value: "notifications", label: t("inbox.tab.notifications") },
+            { value: "emails",        label: t("inbox.tab.emails") },
           ]}
         />
       </div>

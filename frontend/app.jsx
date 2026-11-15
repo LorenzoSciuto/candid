@@ -1,8 +1,4 @@
 // Candid — app shell + routing + auth + locale
-const TWEAKS_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "streaming": true,
-  "showCounts": true
-}/*EDITMODE-END*/;
 
 // Fallback: translations.jsx may not have run yet if Babel loads scripts async
 const LocaleContext = window.LocaleContext || React.createContext({ locale: 'en', setLocale: () => {} });
@@ -37,7 +33,7 @@ const ComposeModal = ({ onClose }) => {
       if (!res.ok) throw new Error();
       const d = await res.json();
       setBody(d.result);
-    } catch { setRewriteError("AI unavailable — check provider settings."); }
+    } catch { setRewriteError(t('app.aiUnavailable')); }
     setRewriting(false);
   };
 
@@ -52,18 +48,18 @@ const ComposeModal = ({ onClose }) => {
         body: JSON.stringify({ to, subject, body }),
       });
       if (res.status === 503) {
-        window.open(`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+        window.open(`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
         onClose();
         return;
       }
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        setSendError(err?.detail || "Send failed");
+        setSendError(err?.detail || t('app.sendFailed'));
         setSending(false);
         return;
       }
     } catch {
-      setSendError("Backend unreachable");
+      setSendError(t('app.backendUnreachable'));
       setSending(false);
       return;
     }
@@ -77,7 +73,7 @@ const ComposeModal = ({ onClose }) => {
           {sendError && <span className="text-12" style={{ color: "var(--danger)", marginRight: "auto" }}>{sendError}</span>}
           <Btn onClick={onClose}>{t('common.cancel')}</Btn>
           <Btn kind="primary" icon={<Icons.Mail size={14} />} onClick={send} disabled={!to.trim() || sending}>
-            {sending ? t('compose.sending') || "Sending…" : t('compose.send')}
+            {sending ? t('compose.sending') : t('compose.send')}
           </Btn>
         </>
       }>
@@ -88,7 +84,7 @@ const ComposeModal = ({ onClose }) => {
         </div>
         <div>
           <label className="label">{t('compose.subject')}</label>
-          <input className="input" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Re: Senior Engineer role" />
+          <input className="input" value={subject} onChange={e => setSubject(e.target.value)} placeholder={t('compose.subjectPlaceholder')} />
         </div>
         <div>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -103,7 +99,7 @@ const ComposeModal = ({ onClose }) => {
               </button>
             </div>
           </div>
-          <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} placeholder="Hi there,&#10;&#10;" />
+          <textarea className="textarea" rows={9} value={body} onChange={e => setBody(e.target.value)} placeholder={t('compose.bodyPlaceholder')} />
         </div>
       </div>
     </Modal>
@@ -135,7 +131,7 @@ const HiringPlanModal = ({ onClose, onNavigate }) => {
         {!loading && jds.length === 0 && (
           <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>
             {t('plan.empty')}
-            <button className="link text-13" style={{ marginLeft: 8 }} onClick={() => { onClose(); onNavigate("jobs"); }}>Go to Positions →</button>
+            <button className="link text-13" style={{ marginLeft: 8 }} onClick={() => { onClose(); onNavigate("jobs"); }}>{t('plan.goToPositions')}</button>
           </div>
         )}
         {jds.length > 0 && (
@@ -202,7 +198,9 @@ const useServerHealth = () => {
   return { online, checking };
 };
 
-const ServerOfflineOverlay = () => (
+const ServerOfflineOverlay = () => {
+  const t = window.useT();
+  return (
   <div style={{
     position: "fixed", inset: 0, zIndex: 9999,
     background: "var(--bg, #fafaf9)",
@@ -233,18 +231,19 @@ const ServerOfflineOverlay = () => (
       </div>
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink, #1c1917)", letterSpacing: "-0.02em", marginBottom: 6 }}>
-          Service Unavailable
+          {t('app.offline.title')}
         </div>
         <div style={{ fontSize: 13.5, color: "var(--ink-secondary, #78716c)", lineHeight: 1.6 }}>
-          Candid is temporarily unreachable. Please try again in a moment.
+          {t('app.offline.body')}
         </div>
       </div>
       <div style={{ fontSize: 12, color: "var(--ink-faint, #a8a29e)" }}>
-        Retrying automatically…
+        {t('app.offline.retrying')}
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 
@@ -284,6 +283,34 @@ const decodeJwt = (token) => {
   } catch { return null; }
 };
 
+// ── Invitations ──────────────────────────────────────────────────────────────
+
+const PENDING_INVITE_KEY = "candid_invite_token";
+
+// Invitation emails link to #accept-invite?token=…; the backend GET accept redirects to #?invite_accepted=1….
+// Stash the token (consumed after login) and clean the hash before routing reads it.
+(function () {
+  const h = window.location.hash;
+  if (h.startsWith("#accept-invite")) {
+    const token = new URLSearchParams(h.split("?")[1] || "").get("token");
+    if (token) localStorage.setItem(PENDING_INVITE_KEY, token);
+  }
+  if (h.startsWith("#accept-invite") || h.startsWith("#?invite_accepted")) {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+})();
+
+// POST /auth/accept-invite — body is { token } or { invitation_id }. Returns { token, org_id, org }.
+const acceptInvite = async (authToken, body, fallbackError) => {
+  const res = await fetch(`${window.API_BASE}/auth/accept-invite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || fallbackError);
+  return res.json();
+};
+
 // ── Login Screen ─────────────────────────────────────────────────────────────
 
 const GoogleLogo = () => (
@@ -298,13 +325,15 @@ const GoogleLogo = () => (
 // ── Org Setup Wizard ──────────────────────────────────────────────────────────
 
 const OrgSetupWizard = ({ user, onComplete }) => {
+  const t = window.useT();
   // Steps: "org" → pick/create org  |  "profile" → name + role + dept  |  "invite" → invite teammates
+  const linkToken = localStorage.getItem(PENDING_INVITE_KEY) || "";
   const [step, setStep] = useState("org");
   const [subStep, setSubStep] = useState(
-    (user.pending_invitations?.length > 0) ? "invites" : "choose"
+    linkToken ? "token" : (user.pending_invitations?.length > 0) ? "invites" : "choose"
   );
   const [orgName, setOrgName] = useState("");
-  const [inviteToken, setInviteToken] = useState("");
+  const [inviteToken, setInviteToken] = useState(linkToken);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pendingOrg, setPendingOrg] = useState(null);
@@ -329,13 +358,7 @@ const OrgSetupWizard = ({ user, onComplete }) => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${window.API_BASE}/auth/accept-invite`, {
-        method: "POST",
-        headers: apiHeaders,
-        body: JSON.stringify({ invitation_id: invitationId }),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to join organization");
-      const data = await res.json();
+      const data = await acceptInvite(user.token, { invitation_id: invitationId }, t('wizard.err.join'));
       setPendingOrg({ token: data.token, org_id: data.org_id, org: data.org });
       setStep("profile");
     } catch (err) {
@@ -346,16 +369,11 @@ const OrgSetupWizard = ({ user, onComplete }) => {
 
   const joinByToken = async () => {
     if (!inviteToken.trim()) return;
+    localStorage.removeItem(PENDING_INVITE_KEY);
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${window.API_BASE}/auth/accept-invite`, {
-        method: "POST",
-        headers: apiHeaders,
-        body: JSON.stringify({ token: inviteToken.trim() }),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Invalid invitation token");
-      const data = await res.json();
+      const data = await acceptInvite(user.token, { token: inviteToken.trim() }, t('wizard.err.token'));
       setPendingOrg({ token: data.token, org_id: data.org_id, org: data.org });
       setStep("profile");
     } catch (err) {
@@ -363,6 +381,9 @@ const OrgSetupWizard = ({ user, onComplete }) => {
     }
     setLoading(false);
   };
+
+  // Arrived from an invitation link: submit the stored token right away.
+  useEffect(() => { if (linkToken) joinByToken(); }, []);
 
   const createOrg = async () => {
     if (!orgName.trim() || loading) return;
@@ -374,7 +395,7 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         headers: apiHeaders,
         body: JSON.stringify({ name: orgName.trim() }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to create organization");
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || t('wizard.err.create'));
       const data = await res.json();
       setPendingOrg({ token: data.token, org_id: data.org.id, org: { id: data.org.id, name: data.org.name, role: "owner" } });
       setStep("profile");
@@ -415,8 +436,11 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         body: JSON.stringify({ provider: aiProvider, api_key: aiKey.trim() }),
       }).catch(() => {});
     }
-    // Save locations to localStorage
-    localStorage.setItem("candid_locations", JSON.stringify(setupLocations));
+    await fetch(`${window.API_BASE}/config/preferences`, {
+      method: "PUT",
+      headers: orgHeaders,
+      body: JSON.stringify({ locations: setupLocations }),
+    }).catch(() => {});
     setSetupSaving(false);
     setStep("invite");
   };
@@ -465,18 +489,10 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         {/* Header */}
         <div className="col" style={{ alignItems: "center", gap: 8 }}>
           <div style={{ width: 48, height: 48, borderRadius: 10, background: "var(--ink)", display: "grid", placeItems: "center", color: "white", fontSize: 24, fontWeight: 600 }}>C</div>
-          {step === "org"     && <span style={{ fontSize: 20, fontWeight: 600 }}>Welcome, {(displayName || user.name)?.split(" ")[0]}</span>}
-          {step === "profile" && <span style={{ fontSize: 20, fontWeight: 600 }}>About you</span>}
-          {step === "setup"   && <span style={{ fontSize: 20, fontWeight: 600 }}>Quick setup</span>}
-          {step === "invite"  && <span style={{ fontSize: 20, fontWeight: 600 }}>Invite your team</span>}
-          {step === "recap"   && <span style={{ fontSize: 20, fontWeight: 600 }}>You're all set</span>}
-          <span className="text-13 text-secondary" style={{ textAlign: "center" }}>
-            {step === "org"     ? "Set up your workspace to get started"
-           : step === "profile" ? "Help your teammates know who you are"
-           : step === "setup"   ? "Configure AI and office locations — skip any time"
-           : step === "invite"  ? "Add colleagues to your organization"
-           : "Review your setup before entering the workspace"}
+          <span style={{ fontSize: 20, fontWeight: 600 }}>
+            {step === "org" ? t('wizard.org.title').replace('{name}', (displayName || user.name || "").split(" ")[0]) : t(`wizard.${step}.title`)}
           </span>
+          <span className="text-13 text-secondary" style={{ textAlign: "center" }}>{t(`wizard.${step}.sub`)}</span>
         </div>
 
         {/* Step indicator */}
@@ -497,17 +513,17 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         {/* ── Step 1: Org ── */}
         {step === "org" && subStep === "invites" && (
           <div className="col gap-12">
-            <span className="weight-600 text-14">You have pending invitations</span>
+            <span className="weight-600 text-14">{t('wizard.pendingInvites')}</span>
             {invitations.map(inv => (
               <button key={inv.invitation_id} className="col" style={cardStyle(false)}
                 onClick={() => !loading && joinByInvitation(inv.invitation_id)}>
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                   <div className="col gap-2">
                     <span className="weight-600">{inv.org_name}</span>
-                    <span className="text-12 text-secondary">Join as {inv.role}</span>
+                    <span className="text-12 text-secondary">{t('wizard.joinAs').replace('{role}', inv.role)}</span>
                   </div>
                   <span className="text-12 text-mono" style={{ background: "var(--bg-sunken)", padding: "3px 10px", borderRadius: 6 }}>
-                    {loading ? "Joining…" : "Join →"}
+                    {loading ? t('wizard.joining') : t('wizard.join')}
                   </span>
                 </div>
               </button>
@@ -515,8 +531,8 @@ const OrgSetupWizard = ({ user, onComplete }) => {
             {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
             <div style={{ height: 1, background: "var(--border-soft)" }} />
             <button className="col" style={cardStyle(false)} onClick={() => { setSubStep("create"); setError(""); }}>
-              <div className="weight-600" style={{ marginBottom: 2 }}>Create a new organization instead</div>
-              <div className="text-12 text-secondary">Start fresh with your own workspace</div>
+              <div className="weight-600" style={{ marginBottom: 2 }}>{t('wizard.createInstead')}</div>
+              <div className="text-12 text-secondary">{t('wizard.createSub')}</div>
             </button>
           </div>
         )}
@@ -524,12 +540,12 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         {step === "org" && subStep === "choose" && (
           <div className="col gap-12">
             <button className="col" style={cardStyle(false)} onClick={() => setSubStep("create")}>
-              <div className="weight-600" style={{ marginBottom: 4 }}>Create a new organization</div>
-              <div className="text-13 text-secondary">Start fresh with your own workspace</div>
+              <div className="weight-600" style={{ marginBottom: 4 }}>{t('wizard.create')}</div>
+              <div className="text-13 text-secondary">{t('wizard.createSub')}</div>
             </button>
             <button className="col" style={cardStyle(false)} onClick={() => setSubStep("token")}>
-              <div className="weight-600" style={{ marginBottom: 4 }}>Join via invitation token</div>
-              <div className="text-13 text-secondary">Paste the token from your invitation email</div>
+              <div className="weight-600" style={{ marginBottom: 4 }}>{t('wizard.joinToken')}</div>
+              <div className="text-13 text-secondary">{t('wizard.joinTokenSub')}</div>
             </button>
           </div>
         )}
@@ -537,16 +553,16 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         {step === "org" && subStep === "create" && (
           <div className="col gap-12">
             <div>
-              <label className="label">Organization name</label>
+              <label className="label">{t('wizard.orgName')}</label>
               <input className="input" value={orgName} onChange={e => setOrgName(e.target.value)}
                 placeholder="Acme Corp" autoFocus onKeyDown={e => e.key === "Enter" && createOrg()} />
             </div>
             {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
             <div className="row gap-8">
               <Btn kind="primary" onClick={createOrg} disabled={!orgName.trim() || loading}>
-                {loading ? "Creating…" : "Create organization"}
+                {loading ? t('wizard.creating') : t('wizard.createOrg')}
               </Btn>
-              <Btn onClick={() => { setSubStep(invitations.length > 0 ? "invites" : "choose"); setError(""); }}>Back</Btn>
+              <Btn onClick={() => { setSubStep(invitations.length > 0 ? "invites" : "choose"); setError(""); }}>{t('wizard.back')}</Btn>
             </div>
           </div>
         )}
@@ -554,17 +570,17 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         {step === "org" && subStep === "token" && (
           <div className="col gap-12">
             <div>
-              <label className="label">Invitation token</label>
+              <label className="label">{t('wizard.token')}</label>
               <input className="input" value={inviteToken} onChange={e => setInviteToken(e.target.value)}
-                placeholder="Paste your invitation token…" autoFocus onKeyDown={e => e.key === "Enter" && joinByToken()} />
-              <div className="text-12 text-muted" style={{ marginTop: 6 }}>Sent by email when a team member invited you.</div>
+                placeholder={t('wizard.tokenPlaceholder')} autoFocus onKeyDown={e => e.key === "Enter" && joinByToken()} />
+              <div className="text-12 text-muted" style={{ marginTop: 6 }}>{t('wizard.tokenHelp')}</div>
             </div>
             {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
             <div className="row gap-8">
               <Btn kind="primary" onClick={joinByToken} disabled={!inviteToken.trim() || loading}>
-                {loading ? "Joining…" : "Join organization"}
+                {loading ? t('wizard.joining') : t('wizard.joinOrg')}
               </Btn>
-              <Btn onClick={() => { setSubStep("choose"); setError(""); }}>Back</Btn>
+              <Btn onClick={() => { setSubStep("choose"); setError(""); }}>{t('wizard.back')}</Btn>
             </div>
           </div>
         )}
@@ -594,27 +610,27 @@ const OrgSetupWizard = ({ user, onComplete }) => {
             {/* Editable profile fields */}
             <div className="col gap-10">
               <div>
-                <label className="label">Display name</label>
-                <input className="input" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Full name" autoFocus />
+                <label className="label">{t('wizard.displayName')}</label>
+                <input className="input" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder={t('wizard.fullName')} autoFocus />
               </div>
               <div className="row gap-10">
                 <div style={{ flex: 1 }}>
-                  <label className="label">Role / title <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                  <label className="label">{t('wizard.title')} <span className="text-muted" style={{ fontWeight: 400 }}>{t('wizard.optional')}</span></label>
                   <input className="input" value={title} onChange={e => setTitle(e.target.value)}
-                    placeholder="e.g. Recruiting Manager" />
+                    placeholder={t('wizard.titlePlaceholder')} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label className="label">Department <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                  <label className="label">{t('wizard.department')} <span className="text-muted" style={{ fontWeight: 400 }}>{t('wizard.optional')}</span></label>
                   <input className="input" value={department} onChange={e => setDepartment(e.target.value)}
-                    placeholder="e.g. HR, Engineering"
+                    placeholder={t('wizard.departmentPlaceholder')}
                     onKeyDown={e => e.key === "Enter" && completeProfile()} />
                 </div>
               </div>
             </div>
 
             <div className="row gap-8">
-              <Btn kind="primary" onClick={completeProfile} disabled={loading}>Continue →</Btn>
-              <Btn onClick={() => setStep("org")}>Back</Btn>
+              <Btn kind="primary" onClick={completeProfile} disabled={loading}>{t('wizard.continue')}</Btn>
+              <Btn onClick={() => setStep("org")}>{t('wizard.back')}</Btn>
             </div>
           </div>
         )}
@@ -624,7 +640,7 @@ const OrgSetupWizard = ({ user, onComplete }) => {
           <div className="col gap-16">
             {/* AI provider */}
             <div className="col gap-10">
-              <span className="weight-600 text-13">AI Provider</span>
+              <span className="weight-600 text-13">{t('wizard.aiProvider')}</span>
               <div className="row gap-6" style={{ flexWrap: "wrap" }}>
                 {[
                   { id: "openai", label: "OpenAI", models: ["gpt-4o", "gpt-4o-mini"] },
@@ -639,14 +655,14 @@ const OrgSetupWizard = ({ user, onComplete }) => {
                 ))}
               </div>
               <input className="input" type="password" value={aiKey} onChange={e => setAiKey(e.target.value)}
-                placeholder="API key (optional — configure later in Settings)" />
+                placeholder={t('wizard.apiKeyPlaceholder')} />
             </div>
 
             <div style={{ height: 1, background: "var(--border-soft)" }} />
 
             {/* Locations */}
             <div className="col gap-8">
-              <span className="weight-600 text-13">Office locations</span>
+              <span className="weight-600 text-13">{t('wizard.locations')}</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {setupLocations.map(loc => (
                   <span key={loc} className="row gap-4" style={{ background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 8px", fontSize: 12 }}>
@@ -659,16 +675,16 @@ const OrgSetupWizard = ({ user, onComplete }) => {
               </div>
               <div className="row gap-8">
                 <input className="input" style={{ flex: 1 }} value={newSetupLoc} onChange={e => setNewSetupLoc(e.target.value)}
-                  placeholder="Add location…"
+                  placeholder={t('wizard.addLocation')}
                   onKeyDown={e => { if (e.key === "Enter" && newSetupLoc.trim()) { setSetupLocations(p => [...p, newSetupLoc.trim()]); setNewSetupLoc(""); } }} />
-                <Btn onClick={() => { if (newSetupLoc.trim()) { setSetupLocations(p => [...p, newSetupLoc.trim()]); setNewSetupLoc(""); } }} disabled={!newSetupLoc.trim()}>Add</Btn>
+                <Btn onClick={() => { if (newSetupLoc.trim()) { setSetupLocations(p => [...p, newSetupLoc.trim()]); setNewSetupLoc(""); } }} disabled={!newSetupLoc.trim()}>{t('common.add')}</Btn>
               </div>
             </div>
 
             <div className="row gap-8" style={{ alignItems: "center" }}>
-              <Btn kind="primary" onClick={saveSetup} disabled={setupSaving}>{setupSaving ? "Saving…" : "Save & continue →"}</Btn>
-              <button className="btn btn-ghost btn-sm text-muted" onClick={() => setStep("invite")}>Skip for now</button>
-              <button className="btn btn-ghost btn-sm text-muted" style={{ marginLeft: "auto" }} onClick={() => setStep("profile")}>← Back</button>
+              <Btn kind="primary" onClick={saveSetup} disabled={setupSaving}>{setupSaving ? t('common.saving') : t('wizard.saveContinue')}</Btn>
+              <button className="btn btn-ghost btn-sm text-muted" onClick={() => setStep("invite")}>{t('wizard.skip')}</button>
+              <button className="btn btn-ghost btn-sm text-muted" style={{ marginLeft: "auto" }} onClick={() => setStep("profile")}>← {t('wizard.back')}</button>
             </div>
           </div>
         )}
@@ -676,7 +692,7 @@ const OrgSetupWizard = ({ user, onComplete }) => {
         {/* ── Step 4: Invite ── */}
         {step === "invite" && (
           <div className="col gap-12">
-            <span className="text-13 text-secondary">Add email addresses of colleagues to invite. You can always invite more later from Settings → Team.</span>
+            <span className="text-13 text-secondary">{t('wizard.inviteHelp')}</span>
             <div className="col gap-8">
               {inviteEmails.map((email, i) => (
                 <input key={i} className="input" type="email" value={email}
@@ -685,15 +701,15 @@ const OrgSetupWizard = ({ user, onComplete }) => {
               ))}
               <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start", fontSize: 12 }}
                 onClick={() => setInviteEmails(prev => [...prev, ""])}>
-                + Add another
+                {t('wizard.addAnother')}
               </button>
             </div>
             <div className="row gap-8" style={{ alignItems: "center" }}>
               {inviteEmails.some(e => e.trim())
-                ? <Btn kind="primary" onClick={sendInvites} disabled={inviteSending}>{inviteSending ? "Sending…" : "Send invites →"}</Btn>
-                : <Btn kind="primary" onClick={() => setStep("recap")}>Continue →</Btn>
+                ? <Btn kind="primary" onClick={sendInvites} disabled={inviteSending}>{inviteSending ? t('compose.sending') : t('wizard.sendInvites')}</Btn>
+                : <Btn kind="primary" onClick={() => setStep("recap")}>{t('wizard.continue')}</Btn>
               }
-              <button className="btn btn-ghost btn-sm text-muted" style={{ marginLeft: "auto" }} onClick={() => setStep("setup")}>← Back</button>
+              <button className="btn btn-ghost btn-sm text-muted" style={{ marginLeft: "auto" }} onClick={() => setStep("setup")}>← {t('wizard.back')}</button>
             </div>
           </div>
         )}
@@ -717,9 +733,9 @@ const OrgSetupWizard = ({ user, onComplete }) => {
             </div>
 
             <Btn kind="primary" onClick={enterWorkspace} style={{ width: "100%", justifyContent: "center" }}>
-              Enter workspace →
+              {t('wizard.enter')}
             </Btn>
-            <button className="btn btn-ghost btn-sm text-muted" onClick={() => setStep("invite")}>← Back</button>
+            <button className="btn btn-ghost btn-sm text-muted" onClick={() => setStep("invite")}>← {t('wizard.back')}</button>
           </div>
         )}
       </div>
@@ -730,11 +746,11 @@ const OrgSetupWizard = ({ user, onComplete }) => {
 // ── Login Screen ─────────────────────────────────────────────────────────────
 
 const _LOGIN_FEATURES = [
-  { Icon: Icons.Sparkles, label: "AI candidate analysis",    desc: "Instant CV scoring, gap detection, and tailored interview questions" },
-  { Icon: Icons.Layout,   label: "Visual hiring pipeline",   desc: "Kanban board with drag-and-drop stages and smart filters" },
-  { Icon: Icons.Mic,      label: "Interview intelligence",   desc: "Transcript clean-up, summaries, and structured evaluation" },
-  { Icon: Icons.Users,    label: "Team collaboration",       desc: "Multi-tenant workspaces with role-based access control" },
-  { Icon: Icons.UserCheck,label: "Performance reviews",      desc: "360° feedback cycles with AI-assisted writing" },
+  { Icon: Icons.Sparkles,  key: "analysis" },
+  { Icon: Icons.Layout,    key: "pipeline" },
+  { Icon: Icons.Mic,       key: "interviews" },
+  { Icon: Icons.Users,     key: "team" },
+  { Icon: Icons.UserCheck, key: "reviews" },
 ];
 
 const LoginScreen = ({ onLogin }) => {
@@ -772,11 +788,11 @@ const LoginScreen = ({ onLogin }) => {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || "Google sign-in failed");
+        throw new Error(body?.detail || t('login.err.google'));
       }
       onLogin(await res.json());
     } catch (err) {
-      setError(err.message || "Sign-in failed. Is the backend running?");
+      setError(err.message || t('login.err.generic'));
       setLoading(false);
     }
   };
@@ -834,19 +850,19 @@ const LoginScreen = ({ onLogin }) => {
               margin: "0 0 14px", fontSize: 40, fontWeight: 700, color: "white",
               letterSpacing: "-0.035em", lineHeight: 1.13,
             }}>
-              Hire smarter.<br />
-              <span style={{ color: "oklch(0.74 0.12 285)" }}>Move faster.</span>
+              {t('login.hero1')}<br />
+              <span style={{ color: "oklch(0.74 0.12 285)" }}>{t('login.hero2')}</span>
             </h2>
             <p style={{
               margin: 0, fontSize: 15, lineHeight: 1.65,
               color: "rgba(255,255,255,0.48)", maxWidth: 360,
             }}>
-              The AI recruiting workspace for modern teams — from first contact to offer letter.
+              {t('login.tagline')}
             </p>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {_LOGIN_FEATURES.map(({ Icon, label, desc }, index) => (
+            {_LOGIN_FEATURES.map(({ Icon, key }, index) => (
               <div key={index} style={{ display: "flex", gap: 13, alignItems: "flex-start" }}>
                 <div style={{
                   width: 34, height: 34, borderRadius: 8, flexShrink: 0, marginTop: 1,
@@ -858,8 +874,8 @@ const LoginScreen = ({ onLogin }) => {
                   <Icon size={16} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.88)", marginBottom: 2, letterSpacing: "-0.01em" }}>{label}</div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", lineHeight: 1.55 }}>{desc}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.88)", marginBottom: 2, letterSpacing: "-0.01em" }}>{t(`login.feature.${key}`)}</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", lineHeight: 1.55 }}>{t(`login.feature.${key}.desc`)}</div>
                 </div>
               </div>
             ))}
@@ -868,7 +884,7 @@ const LoginScreen = ({ onLogin }) => {
 
         {/* Footer */}
         <div style={{ position: "relative", fontSize: 11, color: "rgba(255,255,255,0.22)", letterSpacing: "0.01em" }}>
-          © 2026 Candid — AI Recruiting Platform
+          © {new Date().getFullYear()} Candid — {t('login.footer')}
         </div>
       </div>
 
@@ -886,9 +902,9 @@ const LoginScreen = ({ onLogin }) => {
             <h1 style={{
               margin: "0 0 8px", fontSize: 26, fontWeight: 700,
               color: "var(--ink)", letterSpacing: "-0.025em",
-            }}>Welcome back</h1>
+            }}>{t('login.welcome')}</h1>
             <p style={{ margin: 0, fontSize: 14, color: "var(--ink-secondary)", lineHeight: 1.55 }}>
-              Sign in to your Candid workspace
+              {t('login.signInSub')}
             </p>
           </div>
 
@@ -910,9 +926,9 @@ const LoginScreen = ({ onLogin }) => {
                 alignItems: "center", gap: 8,
               }}>
                 <Icons.Lock size={22} style={{ color: "var(--ink-muted)" }} />
-                <p style={{ margin: 0, fontSize: 13, color: "var(--ink-secondary)" }}>Google Sign-In not configured</p>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--ink-secondary)" }}>{t('login.notConfigured')}</p>
                 <p style={{ margin: 0, fontSize: 12, color: "var(--ink-muted)" }}>
-                  Set <code style={{ background: "var(--border-strong)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>GOOGLE_CLIENT_ID</code> in <code style={{ background: "var(--border-strong)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>backend/.env</code>
+                  {t('login.set')} <code style={{ background: "var(--border-strong)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>GOOGLE_CLIENT_ID</code> {t('login.in')} <code style={{ background: "var(--border-strong)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>backend/.env</code>
                 </p>
               </div>
             )}
@@ -932,31 +948,6 @@ const LoginScreen = ({ onLogin }) => {
             )}
           </div>
 
-          {/* Divider with label */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "28px 0" }}>
-            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-            <span style={{ fontSize: 11, color: "var(--ink-faint)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Secure sign-in</span>
-            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-          </div>
-
-          {/* Trust badges */}
-          <div style={{ display: "flex", justifyContent: "center", gap: 20 }}>
-            {[
-              { icon: Icons.Lock,  label: "SSO ready"       },
-              { icon: Icons.Users, label: "Multi-tenant"    },
-              { icon: Icons.Check, label: "SOC-2 aligned"   },
-            ].map(({ icon: BadgeIcon, label }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-muted)" }}>
-                <BadgeIcon size={12} />
-                {label}
-              </div>
-            ))}
-          </div>
-
-          {/* Terms */}
-          <p style={{ marginTop: 44, fontSize: 11, color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.7 }}>
-            By signing in you agree to our Terms of Service and Privacy Policy.
-          </p>
         </div>
       </div>
     </div>
@@ -987,7 +978,6 @@ const App = () => {
   const [quickOpen, setQuickOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
-  const [t_tweaks, setTweak] = window.useTweaks(TWEAKS_DEFAULTS);
   const [liveCounts, setLiveCounts] = useState({});
   const [liveInterview, setLiveInterview] = useState(null);
   const [liveReturnTab, setLiveReturnTab] = useState(null);
@@ -1020,7 +1010,11 @@ const App = () => {
     if (!user || !user.org_id) return;
     fetch(`${window.API_BASE}/config/preferences`)
       .then(r => r.ok ? r.json() : null)
-      .then(prefs => { if (prefs?.date_format) window.CANDID_DATE_FORMAT = prefs.date_format; })
+      .then(prefs => {
+        if (!prefs) return;
+        window.CANDID_PREFS = prefs;
+        window.CANDID_DATE_FORMAT = prefs.date_format;
+      })
       .catch(() => {});
   }, [user?.org_id]);
 
@@ -1111,6 +1105,20 @@ const App = () => {
     navigate("pipeline");
   };
 
+  const [inviteError, setInviteError] = useState("");
+  useEffect(() => {
+    const token = localStorage.getItem(PENDING_INVITE_KEY);
+    if (!token || !user?.token || user.needs_org_setup) return; // the wizard consumes it in that case
+    localStorage.removeItem(PENDING_INVITE_KEY);
+    acceptInvite(user.token, { token }, t_app('wizard.err.token'))
+      .then(data => {
+        const orgs = (user.orgs || []).some(o => o.id === data.org_id) ? user.orgs : [...(user.orgs || []), data.org];
+        handleUserUpdate({ ...user, token: data.token, org_id: data.org_id, orgs });
+        navigate("pipeline");
+      })
+      .catch(err => setInviteError(err.message));
+  }, [user?.token]);
+
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgLoading, setNewOrgLoading] = useState(false);
@@ -1155,24 +1163,17 @@ const App = () => {
     );
   }
 
-  const counts = t_tweaks.showCounts ? liveCounts : {};
-
   const openCandidate = (id) => { setCandidateId(id); navigate("candidate"); };
 
   const crumbs = (() => {
     switch (route) {
-      case "pipeline":     return ["Workspace", "Pipeline"];
-      case "candidates":   return ["Workspace", "Candidates"];
-      case "jobs":         return ["Workspace", "Positions"];
-      case "roles":        return ["Workspace", "Roles"];
-      case "employees":    return ["Workspace", "Employees"];
-      case "interviews":   return ["Workspace", "Interviews"];
-      case "inbox":        return ["Workspace", "Inbox"];
-      case "reports":      return ["Workspace", "Reports"];
-      case "liveroom":     return ["Interviews", "Recording"];
-      case "candidate":
-        return ["Candidates", "—"];
-      case "settings":     return ["Settings"];
+      case "jobs":         return [t_app('nav.workspace'), t_app('nav.positions')];
+      case "pipeline": case "candidates": case "roles": case "employees":
+      case "interviews": case "inbox": case "reports":
+        return [t_app('nav.workspace'), t_app(`nav.${route}`)];
+      case "liveroom":     return [t_app('nav.interviews'), t_app('nav.recording')];
+      case "candidate":    return [t_app('nav.candidates'), "—"];
+      case "settings":     return [t_app('nav.settings')];
       default:             return ["Candid"];
     }
   })();
@@ -1192,7 +1193,7 @@ const App = () => {
         <Sidebar
           route={route === "candidate" ? "candidates" : route === "liveroom" ? "interviews" : route}
           onRoute={navigate}
-          counts={counts}
+          counts={liveCounts}
           onQuickAdd={() => setQuickOpen(true)}
           user={user}
           onLogout={handleLogout}
@@ -1225,37 +1226,33 @@ const App = () => {
           </div>
         </div>
 
-        <window.QuickAdd open={quickOpen} onClose={() => setQuickOpen(false)} onCreate={(id) => openCandidate(id)} tweaks={t_tweaks} />
+        <window.QuickAdd open={quickOpen} onClose={() => setQuickOpen(false)} onCreate={(id) => openCandidate(id)} />
         {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
         {planOpen && <HiringPlanModal onClose={() => setPlanOpen(false)} onNavigate={navigate} />}
+        {inviteError && (
+          <Modal open title={t_app('wizard.inviteFailed')} onClose={() => setInviteError("")} width={400}
+            footer={<Btn onClick={() => setInviteError("")}>{t_app('common.close')}</Btn>}>
+            <span className="text-13">{inviteError}</span>
+          </Modal>
+        )}
         {createOrgOpen && (
-          <Modal open title="New organization" onClose={() => setCreateOrgOpen(false)} width={400}
+          <Modal open title={t_app('wizard.newOrg')} onClose={() => setCreateOrgOpen(false)} width={400}
             footer={
               <>
-                <Btn onClick={() => setCreateOrgOpen(false)}>Cancel</Btn>
+                <Btn onClick={() => setCreateOrgOpen(false)}>{t_app('common.cancel')}</Btn>
                 <Btn kind="primary" disabled={!newOrgName.trim() || newOrgLoading} onClick={doCreateOrg}>
-                  {newOrgLoading ? "Creating…" : "Create"}
+                  {newOrgLoading ? t_app('wizard.creating') : t_app('wizard.createShort')}
                 </Btn>
               </>
             }>
             <div>
-              <label className="label">Organization name</label>
+              <label className="label">{t_app('wizard.orgName')}</label>
               <input className="input" value={newOrgName} onChange={e => setNewOrgName(e.target.value)}
                 placeholder="Acme Corp" autoFocus onKeyDown={e => e.key === "Enter" && doCreateOrg()} />
             </div>
           </Modal>
         )}
 
-        <window.TweaksPanel>
-          <window.TweakSection label="AI behavior">
-            <window.TweakRadio label="AI output" value={t_tweaks.streaming ? "Streaming" : "Instant"}
-              options={["Streaming", "Instant"]}
-              onChange={(v) => setTweak("streaming", v === "Streaming")} />
-          </window.TweakSection>
-          <window.TweakSection label="Sidebar">
-            <window.TweakToggle label="Show item counts" value={t_tweaks.showCounts} onChange={(v) => setTweak("showCounts", v)} />
-          </window.TweakSection>
-        </window.TweaksPanel>
       </div>
     </LocaleContext.Provider>
   );
@@ -1263,22 +1260,36 @@ const App = () => {
 
 // ── Portal entry-point ────────────────────────────────────────────────────────
 
+// Public pages have no settings screen: use the last app locale, else the browser language.
+const publicLocale = () => {
+  const l = localStorage.getItem("candid_locale") || (navigator.language || "en").slice(0, 2);
+  return window.TRANSLATIONS[l] ? l : "en";
+};
+
 const PortalEntry = () => {
   const { online, checking } = useServerHealth();
 
   const hash = window.location.hash.replace("#", "");
-  if (hash.startsWith("portal/")) {
-    return <window.PortalScreen slug={hash.slice("portal/".length)} />;
-  }
-  if (hash.startsWith("video/")) {
-    return <window.VideoPortalScreen token={hash.slice("video/".length)} />;
+  let page;
+  if (hash.startsWith("portal/") && hash.length > "portal/".length) {
+    page = <window.PortalScreen slug={hash.slice("portal/".length)} />;
+  } else if (hash.startsWith("video/") && hash.length > "video/".length) {
+    page = <window.VideoPortalScreen token={hash.slice("video/".length)} />;
+  } else if (!loadUser() && hash && hash !== "/" && !VALID_ROUTES.includes(hash)) {
+    page = <window.NotFoundScreen />;
+  } else {
+    page = (
+      <>
+        {!checking && !online && <ServerOfflineOverlay />}
+        <App />
+      </>
+    );
   }
 
   return (
-    <>
-      {!checking && !online && <ServerOfflineOverlay />}
-      <App />
-    </>
+    <LocaleContext.Provider value={{ locale: publicLocale(), setLocale: () => {} }}>
+      {page}
+    </LocaleContext.Provider>
   );
 };
 

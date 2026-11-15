@@ -1,23 +1,16 @@
 // Jobs / Positions screen
 
-const getLocations = () => {
-  try {
-    const stored = localStorage.getItem("candid_locations");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return ["Milano", "Remote", "Milano / Remote", "Roma", "Torino", "Bergamo", "Brescia", "Monza"];
-};
-
 // ── Multi-owner select ────────────────────────────────────────────────────────
 
 const OwnerSelect = ({ value, onChange }) => {
+  const t = window.useT();
   // value: string[] of names
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const rawTeam = window.getTeamMembers ? window.getTeamMembers() : [];
   const me = (() => { try { return JSON.parse(localStorage.getItem("candid_user") || "null"); } catch { return null; } })();
   const team = me?.name && !rawTeam.some(m => m.name === me.name)
-    ? [{ name: me.name, email: me.email || "", role: me.role || "Me" }, ...rawTeam]
+    ? [{ name: me.name, email: me.email || "", role: me.role || t('jobs.owner.me') }, ...rawTeam]
     : rawTeam;
 
   useEffect(() => {
@@ -33,7 +26,7 @@ const OwnerSelect = ({ value, onChange }) => {
   };
 
   const label = value.length === 0
-    ? "— No owner —"
+    ? t('jobs.owner.none')
     : value.length === 1
     ? value[0]
     : `${value[0]} +${value.length - 1}`;
@@ -48,7 +41,7 @@ const OwnerSelect = ({ value, onChange }) => {
       {open && (
         <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", padding: 4, zIndex: 50 }}>
           {team.length === 0 && (
-            <div className="text-12 text-muted" style={{ padding: "8px 12px" }}>No team members. Add them in Settings → Team.</div>
+            <div className="text-12 text-muted" style={{ padding: "8px 12px" }}>{t('jobs.owner.noTeam')}</div>
           )}
           {team.map(m => (
             <label key={m.name} className="row gap-8" style={{ padding: "8px 12px", cursor: "pointer", borderRadius: 5, alignItems: "center" }}
@@ -152,7 +145,7 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
           <h1 className="page-h1">{t('jobs.title')}</h1>
-          <div className="page-sub">{rows.length} of {jds.length} positions · {activeCount} active</div>
+          <div className="page-sub">{t('jobs.subtitle').replace('{n}', rows.length).replace('{total}', jds.length).replace('{active}', activeCount)}</div>
         </div>
         <div className="row gap-8">
           {window.CANDID_ORG?.slug && (
@@ -337,7 +330,7 @@ const JobsScreen = ({ onRoute, initialRoleFilter }) => {
       {deleteJdTarget && (
         <ConfirmDialog
           title={t('roles.deleteTitle')}
-          message="This position will be permanently deleted and cannot be recovered."
+          message={t('jobs.deleteBody')}
           onConfirm={confirmDeleteJd}
           onCancel={() => setDeleteJdTarget(null)}
         />
@@ -357,12 +350,12 @@ const JdTd = ({ children, align = "left" }) => (
 
 const SALARY_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "SEK", "NOK", "DKK", "CAD", "AUD", "JPY"];
 
-const fmtSalaryRange = (min, max, currency) => {
+const fmtSalaryRange = (min, max, currency, t) => {
   const sym = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF", SEK: "kr", NOK: "kr", DKK: "kr", CAD: "CA$", AUD: "A$", JPY: "¥" }[currency] || currency || "";
   const fmt = (n) => n >= 1000 ? `${sym}${(n / 1000).toFixed(0)}k` : `${sym}${n}`;
   if (min && max) return `${fmt(min)} – ${fmt(max)}`;
-  if (min) return `from ${fmt(min)}`;
-  if (max) return `up to ${fmt(max)}`;
+  if (min) return t('jobs.salary.from').replace('{amount}', fmt(min));
+  if (max) return t('jobs.salary.upTo').replace('{amount}', fmt(max));
   return null;
 };
 
@@ -387,7 +380,7 @@ const JdModal = ({ jd, onClose, onSaved }) => {
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState("");
 
-  const locations = useMemo(() => getLocations(), []);
+  const locations = useMemo(() => window.getLocations(), []);
   const allRoles = window.useApiData ? window.useApiData("/roles", window.CANDID_DATA.ROLES || []) : [];
 
   useEffect(() => {
@@ -432,7 +425,7 @@ const JdModal = ({ jd, onClose, onSaved }) => {
       const d = await res.json();
       setDescription(d.improved_text);
     } catch {
-      setImproveError("AI unavailable — check provider settings.");
+      setImproveError(t('jobs.ai.unavailable'));
     }
     setImproving(false);
   };
@@ -446,7 +439,7 @@ const JdModal = ({ jd, onClose, onSaved }) => {
         </>
       }>
       <div className="col gap-12">
-        <div><label className="label">{t('jobs.modal.role')}</label><RoleSelect value={roleId} onChange={setRoleId} placeholder="Select role…" /></div>
+        <div><label className="label">{t('jobs.modal.role')}</label><RoleSelect value={roleId} onChange={setRoleId} /></div>
         <div><label className="label">{t('jobs.modal.title')}</label><input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" /></div>
 
         <div>
@@ -484,7 +477,7 @@ const JdModal = ({ jd, onClose, onSaved }) => {
         </div>
 
         <div>
-          <label className="label">{t('jobs.modal.salaryRange')} <span className="text-11 text-muted">(optional)</span></label>
+          <label className="label">{t('jobs.modal.salaryRange')} <span className="text-11 text-muted">{t('jobs.modal.optional')}</span></label>
           <div className="row gap-8" style={{ alignItems: "center" }}>
             <input className="input" type="number" min={0} value={salaryMin} onChange={e => setSalaryMin(e.target.value)} placeholder={t('jobs.modal.salaryMin')} style={{ flex: 1 }} />
             <span className="text-12 text-muted">–</span>
@@ -508,12 +501,12 @@ const JdModal = ({ jd, onClose, onSaved }) => {
               <button className="btn btn-ghost btn-sm row gap-4" style={{ fontSize: 12 }}
                 onClick={improveWithAI} disabled={improving || !description.trim()}>
                 {improving
-                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> generating…</span>
+                  ? <span className="badge ai" style={{ padding: "1px 6px", fontSize: 10 }}><span className="dot" /> {t('roles.modal.generating')}</span>
                   : t('jobs.improve')}
               </button>
             </div>
           </div>
-          <textarea className="textarea" rows={8} value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this role about? Include responsibilities, requirements, and what success looks like." />
+          <textarea className="textarea" rows={8} value={description} onChange={e => setDescription(e.target.value)} placeholder={t('jobs.modal.descriptionPh')} />
         </div>
       </div>
     </Modal>
@@ -526,7 +519,7 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
   const statusKind = jd.status === "Active" ? "positive" : jd.status === "Draft" ? undefined : "warn";
   const owners = jd.owner ? jd.owner.split(",").map(s => s.trim()).filter(Boolean) : [];
   const roleName = roles[jd.role_id]?.name;
-  const salaryLabel = fmtSalaryRange(jd.salary_min, jd.salary_max, jd.salary_currency);
+  const salaryLabel = fmtSalaryRange(jd.salary_min, jd.salary_max, jd.salary_currency, t);
 
   return (
     <Modal open title={jd.title} onClose={onClose} width={640} disableBackdropClose={false}
@@ -549,7 +542,7 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
           ))}
           <span className="row gap-4 text-13 text-secondary">
             <Icons.Users size={12} style={{ color: "var(--ink-muted)" }} />
-            {jd.openings || 1} opening{(jd.openings || 1) !== 1 ? "s" : ""}
+            {t((jd.openings || 1) !== 1 ? 'jobs.openingsCount' : 'jobs.openingCount').replace('{n}', jd.openings || 1)}
           </span>
           {salaryLabel && (
             <span className="badge text-13" style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -570,7 +563,7 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
             <div className="text-13 text-secondary" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>{jd.description}</div>
           </div>
         ) : (
-          <div className="text-13 text-muted" style={{ fontStyle: "italic" }}>No description added yet.</div>
+          <div className="text-13 text-muted" style={{ fontStyle: "italic" }}>{t('jobs.noDescription')}</div>
         )}
 
         {/* Requirements */}
@@ -578,7 +571,7 @@ const JdViewModal = ({ jd, roles, onClose, onEdit, t }) => {
           <>
             <div style={{ height: 1, background: "var(--border-soft)" }} />
             <div>
-              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Requirements</div>
+              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>{t('jobs.modal.requirements')}</div>
               <div className="text-13 text-secondary" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>{jd.requirements}</div>
             </div>
           </>

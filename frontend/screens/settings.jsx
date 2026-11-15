@@ -17,14 +17,13 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
       <div className="tabs">
         {[
           { id: "ai",           label: t('settings.tab.ai') },
-          { id: "pipeline",     label: "Pipeline" },
-          { id: "email",        label: "Email" },
-          { id: "branding",     label: "Branding" },
+          { id: "pipeline",     label: t('settings.tab.pipeline') },
+          { id: "email",        label: t('settings.tab.email') },
+          { id: "branding",     label: t('settings.tab.branding') },
           { id: "locale",       label: t('settings.tab.locale') },
           { id: "profile",      label: t('settings.tab.profile') },
           { id: "locations",    label: t('settings.tab.locations') },
           { id: "team",         label: t('settings.tab.team') },
-          { id: "integrations", label: t('settings.tab.integrations') },
         ].map(tb => (
           <button key={tb.id} className={`tab ${tab === tb.id ? "active" : ""}`} onClick={() => setTab(tb.id)}>{tb.label}</button>
         ))}
@@ -38,7 +37,6 @@ const SettingsScreen = ({ user, onLocaleChange, onLogout, onUserUpdate }) => {
       {tab === "profile"      && <ProfileSettings t={t} user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />}
       {tab === "locations"    && <LocationsSettings t={t} />}
       {tab === "team"         && <TeamSettings t={t} user={user} onLogout={onLogout} />}
-      {tab === "integrations" && <IntegrationsSettings t={t} />}
     </div>
   );
 };
@@ -60,6 +58,7 @@ const PORTAL_FONTS = [
   { value: "'Merriweather', serif",       label: "Merriweather" },
   { value: "Georgia, serif",              label: "Georgia" },
 ];
+window.PORTAL_FONTS = PORTAL_FONTS; // the portal accepts only these values as font_family
 
 const BrandingSettings = ({ t }) => {
   const [primaryColor, setPrimaryColor] = useState("#4F46E5");
@@ -86,11 +85,11 @@ const BrandingSettings = ({ t }) => {
 
   const handleLogoFile = (file) => {
     if (!file) return;
-    if (file.size > 512 * 1024) { setError("Logo must be under 512 KB."); return; }
+    if (file.size > 512 * 1024) { setError(t('branding.err.logoSize')); return; }
     setLogoUploading(true);
     const reader = new FileReader();
     reader.onload = (e) => { setLogoUrl(e.target.result); setLogoUploading(false); };
-    reader.onerror = () => { setError("Failed to read file."); setLogoUploading(false); };
+    reader.onerror = () => { setError(t('branding.err.readFile')); setLogoUploading(false); };
     reader.readAsDataURL(file);
   };
 
@@ -102,7 +101,7 @@ const BrandingSettings = ({ t }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ primary_color: primaryColor, background_color: backgroundColor, font_family: fontFamily, logo_url: logoUrl || null }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to save");
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || t('settings.err.saveFailed'));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) { setError(err.message); }
@@ -155,7 +154,7 @@ const BrandingSettings = ({ t }) => {
           <div className="row gap-10" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
             {logoUrl && (
               <div style={{ position: "relative", flexShrink: 0 }}>
-                <img src={logoUrl} alt="Logo" style={{ maxHeight: 52, maxWidth: 160, borderRadius: 8, border: "1px solid var(--border)", padding: 6, background: "#fff", display: "block" }}
+                <img src={logoUrl} alt={t('branding.logo')} style={{ maxHeight: 52, maxWidth: 160, borderRadius: 8, border: "1px solid var(--border)", padding: 6, background: "#fff", display: "block" }}
                   onError={e => { e.target.style.display = "none"; }} />
                 <button onClick={async () => {
                     setLogoUrl("");
@@ -171,7 +170,7 @@ const BrandingSettings = ({ t }) => {
             <div className="col gap-6" style={{ flex: 1, minWidth: 200 }}>
               <label style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8, border: "1.5px dashed var(--border)", cursor: "pointer", fontSize: 13, color: "var(--ink-secondary)", background: "var(--bg-sunken)", width: "fit-content" }}>
                 <Icons.Upload size={14} />
-                {logoUploading ? "Reading…" : t('branding.upload')}
+                {logoUploading ? t('branding.reading') : t('branding.upload')}
                 <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleLogoFile(e.target.files?.[0])} />
               </label>
               <span className="text-11 text-muted">{t('branding.uploadHint')}</span>
@@ -182,7 +181,7 @@ const BrandingSettings = ({ t }) => {
         {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
         <div className="row gap-8">
           <Btn kind="primary" onClick={saveBranding} disabled={saving || logoUploading}>
-            {saving ? "Saving…" : saved ? t('branding.saved') : t('branding.save')}
+            {saving ? t('common.saving') : saved ? t('branding.saved') : t('branding.save')}
           </Btn>
         </div>
       </div>
@@ -192,15 +191,15 @@ const BrandingSettings = ({ t }) => {
         <span className="weight-600 text-13">{t('branding.preview')}</span>
         <div style={{ background: backgroundColor, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
           <div style={{ background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}cc)`, padding: "24px 20px", textAlign: "center" }}>
-            {logoUrl && <img src={logoUrl} alt="Logo" style={{ maxHeight: 36, maxWidth: 120, marginBottom: 10, display: "block", margin: "0 auto 10px", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />}
-            <div style={{ fontWeight: 800, fontSize: 20, color: "#fff", fontFamily: fontFamily, letterSpacing: "-.02em" }}>Your Organization</div>
+            {logoUrl && <img src={logoUrl} alt={t('branding.logo')} style={{ maxHeight: 36, maxWidth: 120, marginBottom: 10, display: "block", margin: "0 auto 10px", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />}
+            <div style={{ fontWeight: 800, fontSize: 20, color: "#fff", fontFamily: fontFamily, letterSpacing: "-.02em" }}>{t('branding.preview.orgName')}</div>
             <div style={{ fontSize: 13, color: "#fff", opacity: .75, marginTop: 4, fontFamily: fontFamily }}>{t('branding.previewSub')}</div>
           </div>
           <div style={{ padding: "16px 20px" }}>
             <div style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", border: "1.5px solid #e5e7eb", fontFamily: fontFamily }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>Senior Engineer</div>
-              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>📍 Milano · Remote</div>
-              <button style={{ background: primaryColor, color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "default", fontFamily: fontFamily }}>Apply →</button>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>{t('branding.preview.jobTitle')}</div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>📍 London · {t('branding.preview.remote')}</div>
+              <button style={{ background: primaryColor, color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "default", fontFamily: fontFamily }}>{t('branding.preview.apply')}</button>
             </div>
           </div>
         </div>
@@ -270,7 +269,7 @@ const AISettings = ({ t }) => {
   };
 
   const parseApiError = (raw) => {
-    if (!raw) return "Test failed";
+    if (!raw) return t('settings.ai.testFailed');
     // Extract nested 'message' from OpenAI/Groq/Anthropic error strings
     // e.g. "Error code: 400 - {'error': {'message': '...', ...}}"
     try {
@@ -290,7 +289,7 @@ const AISettings = ({ t }) => {
       const res = await fetch(`${window.API_BASE}/config/test`, { method: "POST" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(parseApiError(d.detail || "Test failed"));
+        throw new Error(parseApiError(d.detail || t('settings.ai.testFailed')));
       }
       const d = await res.json();
       setTestStatus("ok");
@@ -309,7 +308,7 @@ const AISettings = ({ t }) => {
       <div className="card card-pad col gap-12">
         <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
           <div className="col">
-            <span className="weight-600">AI Providers</span>
+            <span className="weight-600">{t('settings.tab.ai')}</span>
             <span className="text-12 text-secondary">{t('settings.ai.activeDesc')}</span>
           </div>
           <div className="row gap-8">
@@ -323,7 +322,7 @@ const AISettings = ({ t }) => {
           <div className="row gap-10" style={{ background: "oklch(0.97 0.02 25)", border: "1px solid oklch(0.88 0.06 25)", borderRadius: 8, padding: "10px 14px", alignItems: "flex-start" }}>
             <Icons.X size={14} style={{ color: "var(--danger)", flexShrink: 0, marginTop: 1 }} />
             <div className="col gap-2">
-              <span className="weight-500 text-13" style={{ color: "var(--danger)" }}>Connection failed — {activeProvider} / {activeModel}</span>
+              <span className="weight-500 text-13" style={{ color: "var(--danger)" }}>{t('settings.ai.connectionFailed')} — {activeProvider} / {activeModel}</span>
               <span className="text-12 text-mono" style={{ color: "oklch(0.45 0.08 25)", wordBreak: "break-word" }}>{testMsg}</span>
             </div>
           </div>
@@ -412,13 +411,8 @@ const DateFormatSettings = ({ t }) => {
 
   const handleSelect = async (formatId) => {
     setDateFormat(formatId);
-    window.CANDID_DATE_FORMAT = formatId;
     try {
-      await fetch(`${window.API_BASE}/config/preferences`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date_format: formatId }),
-      });
+      await window.savePreferences({ date_format: formatId });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {}
@@ -427,8 +421,8 @@ const DateFormatSettings = ({ t }) => {
   return (
     <div className="card card-pad col gap-12">
       <div className="col">
-        <span className="weight-600">Date format</span>
-        <span className="text-12 text-secondary">How dates appear across the app.</span>
+        <span className="weight-600">{t('settings.date.title')}</span>
+        <span className="text-12 text-secondary">{t('settings.date.subtitle')}</span>
       </div>
       <div className="row gap-10" style={{ flexWrap: "wrap" }}>
         {DATE_FORMATS.map(fmt => (
@@ -444,7 +438,7 @@ const DateFormatSettings = ({ t }) => {
           </button>
         ))}
       </div>
-      {saved && <span className="text-12" style={{ color: "var(--success)" }}>Saved</span>}
+      {saved && <span className="text-12" style={{ color: "var(--success)" }}>{t('common.saved')}</span>}
     </div>
   );
 };
@@ -476,16 +470,6 @@ const LocaleSettings = ({ t, locale, onChange }) => (
 );
 
 // ── Profile / Workspace ───────────────────────────────────────────────────────
-
-const DEFAULT_LOCATIONS = ["Milano", "Remote", "Milano / Remote", "Roma", "Torino", "Bergamo", "Brescia", "Monza"];
-
-const loadLocations = () => {
-  try {
-    const s = localStorage.getItem("candid_locations");
-    if (s) return JSON.parse(s);
-  } catch {}
-  return DEFAULT_LOCATIONS;
-};
 
 const ProfileSettings = ({ t, user, onLogout, onUserUpdate }) => {
   const [title, setTitle] = useState(user?.title || "");
@@ -553,7 +537,7 @@ const ProfileSettings = ({ t, user, onLogout, onUserUpdate }) => {
             <button
               onClick={() => fileInputRef.current?.click()}
               style={{ position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: "50%", background: "var(--ink)", color: "white", border: "2px solid var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-              title="Change photo">
+              title={t('settings.profile.changePhoto')}>
               <Icons.Edit size={12} />
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileChange} />
@@ -572,18 +556,18 @@ const ProfileSettings = ({ t, user, onLogout, onUserUpdate }) => {
         {/* Editable fields */}
         <div className="col gap-10">
           <div>
-            <label className="label">Titolo / ruolo</label>
-            <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="es. Recruiting Manager" />
+            <label className="label">{t('settings.profile.title')}</label>
+            <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder={t('settings.profile.titlePlaceholder')} />
           </div>
           <div>
-            <label className="label">Dipartimento</label>
-            <input className="input" value={department} onChange={e => setDepartment(e.target.value)} placeholder="es. HR" />
+            <label className="label">{t('employees.form.dept')}</label>
+            <input className="input" value={department} onChange={e => setDepartment(e.target.value)} placeholder={t('settings.profile.deptPlaceholder')} />
           </div>
         </div>
 
         <div className="row gap-8" style={{ justifyContent: "space-between" }}>
           <Btn onClick={onLogout}>{t('user.signOut')}</Btn>
-          <Btn kind="primary" onClick={save} disabled={saving}>{saved ? "Salvato ✓" : t('common.save')}</Btn>
+          <Btn kind="primary" onClick={save} disabled={saving}>{saved ? t('settings.ai.saved') : t('common.save')}</Btn>
         </div>
       </div>
     </div>
@@ -593,19 +577,18 @@ const ProfileSettings = ({ t, user, onLogout, onUserUpdate }) => {
 // ── Locations ─────────────────────────────────────────────────────────────────
 
 const LocationsSettings = ({ t }) => {
-  const [currency, setCurrency] = useState(loadCurrency);
-  const [locations, setLocations] = useState(loadLocations);
+  const [currency, setCurrency] = useState(window.getCurrency);
+  const [locations, setLocations] = useState(window.getLocations);
   const [newLoc, setNewLoc] = useState("");
 
   const saveCurrency = (c) => {
     setCurrency(c);
-    localStorage.setItem("candid_currency", c);
-    window.getCurrency = () => c;
+    window.savePreferences({ currency: c }).catch(() => setCurrency(window.getCurrency()));
   };
 
   const saveLocations = (locs) => {
     setLocations(locs);
-    localStorage.setItem("candid_locations", JSON.stringify(locs));
+    window.savePreferences({ locations: locs }).catch(() => setLocations(window.getLocations()));
   };
 
   const addLocation = () => {
@@ -635,7 +618,7 @@ const LocationsSettings = ({ t }) => {
       <div className="card card-pad col gap-12">
         <div className="col">
           <span className="weight-600">{t('settings.tab.locations')}</span>
-          <span className="text-12 text-secondary">Available locations in job position forms.</span>
+          <span className="text-12 text-secondary">{t('settings.locations.subtitle')}</span>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {locations.map(loc => (
@@ -654,7 +637,7 @@ const LocationsSettings = ({ t }) => {
             value={newLoc}
             onChange={e => setNewLoc(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLocation(); } }}
-            placeholder="Aggiungi sede… (es. Genova, Venezia)"
+            placeholder={t('settings.locations.placeholder')}
           />
           <Btn onClick={addLocation} disabled={!newLoc.trim()}>{t('common.add')}</Btn>
         </div>
@@ -691,7 +674,7 @@ const PipelineSettings = ({ t }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stages: updatedStages }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || "Failed to save");
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || t('settings.err.saveFailed'));
       const data = await res.json();
       setStages(data.stages);
       window.CANDID_DATA.STATUS = data.stages;
@@ -743,10 +726,10 @@ const PipelineSettings = ({ t }) => {
     <div className="col gap-16">
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Pipeline stages</span>
+          <span className="card-title">{t('settings.pipeline.title')}</span>
           <div className="row gap-8">
-            {saved && <Badge kind="positive">Saved</Badge>}
-            <Btn icon={<Icons.Plus size={14} />} onClick={() => setAdding(v => !v)}>Add stage</Btn>
+            {saved && <Badge kind="positive">{t('common.saved')}</Badge>}
+            <Btn icon={<Icons.Plus size={14} />} onClick={() => setAdding(v => !v)}>{t('settings.pipeline.addStage')}</Btn>
           </div>
         </div>
         {stages.map((stage, i) => (
@@ -780,24 +763,24 @@ const PipelineSettings = ({ t }) => {
           <div className="col gap-14" style={{ padding: "18px 18px 20px", borderTop: "2px solid var(--border)", background: "var(--bg-sunken)" }}>
             <div className="row gap-12" style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
-                <label className="label">Label</label>
-                <input className="input" value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="es. Technical Screen" autoFocus onKeyDown={e => e.key === "Enter" && addStage()} />
+                <label className="label">{t('settings.pipeline.label')}</label>
+                <input className="input" value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder={t('settings.pipeline.labelPlaceholder')} autoFocus onKeyDown={e => e.key === "Enter" && addStage()} />
               </div>
               <div>
-                <label className="label">Color</label>
+                <label className="label">{t('settings.pipeline.color')}</label>
                 <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)}
                   style={{ width: 38, height: 36, border: "1px solid var(--border)", borderRadius: 6, padding: 2, cursor: "pointer", background: "none", display: "block" }} />
               </div>
             </div>
             {error && <span className="text-12" style={{ color: "var(--danger)" }}>{error}</span>}
             <div className="row gap-10" style={{ justifyContent: "flex-end" }}>
-              <Btn onClick={() => { setAdding(false); setNewLabel(""); setError(""); }}>Cancel</Btn>
-              <Btn kind="primary" onClick={addStage} disabled={!newLabel.trim() || saving}>Add stage</Btn>
+              <Btn onClick={() => { setAdding(false); setNewLabel(""); setError(""); }}>{t('common.cancel')}</Btn>
+              <Btn kind="primary" onClick={addStage} disabled={!newLabel.trim() || saving}>{t('settings.pipeline.addStage')}</Btn>
             </div>
           </div>
         )}
       </div>
-      <div className="text-12 text-muted">Stage IDs are generated from labels and used in candidate records. Removing a stage will hide candidates in that stage until reassigned.</div>
+      <div className="text-12 text-muted">{t('settings.pipeline.hint')}</div>
     </div>
   );
 };
@@ -806,8 +789,6 @@ const PipelineSettings = ({ t }) => {
 
 // Currency helpers (exported for use in other screens)
 const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "DKK", "NOK"];
-const loadCurrency = () => localStorage.getItem("candid_currency") || "EUR";
-window.getCurrency = loadCurrency;
 
 // getTeamMembers still exported for compatibility with jobs modal — returns cached org members
 window.getTeamMembers = () => {
@@ -821,6 +802,7 @@ const TeamSettings = ({ t, user, onLogout }) => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState("");
+  const [inviteUrl, setInviteUrl] = useState("");   // shown when SMTP is not configured
   const [adding, setAdding] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
@@ -848,6 +830,7 @@ const TeamSettings = ({ t, user, onLogout }) => {
     if (!inviteEmail.trim()) return;
     setInviting(true);
     setInviteMsg("");
+    setInviteUrl("");
     try {
       const res = await fetch(`${window.API_BASE}/organizations/current/invite`, {
         method: "POST",
@@ -855,16 +838,18 @@ const TeamSettings = ({ t, user, onLogout }) => {
         body: JSON.stringify({ email: inviteEmail.trim() }),
       });
       if (res.ok) {
-        setInviteMsg("Invitation sent.");
+        const data = await res.json();
+        setInviteMsg(data.email_sent ? t('settings.team.inviteSent') : t('settings.team.inviteCreated'));
+        setInviteUrl(data.invite_url || "");
         setInviteEmail("");
         setAdding(false);
         reload();
       } else {
         const body = await res.json().catch(() => null);
-        setInviteMsg(body?.detail || "Failed to send invitation.");
+        setInviteMsg(body?.detail || t('settings.team.inviteFailed'));
       }
     } catch {
-      setInviteMsg("Network error.");
+      setInviteMsg(t('settings.team.networkError'));
     }
     setInviting(false);
   };
@@ -917,11 +902,11 @@ const TeamSettings = ({ t, user, onLogout }) => {
                   }).catch(() => {});
                   reload();
                 }}>
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-                <option value="member">Member</option>
+                <option value="owner">{t('settings.team.role.owner')}</option>
+                <option value="admin">{t('settings.team.role.admin')}</option>
+                <option value="member">{t('settings.team.role.member')}</option>
               </select>
-              <button className="icon-btn" onClick={() => removeMember(member.user_id)} title="Remove">
+              <button className="icon-btn" onClick={() => removeMember(member.user_id)} title={t('settings.team.remove')}>
                 <Icons.X size={13} />
               </button>
             </div>
@@ -929,14 +914,14 @@ const TeamSettings = ({ t, user, onLogout }) => {
         ))}
         {!loading && pending.length > 0 && (
           <>
-            <div className="text-11 text-muted" style={{ padding: "10px 18px 4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Pending invitations</div>
+            <div className="text-11 text-muted" style={{ padding: "10px 18px 4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t('settings.team.pendingInvitations')}</div>
             {pending.map((invitation) => (
               <div key={invitation.id} className="row" style={{ padding: "10px 18px", borderBottom: "1px solid var(--border-soft)", justifyContent: "space-between", opacity: 0.7 }}>
                 <div className="row gap-12">
                   <Avatar name={invitation.email} />
                   <span className="text-13">{invitation.email}</span>
                 </div>
-                <Badge>Pending</Badge>
+                <Badge>{t('common.pending')}</Badge>
               </div>
             ))}
           </>
@@ -948,10 +933,16 @@ const TeamSettings = ({ t, user, onLogout }) => {
               <input className="input" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="colleague@company.com" autoFocus
                 onKeyDown={e => e.key === "Enter" && sendInvite()} />
             </div>
-            {inviteMsg && <span className="text-12" style={{ color: inviteMsg.includes("sent") ? "var(--positive)" : "var(--danger)" }}>{inviteMsg}</span>}
+            {inviteMsg && <span className="text-12" style={{ color: [t('settings.team.inviteSent'), t('settings.team.inviteCreated')].includes(inviteMsg) ? "var(--positive)" : "var(--danger)" }}>{inviteMsg}</span>}
+            {inviteUrl && (
+              <div className="row gap-6" style={{ alignItems: "center" }}>
+                <input className="input" readOnly value={inviteUrl} onFocus={e => e.target.select()} style={{ flex: 1, fontSize: 12 }} />
+                <Btn size="sm" icon={<Icons.Copy size={12} />} onClick={() => navigator.clipboard?.writeText(inviteUrl)}>{t('candidate.video.copyLink')}</Btn>
+              </div>
+            )}
             <div className="row gap-8">
               <Btn kind="primary" onClick={sendInvite} disabled={!inviteEmail.trim() || inviting}>
-                {inviting ? "Sending…" : t('settings.team.invite')}
+                {inviting ? t('compose.sending') : t('settings.team.invite')}
               </Btn>
               <Btn onClick={() => { setAdding(false); setInviteMsg(""); }}>{t('common.cancel')}</Btn>
             </div>
@@ -963,15 +954,15 @@ const TeamSettings = ({ t, user, onLogout }) => {
       {isOwner && (
         <div className="card" style={{ border: "1px solid var(--danger-soft, oklch(0.88 0.06 25))" }}>
           <div className="card-header" style={{ borderBottom: "1px solid var(--danger-soft, oklch(0.88 0.06 25))" }}>
-            <span className="card-title" style={{ color: "var(--danger)" }}>Danger zone</span>
+            <span className="card-title" style={{ color: "var(--danger)" }}>{t('settings.danger.title')}</span>
           </div>
           <div className="row" style={{ padding: "16px 18px", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
             <div className="col gap-2">
-              <span className="weight-500">Delete this organization</span>
-              <span className="text-12 text-secondary">Permanently deletes the org and all its data — candidates, interviews, employees, roles, and settings. Cannot be undone.</span>
+              <span className="weight-500">{t('settings.danger.deleteTitle')}</span>
+              <span className="text-12 text-secondary">{t('settings.danger.deleteDesc')}</span>
             </div>
             <Btn kind="danger" onClick={() => { setConfirmName(""); setDeleteOpen(true); }} style={{ flexShrink: 0 }}>
-              Delete organization
+              {t('settings.danger.deleteBtn')}
             </Btn>
           </div>
         </div>
@@ -983,13 +974,13 @@ const TeamSettings = ({ t, user, onLogout }) => {
           onClick={() => !deleting && setDeleteOpen(false)}>
           <div className="card col" style={{ width: 420, padding: 28, gap: 16 }} onClick={e => e.stopPropagation()}>
             <div className="col gap-4">
-              <span style={{ fontWeight: 600, fontSize: 16, color: "var(--danger)" }}>Delete "{org?.name}"?</span>
+              <span style={{ fontWeight: 600, fontSize: 16, color: "var(--danger)" }}>{t('settings.danger.confirmTitle').replace('{name}', org?.name || '')}</span>
               <span className="text-13 text-secondary">
-                This will permanently delete the organization and <strong>all its data</strong>: candidates, interviews, employees, roles, positions, API keys, and settings. This action cannot be undone.
+                {t('settings.danger.confirmBodyPre')} <strong>{t('settings.danger.confirmBodyStrong')}</strong>{t('settings.danger.confirmBodyPost')}
               </span>
             </div>
             <div>
-              <label className="label">Type <strong>{org?.name}</strong> to confirm</label>
+              <label className="label">{t('settings.danger.typePre')} <strong>{org?.name}</strong> {t('settings.danger.typePost')}</label>
               <input className="input" value={confirmName} onChange={e => setConfirmName(e.target.value)}
                 placeholder={org?.name} autoFocus />
             </div>
@@ -997,7 +988,7 @@ const TeamSettings = ({ t, user, onLogout }) => {
               <Btn onClick={() => setDeleteOpen(false)} disabled={deleting}>{t('common.cancel')}</Btn>
               <Btn kind="danger" onClick={deleteOrg}
                 disabled={confirmName !== org?.name || deleting}>
-                {deleting ? "Deleting…" : "Delete forever"}
+                {deleting ? t('settings.danger.deleting') : t('settings.danger.deleteForever')}
               </Btn>
             </div>
           </div>
@@ -1006,98 +997,6 @@ const TeamSettings = ({ t, user, onLogout }) => {
     </div>
   );
 };
-
-// ── Integrations ──────────────────────────────────────────────────────────────
-
-const INTEGRATIONS = [
-  {
-    category: "Communication",
-    items: [
-      { name: "Slack",           desc: "Post pipeline updates and hiring notifications to any channel", icon: "💬" },
-      { name: "Microsoft Teams", desc: "Send interview reminders and candidate alerts to Teams channels", icon: "🟦" },
-      { name: "Google Chat",     desc: "Notify your team of stage changes via Google Chat spaces", icon: "💭" },
-    ],
-  },
-  {
-    category: "Calendar & Scheduling",
-    items: [
-      { name: "Google Calendar",  desc: "Auto-sync interviews to your team's calendars", icon: "📅" },
-      { name: "Outlook Calendar", desc: "Create calendar events for every scheduled interview", icon: "📆" },
-      { name: "Calendly",         desc: "Let candidates self-schedule via your Calendly links", icon: "🗓️" },
-    ],
-  },
-  {
-    category: "Video Conferencing",
-    items: [
-      { name: "Zoom",          desc: "Auto-generate Zoom links when an interview is scheduled", icon: "🎥" },
-      { name: "Google Meet",   desc: "Attach Meet links to interview calendar events", icon: "🟢" },
-      { name: "Microsoft Teams Meetings", desc: "Create Teams meeting links for remote interviews", icon: "📹" },
-    ],
-  },
-  {
-    category: "ATS & HR Systems",
-    items: [
-      { name: "Greenhouse",  desc: "Two-way sync for candidates, stages, and scorecards", icon: "🌿" },
-      { name: "BambooHR",    desc: "Push hired candidates directly into your HR system", icon: "🎋" },
-      { name: "Workday",     desc: "Sync employee records and onboarding data with Workday", icon: "☁️" },
-      { name: "Lever",       desc: "Import candidates and export offers to Lever", icon: "⚙️" },
-    ],
-  },
-  {
-    category: "Job Boards",
-    items: [
-      { name: "LinkedIn Jobs", desc: "Post open roles and import applicants automatically", icon: "🔗" },
-      { name: "Indeed",        desc: "Sync job listings and pull in applicants from Indeed", icon: "🔍" },
-      { name: "Glassdoor",     desc: "Publish openings and track applicant source data", icon: "🏢" },
-    ],
-  },
-  {
-    category: "Automation & Documents",
-    items: [
-      { name: "Zapier",    desc: "Connect Candid to 6,000+ apps with no-code workflows", icon: "⚡" },
-      { name: "Make",      desc: "Build advanced multi-step automations with Make scenarios", icon: "🔧" },
-      { name: "DocuSign",  desc: "Send and track offer letters and NDAs for e-signature", icon: "✍️" },
-    ],
-  },
-];
-
-const IntegrationsSettings = () => (
-  <div className="col gap-20">
-    <div style={{ background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 16px", display: "flex", gap: 10, alignItems: "center" }}>
-      <span style={{ fontSize: 18 }}>🚧</span>
-      <div className="col gap-1">
-        <span style={{ fontWeight: 600, fontSize: 13 }}>Integrations — Coming soon</span>
-        <span className="text-12 text-muted">These integrations are under development. You'll be notified when they become available.</span>
-      </div>
-    </div>
-
-    {INTEGRATIONS.map(group => (
-      <div key={group.category}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
-          {group.category}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
-          {group.items.map(integration => (
-            <div key={integration.name} className="card card-pad" style={{ opacity: 0.55, cursor: "not-allowed", userSelect: "none" }}>
-              <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div className="row gap-10" style={{ alignItems: "flex-start", flex: 1 }}>
-                  <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{integration.icon}</span>
-                  <div className="col gap-3">
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{integration.name}</span>
-                    <span className="text-12 text-muted" style={{ lineHeight: 1.4 }}>{integration.desc}</span>
-                  </div>
-                </div>
-                <span style={{ flexShrink: 0, marginLeft: 10, fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap" }}>
-                  Soon
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    ))}
-  </div>
-);
 
 // ── Email (SMTP) Settings ─────────────────────────────────────────────────────
 
@@ -1145,10 +1044,10 @@ const EmailSettings = ({ t }) => {
       const d = await res.json();
       setPasswordSet(d.smtp_password_set || false);
       setPassword("");
-      setSaveMsg("Saved ✓");
+      setSaveMsg(t('settings.ai.saved'));
       setTimeout(() => setSaveMsg(""), 2500);
     } catch {
-      setSaveMsg("Save failed");
+      setSaveMsg(t('settings.email.saveFailed'));
     }
     setSaving(false);
   };
@@ -1157,42 +1056,42 @@ const EmailSettings = ({ t }) => {
     <div className="col gap-16">
       <div className="card card-pad col gap-16">
         <div className="col gap-4">
-          <span className="weight-600">Outgoing email (SMTP)</span>
-          <span className="text-12 text-secondary">Used to send rejection emails. Each organization can configure its own sender.</span>
+          <span className="weight-600">{t('settings.email.title')}</span>
+          <span className="text-12 text-secondary">{t('settings.email.subtitle')}</span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
           <div>
-            <label className="label">SMTP host</label>
+            <label className="label">{t('settings.email.host')}</label>
             <input className="input" value={host} onChange={e => setHost(e.target.value)} placeholder="smtp.gmail.com" />
           </div>
           <div>
-            <label className="label">Port</label>
+            <label className="label">{t('settings.email.port')}</label>
             <input className="input" type="number" value={port} onChange={e => setPort(e.target.value)} placeholder="587" />
           </div>
         </div>
 
         <div>
-          <label className="label">Username</label>
+          <label className="label">{t('settings.email.username')}</label>
           <input className="input" type="email" value={user} onChange={e => setUser(e.target.value)} placeholder="sender@yourcompany.com" />
         </div>
 
         <div>
           <label className="label">
-            Password
-            {passwordSet && !password && <span className="text-11 text-muted" style={{ marginLeft: 6 }}>(set — leave blank to keep)</span>}
+            {t('settings.email.password')}
+            {passwordSet && !password && <span className="text-11 text-muted" style={{ marginLeft: 6 }}>{t('settings.email.passwordSet')}</span>}
           </label>
-          <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={passwordSet ? "••••••••" : "App password or SMTP password"} />
+          <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={passwordSet ? "••••••••" : t('settings.email.passwordPlaceholder')} />
         </div>
 
         <div>
-          <label className="label">From address</label>
+          <label className="label">{t('settings.email.from')}</label>
           <input className="input" type="email" value={from} onChange={e => setFrom(e.target.value)} placeholder="recruiting@yourcompany.com" />
-          <span className="text-11 text-muted" style={{ marginTop: 4, display: "block" }}>Shown as the sender on rejection emails. Defaults to username if blank.</span>
+          <span className="text-11 text-muted" style={{ marginTop: 4, display: "block" }}>{t('settings.email.fromHint')}</span>
         </div>
 
         <div className="row gap-8" style={{ alignItems: "center" }}>
-          <Btn kind="primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
+          <Btn kind="primary" onClick={save} disabled={saving}>{saving ? t('common.saving') : t('common.save')}</Btn>
           {saveMsg && <span className="text-12" style={{ color: saveMsg.includes("✓") ? "var(--positive)" : "var(--danger)" }}>{saveMsg}</span>}
         </div>
       </div>

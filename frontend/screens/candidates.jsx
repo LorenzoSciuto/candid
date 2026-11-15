@@ -30,7 +30,7 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
   const allJds = (window.CANDID_DATA.JDS || []);
 
   const save = async () => {
-    if (!first.trim() || !last.trim()) { setError("First and last name are required."); return; }
+    if (!first.trim() || !last.trim()) { setError(t('candidates.error.nameRequired')); return; }
     setSaving(true);
     setError("");
     try {
@@ -50,7 +50,7 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
         const created = await res.json();
         onCreated(created);
       } else {
-        setError("Failed to create candidate.");
+        setError(t('candidates.error.createFailed'));
       }
     } catch {
       onCreated({ id: `local-${Date.now()}`, first_name: first, last_name: last, email, phone, current_role: role, location, years_of_experience: experience ? parseInt(experience) : null, source, status, applied_at: new Date().toISOString().slice(0, 10), score: null });
@@ -93,7 +93,7 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
           </div>
           <div>
             <label className="label">{t('employees.form.location')}</label>
-            <input className="input" value={location} onChange={e => setLocation(e.target.value)} placeholder="Milano, MI" />
+            <input className="input" value={location} onChange={e => setLocation(e.target.value)} placeholder="London, UK" />
           </div>
           <div>
             <label className="label">{t('candidates.form.experience')}</label>
@@ -128,6 +128,7 @@ const NewCandidateModal = ({ onClose, onCreated }) => {
 // ── Hire modal ────────────────────────────────────────────────────────────────
 
 const HireModal = ({ candidate, onClose, onHired }) => {
+  const t = window.useT();
   const [jds, setJds] = useState([]);
   const [selectedJd, setSelectedJd] = useState("");
   const [salary, setSalary] = useState("");
@@ -169,7 +170,7 @@ const HireModal = ({ candidate, onClose, onHired }) => {
           candidate_id: candidate.id,
         }),
       });
-      if (!empRes.ok) throw new Error("Failed to create employee");
+      if (!empRes.ok) throw new Error(t('candidates.hire.failed'));
 
       await fetch(`${window.API_BASE}/candidates/${candidate.id}`, {
         method: "PATCH",
@@ -199,8 +200,8 @@ const HireModal = ({ candidate, onClose, onHired }) => {
       onClick={onClose}>
       <div className="card col" style={{ width: 440, padding: 28, gap: 20 }} onClick={e => e.stopPropagation()}>
         <div className="col gap-4">
-          <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>Hire {candidate.first} {candidate.last}</span>
-          <span className="text-13 text-secondary">Creates an employee record and closes the position.</span>
+          <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>{t('candidates.hire.title').replace('{name}', `${candidate.first} ${candidate.last}`)}</span>
+          <span className="text-13 text-secondary">{t('candidates.hire.subtitle')}</span>
         </div>
 
         <div className="col gap-12">
@@ -214,27 +215,27 @@ const HireModal = ({ candidate, onClose, onHired }) => {
           </div>
 
           <div>
-            <label className="label">Position (open JD)</label>
+            <label className="label">{t('candidates.hire.position')}</label>
             {jds.length > 0 ? (
               <select className="select" value={selectedJd} onChange={e => setSelectedJd(e.target.value)}>
                 {jds.map(j => <option key={j.id} value={j.id}>{j.title}{j.location ? ` · ${j.location}` : ""}</option>)}
               </select>
             ) : (
-              <div className="text-13 text-muted" style={{ padding: "8px 0" }}>No active open positions. The employee will be added without a specific role.</div>
+              <div className="text-13 text-muted" style={{ padding: "8px 0" }}>{t('candidates.hire.noPositions')}</div>
             )}
           </div>
           <div>
-            <label className="label">Salary <span className="text-11 text-muted">({currencyCode}, annual)</span></label>
-            <input className="input" type="number" min={0} value={salary} onChange={e => setSalary(e.target.value)} placeholder="e.g. 85000" />
+            <label className="label">{t('employees.form.salary')} <span className="text-11 text-muted">{t('candidates.hire.salaryHint').replace('{currency}', currencyCode)}</span></label>
+            <input className="input" type="number" min={0} value={salary} onChange={e => setSalary(e.target.value)} placeholder={t('candidates.hire.salaryPh')} />
           </div>
         </div>
 
         {error && <div className="text-12" style={{ color: "var(--danger)" }}>{error}</div>}
 
         <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
-          <Btn onClick={onClose}>Cancel</Btn>
+          <Btn onClick={onClose}>{t('common.cancel')}</Btn>
           <Btn kind="primary" icon={<Icons.UserCheck size={14} />} onClick={confirm} disabled={saving}>
-            {saving ? "Hiring…" : "Confirm hire"}
+            {saving ? t('candidates.hire.hiring') : t('candidate.hire.title')}
           </Btn>
         </div>
       </div>
@@ -289,7 +290,7 @@ const QuickAssignJobModal = ({ candidateId, onClose, onAssigned }) => {
           <span className="text-13 text-muted">{t('assignJob.noJobs')}</span>
         ) : (
           <div>
-            <label className="label">Position</label>
+            <label className="label">{t('candidates.col.position')}</label>
             <select className="select" value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)}>
               <option value="">{t('assignJob.selectPh')}</option>
               {jobs.map(j => (
@@ -364,7 +365,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
 
   const promptDelete = (id) => {
     const c = candidates.find(x => x.id === id);
-    setDeleteTarget({ id, name: c ? `${c.first} ${c.last}` : "this candidate" });
+    setDeleteTarget({ id, name: c ? `${c.first} ${c.last}` : t('candidates.thisCandidate') });
   };
 
   const confirmDelete = () => {
@@ -377,7 +378,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
 
   const promptReject = (id) => {
     const c = candidates.find(x => x.id === id);
-    setRejectTarget({ id, name: c ? `${c.first} ${c.last}` : "this candidate" });
+    setRejectTarget({ id, name: c ? `${c.first} ${c.last}` : t('candidates.thisCandidate') });
   };
 
   const confirmReject = () => {
@@ -438,11 +439,11 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
         <div>
           <h1 className="page-h1">{t('candidates.title')}</h1>
           <div className="page-sub">
-            {showArchived ? `${rows.length} archived` : showTerminal ? `${rows.length} hired / rejected` : `${rows.length} of ${candidates.filter(c => c.status !== "archived" && !TERMINAL_STATUSES_SET.has(c.status)).length} active`} candidates
+            {showArchived ? t('candidates.sub.archived').replace('{n}', rows.length) : showTerminal ? t('candidates.sub.terminal').replace('{n}', rows.length) : t('candidates.sub.active').replace('{n}', rows.length).replace('{total}', candidates.filter(c => c.status !== "archived" && !TERMINAL_STATUSES_SET.has(c.status)).length)}
           </div>
         </div>
         <div className="row gap-8">
-          <SegControl value={view} onChange={setView} options={[{ value: "table", label: "Table" }, { value: "grid", label: "Grid" }]} />
+          <SegControl value={view} onChange={setView} options={[{ value: "table", label: t('candidates.view.table') }, { value: "grid", label: t('candidates.view.grid') }]} />
           <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={() => setCreateOpen(true)}>{t('candidates.new')}</Btn>
         </div>
       </div>
@@ -466,7 +467,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
             fontWeight: showArchived ? 500 : 400,
           }}>
           <Icons.Archive size={13} />
-          Archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
+          {t('candidates.archived')}{archivedCount > 0 ? ` (${archivedCount})` : ""}
         </button>
 
         {/* Hired / Rejected toggle */}
@@ -481,7 +482,7 @@ const CandidatesScreen = ({ onOpenCandidate }) => {
             fontWeight: showTerminal ? 500 : 400,
           }}>
           <Icons.UserCheck size={13} />
-          Hired / Rejected{terminalCount > 0 ? ` (${terminalCount})` : ""}
+          {t('candidates.hiredRejected')}{terminalCount > 0 ? ` (${terminalCount})` : ""}
         </button>
 
         {!showArchived && !showTerminal && (
@@ -624,7 +625,7 @@ const CandidateTable = ({ rows, onOpen, t, showArchived, onArchive, onRestore, o
               <Td><StatusBadge status={c.status} /></Td>
               <Td><span className="text-13 text-secondary" style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{c.jdTitle || "—"}</span></Td>
               <Td><span className="text-13 text-secondary">{c.source || "—"}</span></Td>
-              <Td align="right"><span className="text-mono text-12">{c.experience != null ? `${c.experience}y` : "—"}</span></Td>
+              <Td align="right"><span className="text-mono text-12">{c.experience != null ? t('candidates.expYears').replace('{n}', c.experience) : "—"}</span></Td>
               <Td><span className="text-mono text-12 text-muted">{c.appliedAt ? c.appliedAt.slice(0, 10) : "—"}</span></Td>
               <Td>
                 <div className="row gap-4" style={{ justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
@@ -639,20 +640,20 @@ const CandidateTable = ({ rows, onOpen, t, showArchived, onArchive, onRestore, o
                     </button>
                   )}
                   {!isTerminal && !isArchived && (
-                    <button className="icon-btn" title="Reject" style={{ color: "var(--danger)" }} onClick={() => onReject(c.id)}>
+                    <button className="icon-btn" title={t('candidates.reject.confirm')} style={{ color: "var(--danger)" }} onClick={() => onReject(c.id)}>
                       <Icons.UserX size={13} />
                     </button>
                   )}
                   {isArchived ? (
-                    <button className="icon-btn" title="Restore" onClick={() => onRestore(c.id)}>
+                    <button className="icon-btn" title={t('candidates.action.restore')} onClick={() => onRestore(c.id)}>
                       <Icons.RotateCcw size={13} />
                     </button>
                   ) : !isTerminal && (
-                    <button className="icon-btn" title="Archive" onClick={() => onArchive(c.id)}>
+                    <button className="icon-btn" title={t('candidates.action.archive')} onClick={() => onArchive(c.id)}>
                       <Icons.Archive size={13} />
                     </button>
                   )}
-                  <button className="icon-btn" title="Delete" style={{ color: "var(--danger)" }} onClick={() => onDelete(c.id)}>
+                  <button className="icon-btn" title={t('common.delete')} style={{ color: "var(--danger)" }} onClick={() => onDelete(c.id)}>
                     <Icons.Trash size={13} />
                   </button>
                 </div>
@@ -665,7 +666,7 @@ const CandidateTable = ({ rows, onOpen, t, showArchived, onArchive, onRestore, o
     </div>
     {rows.length === 0 && (
       <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
-        {showArchived ? "No archived candidates." : t('candidates.noMatch')}
+        {showArchived ? t('candidates.noArchived') : t('candidates.noMatch')}
       </div>
     )}
   </div>
@@ -678,7 +679,9 @@ const Td = ({ children, align = "left" }) => (
   <td style={{ textAlign: align, padding: "12px 14px", verticalAlign: "middle" }}>{children}</td>
 );
 
-const CandidateGrid = ({ rows, onOpen }) => (
+const CandidateGrid = ({ rows, onOpen }) => {
+  const t = window.useT();
+  return (
   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
     {rows.map(c => (
       <div key={c.id} className="card" style={{ padding: 16, cursor: "pointer" }} onClick={() => onOpen(c.id)}>
@@ -692,12 +695,13 @@ const CandidateGrid = ({ rows, onOpen }) => (
         </div>
         <div className="row gap-8" style={{ flexWrap: "wrap" }}>
           <StatusBadge status={c.status} />
-          {c.experience != null && <Badge>{c.experience}y exp</Badge>}
+          {c.experience != null && <Badge>{t('candidates.expYearsBadge').replace('{n}', c.experience)}</Badge>}
           {c.source && <Badge>{c.source}</Badge>}
         </div>
       </div>
     ))}
   </div>
-);
+  );
+};
 
 window.CandidatesScreen = CandidatesScreen;

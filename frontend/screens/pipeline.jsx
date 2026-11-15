@@ -1,15 +1,15 @@
 // Pipeline (Kanban) screen — with drag-and-drop between columns
 
-const formatAppliedDate = (iso) => {
+const formatAppliedDate = (iso, t) => {
   if (!iso) return "";
   try {
     const date = new Date(iso);
     if (isNaN(date.getTime())) return "";
     const diffDays = Math.floor((Date.now() - date.getTime()) / 86400000);
-    if (diffDays === 0) return "Today";
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 30) return `${diffDays}d ago`;
-    return date.toLocaleDateString("en", { month: "short", day: "numeric" });
+    if (diffDays === 0) return t('pipeline.today');
+    if (diffDays === 1) return t('pipeline.yesterday');
+    if (diffDays < 30) return t('pipeline.daysAgo').replace('{n}', diffDays);
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   } catch {
     return "";
   }
@@ -79,10 +79,10 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd, onRoute }) => {
         <div>
           <h1 className="page-h1">{t('pipeline.title')}</h1>
           <div className="page-sub row gap-8" style={{ alignItems: "center" }}>
-            <span>{candidates.length} candidates · {t('pipeline.hint')}</span>
+            <span>{candidates.length} {t('pipeline.candidates')} · {t('pipeline.hint')}</span>
             {onRoute && (
               <button className="link text-12" style={{ fontWeight: 500 }} onClick={() => onRoute("candidates")}>
-                View all →
+                {t('pipeline.viewAll')}
               </button>
             )}
           </div>
@@ -92,7 +92,6 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd, onRoute }) => {
             <Icons.Search size={14} style={{ color: "var(--ink-muted)" }} />
             <input className="input" style={{ border: 0, padding: "4px 0", background: "transparent", width: 200 }} placeholder={t('pipeline.filterName')} value={filter} onChange={e => setFilter(e.target.value)} />
           </div>
-          <Btn icon={<Icons.Filter size={14} />}>{t('common.filter')}</Btn>
           <Btn kind="primary" icon={<Icons.Plus size={14} />} onClick={onQuickAdd}>{t('pipeline.add')}</Btn>
         </div>
       </div>
@@ -112,7 +111,6 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd, onRoute }) => {
                 <span className="kpill">{col.label}</span>
                 <span className="text-mono text-12 text-muted">{grouped[col.id]?.length ?? 0}</span>
               </div>
-              <button className="icon-btn"><Icons.MoreH size={14} /></button>
             </div>
             <div className="kcol-body">
               {(grouped[col.id] || []).map(c => (
@@ -127,13 +125,13 @@ const PipelineScreen = ({ onOpenCandidate, onQuickAdd, onRoute }) => {
                     </div>
                   </div>
                   <div className="meta">
-                    <span className="text-12 text-muted">{formatAppliedDate(c.appliedAt)}</span>
+                    <span className="text-12 text-muted">{formatAppliedDate(c.appliedAt, t)}</span>
                     {c.score != null ? (
                       <span className="score row gap-4" style={{ flexShrink: 0 }}>
                         <Icons.Star size={11} style={{ color: "var(--warn)" }} fill="currentColor" stroke="none" /> {c.score.toFixed(1)}
                       </span>
                     ) : c.hasAI ? (
-                      <span className="badge ai" style={{ fontSize: 10, whiteSpace: "nowrap", flexShrink: 0 }}><span className="dot" /> AI screening</span>
+                      <span className="badge ai" style={{ fontSize: 10, whiteSpace: "nowrap", flexShrink: 0 }}><span className="dot" /> {t('pipeline.aiScreening')}</span>
                     ) : null}
                   </div>
                 </div>

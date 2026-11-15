@@ -24,7 +24,7 @@ const fmtDate = (date) => {
   return `${y}-${m}-${d}`;
 };
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 // ── Schedule Modal ────────────────────────────────────────────────────────────
 
@@ -88,17 +88,17 @@ const ScheduleModal = ({ onClose, onSaved, initialCandidateId = "" }) => {
 
         <div>
           <label className="label">{t('interviews.modal.titleField')}</label>
-          <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder={`e.g. ${type} Interview`} />
+          <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder={t('interviews.modal.titlePh').replace('{type}', type)} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
             <label className="label">{t('interviews.modal.type')}</label>
             <select className="select" value={type} onChange={e => setType(e.target.value)}>
-              <option>Video</option>
-              <option>Phone</option>
-              <option>In-person</option>
-              <option>Technical</option>
+              <option value="Video">{t('interviews.type.video')}</option>
+              <option value="Phone">{t('interviews.type.phone')}</option>
+              <option value="In-person">{t('interviews.type.inPerson')}</option>
+              <option value="Technical">{t('interviews.type.technical')}</option>
             </select>
           </div>
           <div>
@@ -127,7 +127,7 @@ const ScheduleModal = ({ onClose, onSaved, initialCandidateId = "" }) => {
 
         <div>
           <label className="label">{t('interviews.modal.notes')}</label>
-          <textarea className="textarea" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Agenda, links, instructions…" />
+          <textarea className="textarea" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder={t('interviews.modal.notesPh')} />
         </div>
       </div>
     </Modal>
@@ -173,21 +173,21 @@ const WeekView = ({ interviews, candidates, onRoute }) => {
     <div>
       <div className="row" style={{ alignItems: "center", gap: 12, marginBottom: 12 }}>
         <button className="btn btn-ghost btn-sm" onClick={() => setWeekStart(w => addDays(w, -7))}>
-          <Icons.ChevronLeft size={14} /> Prev
+          <Icons.ChevronLeft size={14} /> {t('interviews.week.prev')}
         </button>
         <span className="text-13 weight-500" style={{ flex: 1, textAlign: "center" }}>{weekLabel}</span>
-        <button className="btn btn-ghost btn-sm" onClick={() => setWeekStart(getMondayOf(new Date()))}>Today</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setWeekStart(getMondayOf(new Date()))}>{t('interviews.week.today')}</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setWeekStart(w => addDays(w, 7))}>
-          Next <Icons.ChevronRight size={14} />
+          {t('interviews.week.next')} <Icons.ChevronRight size={14} />
         </button>
       </div>
       {!thisWeekHasInterviews && hasAnyInterviews && (
         <div className="text-13 text-muted" style={{ textAlign: "center", padding: "8px 0 12px" }}>
-          No interviews this week · <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", fontSize: 12 }}
+          {t('interviews.week.noEvents')} · <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", fontSize: 12 }}
             onClick={() => {
               const next = interviews.filter(iv => iv.date).sort((a, b) => a.date < b.date ? -1 : 1)[0];
               if (next) setWeekStart(getMondayOf(new Date(next.date + "T12:00:00")));
-            }}>Jump to next →</button>
+            }}>{t('interviews.week.jumpNext')}</button>
         </div>
       )}
       <div className="card" style={{ overflow: "hidden" }}>
@@ -197,7 +197,7 @@ const WeekView = ({ interviews, candidates, onRoute }) => {
             const isToday = ds === today;
             return (
               <div key={ds} style={{ borderRight: i < 6 ? "1px solid var(--border-soft)" : 0, padding: "8px 6px", textAlign: "center" }}>
-                <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{DAY_LABELS[i]}</div>
+                <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{t(`interviews.day.${DAY_KEYS[i]}`)}</div>
                 <div className="text-13 weight-500" style={{ marginTop: 2, width: 24, height: 24, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", background: isToday ? "var(--ink)" : "transparent", color: isToday ? "white" : "inherit" }}>
                   {d.getDate()}
                 </div>
@@ -251,19 +251,19 @@ const TranscriptModal = ({ interview, onClose }) => {
       const data = await res.json();
       setSummary(data);
     } catch {
-      setSummaryError("AI summarize failed — check provider settings.");
+      setSummaryError(t('interviews.summary.failed'));
     }
     setSummarizing(false);
   };
 
   return (
-    <Modal open title={interview.title || interview.type || "Transcript"} onClose={onClose} width={720} disableBackdropClose={false}
+    <Modal open title={interview.title || interview.type || t('candidate.iv.transcript')} onClose={onClose} width={720} disableBackdropClose={false}
       footer={
         <div className="row gap-8" style={{ flex: 1, justifyContent: "space-between", alignItems: "center" }}>
           <div className="row gap-8">
             {!summary && (
               <Btn kind="ai" icon={<Icons.Sparkles size={14} />} onClick={summarize} disabled={summarizing || !text.trim()}>
-                {summarizing ? "Summarizing…" : "AI Summarize"}
+                {summarizing ? t('interviews.summary.summarizing') : t('interviews.summary.button')}
               </Btn>
             )}
             {summaryError && <span className="text-12" style={{ color: "var(--danger)" }}>{summaryError}</span>}
@@ -275,7 +275,7 @@ const TranscriptModal = ({ interview, onClose }) => {
         {summary && (
           <div className="col gap-10">
             <div className="col gap-6">
-              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Key Points</span>
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>{t('interviews.summary.keyPoints')}</span>
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {(summary.bullets || []).map((b, i) => (
                   <li key={i} className="text-13" style={{ marginBottom: 4 }}>{b}</li>
@@ -284,7 +284,7 @@ const TranscriptModal = ({ interview, onClose }) => {
             </div>
             {summary.summary && (
               <div className="col gap-4">
-                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Summary</span>
+                <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>{t('interviews.summary.summary')}</span>
                 <p className="text-13" style={{ margin: 0, lineHeight: 1.65 }}>{summary.summary}</p>
               </div>
             )}
@@ -296,7 +296,7 @@ const TranscriptModal = ({ interview, onClose }) => {
             {text}
           </div>
         ) : (
-          <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>No transcript recorded for this interview.</div>
+          <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('candidate.iv.noTranscript')}</div>
         )}
       </div>
     </Modal>
@@ -371,7 +371,7 @@ const InterviewsScreen = ({ onRoute }) => {
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
           <h1 className="page-h1">{t('interviews.title')}</h1>
-          <div className="page-sub">{displayUpcoming.length} upcoming</div>
+          <div className="page-sub">{t('interviews.upcomingCount').replace('{n}', displayUpcoming.length)}</div>
         </div>
         <div className="row gap-8">
           <SegControl
@@ -391,14 +391,14 @@ const InterviewsScreen = ({ onRoute }) => {
       <div className="card" style={{ padding: "10px 12px", marginBottom: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <div className="row gap-6" style={{ background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px", flex: "1 1 200px" }}>
           <Icons.Search size={14} style={{ color: "var(--ink-muted)" }} />
-          <input className="input" style={{ border: 0, padding: "4px 0", background: "transparent" }} placeholder="Search candidate, title, interviewer…" value={q} onChange={e => setQ(e.target.value)} />
+          <input className="input" style={{ border: 0, padding: "4px 0", background: "transparent" }} placeholder={t('interviews.searchPh')} value={q} onChange={e => setQ(e.target.value)} />
         </div>
         <select className="select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ width: 140 }}>
-          <option value="all">All types</option>
+          <option value="all">{t('interviews.allTypes')}</option>
           {types.map(tp => <option key={tp} value={tp}>{tp}</option>)}
         </select>
         <select className="select" value={interviewerFilter} onChange={e => setInterviewerFilter(e.target.value)} style={{ width: 160 }}>
-          <option value="all">All interviewers</option>
+          <option value="all">{t('interviews.allInterviewers')}</option>
           {interviewers.map(iv => <option key={iv} value={iv}>{iv}</option>)}
         </select>
         {(q || typeFilter !== "all" || interviewerFilter !== "all") && (
@@ -412,28 +412,28 @@ const InterviewsScreen = ({ onRoute }) => {
         <>
           {displayUpcoming.length > 0 && (
             <div className="col gap-8" style={{ marginBottom: 24 }}>
-              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 2px", marginBottom: 4 }}>Upcoming</div>
+              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 2px", marginBottom: 4 }}>{t('interviews.upcoming')}</div>
               {displayUpcoming.map(iv => (
                 <div key={iv.id} className="card row" style={{ padding: 14, alignItems: "center", justifyContent: "space-between" }}>
                   <div className="row gap-16" style={{ minWidth: 0 }}>
                     <div style={{ width: 56, textAlign: "center", padding: "6px 8px", background: "var(--bg-sunken)", borderRadius: 6, flexShrink: 0 }}>
-                      <div className="text-mono text-12 text-muted">{iv.date || "TBD"}</div>
+                      <div className="text-mono text-12 text-muted">{iv.date || t('interviews.tbd')}</div>
                       {iv.time && <div className="text-mono text-11 text-muted">{iv.time}</div>}
                     </div>
                     <div className="col" style={{ minWidth: 0 }}>
                       <div className="row gap-8">
                         <span className="weight-500">{iv.title || iv.type}</span>
-                        <Badge>{iv.type || "Interview"}</Badge>
+                        <Badge>{iv.type || t('interviews.interview')}</Badge>
                       </div>
                       <div className="text-12 text-secondary">
-                        {candName(iv)}{iv.interviewer ? ` · with ${iv.interviewer}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
+                        {candName(iv)}{iv.interviewer ? ` · ${t('interviews.withInterviewer').replace('{name}', iv.interviewer)}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
                       </div>
                     </div>
                   </div>
                   <div className="row gap-8">
                     <Btn kind="primary" icon={<Icons.Mic size={14} />}
                       onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>
-                      Record
+                      {t('interviews.record')}
                     </Btn>
                   </div>
                 </div>
@@ -442,7 +442,7 @@ const InterviewsScreen = ({ onRoute }) => {
           )}
           {displayPast.length > 0 && (
             <div className="col gap-8">
-              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 2px", marginBottom: 4 }}>Past</div>
+              <div className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 2px", marginBottom: 4 }}>{t('interviews.past')}</div>
               {displayPast.map(iv => (
                 <div key={iv.id} className="card row" style={{ padding: 14, alignItems: "center", justifyContent: "space-between", opacity: 0.8 }}>
                   <div className="row gap-16" style={{ minWidth: 0 }}>
@@ -453,18 +453,18 @@ const InterviewsScreen = ({ onRoute }) => {
                     <div className="col" style={{ minWidth: 0 }}>
                       <div className="row gap-8">
                         <span className="weight-500">{iv.title || iv.type}</span>
-                        <Badge>{iv.type || "Interview"}</Badge>
+                        <Badge>{iv.type || t('interviews.interview')}</Badge>
                       </div>
                       <div className="text-12 text-secondary">
-                        {candName(iv)}{iv.interviewer ? ` · with ${iv.interviewer}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
+                        {candName(iv)}{iv.interviewer ? ` · ${t('interviews.withInterviewer').replace('{name}', iv.interviewer)}` : ""}{iv.duration ? ` · ${iv.duration}` : ""}
                       </div>
                     </div>
                   </div>
                   <div className="row gap-8">
                     {iv.raw_content || iv.cleaned_transcript ? (
-                      <Btn icon={<Icons.FileText size={14} />} onClick={() => setTranscriptIv(iv)}>Transcript</Btn>
+                      <Btn icon={<Icons.FileText size={14} />} onClick={() => setTranscriptIv(iv)}>{t('candidate.iv.transcript')}</Btn>
                     ) : (
-                      <Btn icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>Record</Btn>
+                      <Btn icon={<Icons.Mic size={14} />} onClick={() => onRoute("liveroom", { ...iv, candidateName: candName(iv) })}>{t('interviews.record')}</Btn>
                     )}
                   </div>
                 </div>

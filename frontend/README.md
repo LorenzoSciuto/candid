@@ -14,7 +14,15 @@ python -m http.server 8080
 
 Open `http://localhost:8080/index.html`.
 
-`window.API_BASE` is set dynamically in `index.html` — it matches the page protocol (`http` or `https`) and points at `localhost:8000`.
+### Backend URL
+
+`index.html` sets `window.API_BASE`. By default it points at `localhost:8000`, using the page protocol (`http` or `https`). To use another backend, define `window.CANDID_API_BASE` in an inline script placed before the `API_BASE` script:
+
+```html
+<script>window.CANDID_API_BASE = "https://api.example.com";</script>
+```
+
+React and ReactDOM load as pinned production builds from unpkg, with SRI hashes.
 
 ---
 
@@ -26,10 +34,9 @@ Open `http://localhost:8080/index.html`.
 |-------|------|---------|
 | 1 | `data.jsx` | `window.CANDID_DATA` — pipeline stages, skill lists, `SKILL_KEYS` i18n map |
 | 2 | `translations.jsx` | `window.TRANSLATIONS` · `window.useT()` — EN / IT / DE |
-| 3 | `ui.jsx` | `Icons`, `Btn`, `Badge`, `Avatar`, `Modal`, `Rating`, `Sidebar`, `Topbar`, `StatusBadge`, `Tooltip`, `useApiData` |
-| 4 | `tweaks-panel.jsx` | `window.useTweaks` — runtime design knobs |
-| 5 | `screens/*.jsx` | one component per screen → `window.*Screen` |
-| 6 | `app.jsx` | `<App>` — routing, auth, fetch interceptor |
+| 3 | `ui.jsx` | `Icons`, `Btn`, `Badge`, `Avatar`, `Modal`, `Rating`, `Sidebar`, `Topbar`, `StatusBadge`, `RoleSelect`, `Tooltip`, `useApiData` |
+| 4 | `screens/*.jsx` | one component per screen → `window.*Screen` |
+| 5 | `app.jsx` | `<App>` — routing, auth, invitation links, fetch interceptor, public entry point |
 
 ---
 
@@ -42,7 +49,9 @@ const t = window.useT();
 t('candidate.name')   // returns translated string for current language
 ```
 
-All user-visible strings must go through `useT()`. Add new keys to all three locales (EN / IT / DE) in `translations.jsx`.
+All user-visible strings must go through `useT()`. Add new keys to all three locales (EN / IT / DE) in `translations.jsx`. There is no interpolation helper: use placeholders such as `{n}` and `t('key').replace('{n}', value)`.
+
+Public pages (portal, video interview, standalone 404) run outside the app. They use the last app locale saved in `localStorage`, or the browser language if none is saved.
 
 **Skill i18n:** English name is the database key. `window.CANDID_DATA.SKILL_KEYS[englishName]` returns the i18n key used with `t()`.
 
@@ -79,6 +88,14 @@ window.refreshCounts()   // call from any screen after mutating data
 
 `window.CANDID_DATA.STATUS` is the stages array. It is overwritten from `GET /config/stages` at app startup. Use this array (not a hardcoded list) wherever stages appear.
 
+### Organisation preferences
+
+`window.CANDID_PREFS` (`date_format`, `currency`, `locations`) is loaded from `GET /config/preferences` after login and shared by the whole organisation. Read it with `window.getCurrency()` / `window.getLocations()`; change it with `window.savePreferences({ ...patch })`.
+
+### Checks
+
+`node tests/check.js` verifies that every script in `index.html` exists and that every translation key is defined in EN, IT and DE (run in CI).
+
 ---
 
 ## Screens
@@ -87,17 +104,25 @@ window.refreshCounts()   // call from any screen after mutating data
 |--------|------|-------|
 | Pipeline | `screens/pipeline.jsx` | Kanban drag-drop; listens to `candid:stages` |
 | Candidates | `screens/candidates.jsx` | Table with filters, AI score, eval avg |
-| Candidate detail | `screens/candidate.jsx` | Tabs: Overview · CV Analysis · Interviews · Evaluation · Activity |
+| Candidate detail | `screens/candidate.jsx` | Tabs: Overview · CV Analysis · Interviews · Video interview (invites + playback) · Evaluation · Activity · Emails |
 | Jobs (Positions) | `screens/jobs.jsx` | JD list + view modal |
 | Roles | `screens/roles.jsx` | Headcount bar + department groups |
 | Employees | `screens/employees.jsx` | People directory |
 | Interviews | `screens/interviews.jsx` | List + week calendar + schedule modal |
-| Settings | `screens/settings.jsx` | AI config · team · pipeline stages · danger zone |
-| Quick Add | `screens/quickadd.jsx` | Paste text → AI parse → candidate create |
-| Live Room | `screens/liveroom.jsx` | Real-time interview with Web Speech API transcription |
-| Pre-interview | `screens/preinterview.jsx` | AI-generated briefing before a scheduled interview |
+| Settings | `screens/settings.jsx` | AI providers · pipeline stages · email (SMTP) · branding · language · profile · locations · team · danger zone |
+| Quick Add | `screens/quickadd.jsx` | Paste text or upload a CV → AI parse → candidate create |
+| Live Room | `screens/liveroom.jsx` | Real-time interview with Web Speech API transcription (needs HTTPS) |
 | Inbox | `screens/inbox.jsx` | Notifications and activity feed |
-| Reports | `screens/reports.jsx` | Hiring analytics and pipeline reports |
+| Reports | `screens/reports.jsx` | Hiring funnel by pipeline stage, source mix, CSV export |
+| Not found | `screens/notfound.jsx` | 404. Shown inside the app shell when logged in, standalone for unknown public links |
+
+### Public (unauthenticated) pages
+
+| Hash | File | Notes |
+|------|------|-------|
+| `#portal/{slug}` | `screens/portal.jsx` | Careers portal with org branding (colours, logo, font from the Settings list) |
+| `#video/{token}` | `screens/videoportal.jsx` | Candidate-side async video interview |
+| `#accept-invite?token=…` | `app.jsx` | Invitation link. The token is kept through login and accepted automatically, through the setup wizard for new users or by switching into the org for existing ones |
 
 ---
 
@@ -105,7 +130,7 @@ window.refreshCounts()   // call from any screen after mutating data
 
 1. Create `screens/mything.jsx` — define component, assign `window.MyThingScreen = MyThingScreen`.
 2. Add `<script src="screens/mything.jsx?v=1" type="text/babel"></script>` to `index.html` after other screens.
-3. Add a nav entry in `app.jsx` Sidebar and a route case in the `App` render switch.
+3. Add the route to `VALID_ROUTES` and the render switch in `app.jsx`, and add a nav entry to `SIDE_NAV` in `ui.jsx` if it needs one.
 
 ---
 

@@ -14,7 +14,7 @@ const QuickAddField = ({ label, fieldKey, type = "text", parsed, onParsedChange 
   </div>
 );
 
-const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
+const QuickAdd = ({ open, onClose, onCreate }) => {
   const t = window.useT();
   const [text, setText] = useState("");
   const [cvName, setCvName] = useState("");
@@ -45,7 +45,7 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
       setText(data.text);
       await runParse(data.text);
     } catch (err) {
-      setError(`${t('quickadd.uploading')} ${err.message}`);
+      setError(t('quickadd.uploadError').replace('{error}', err.message));
       setStage("idle");
     }
   };
@@ -78,23 +78,10 @@ const QuickAdd = ({ open, onClose, onCreate, tweaks }) => {
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      if (tweaks.streaming) {
-        const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined);
-        let i = 0;
-        const tick = () => {
-          if (i >= entries.length) { setStage("parsed"); return; }
-          const [k, v] = entries[i++];
-          setParsed(p => ({ ...(p || {}), [k]: v }));
-          setTimeout(tick, 200);
-        };
-        setParsed({});
-        setTimeout(tick, 300);
-      } else {
-        setParsed(data);
-        setStage("parsed");
-      }
+      setParsed(data);
+      setStage("parsed");
     } catch (err) {
-      setError(`AI error: ${err.message}`);
+      setError(t('quickadd.aiError').replace('{error}', err.message));
       setStage("idle");
     }
   };

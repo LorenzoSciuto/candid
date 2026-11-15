@@ -31,14 +31,6 @@ const RATING_VISUAL = {
 };
 const RATING_VISUAL_DEFAULT =  { border: "var(--border)", bg: "transparent", badge: "var(--bg-sunken)", text: "var(--ink-muted)", dot: "var(--ink-muted)" };
 
-const getEmpLocations = () => {
-  try {
-    const stored = localStorage.getItem("candid_locations");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return ["Milano", "Remote", "Milano / Remote", "Roma", "Torino", "Bergamo", "Brescia", "Monza"];
-};
-
 const downloadText = (text, filename) => {
   const blob = new Blob([text], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -84,7 +76,7 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
             </div>
             {review.next_review_date && (
               <span style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>
-                Next: {review.next_review_date}
+                {t('employees.reviews.next').replace('{date}', review.next_review_date)}
               </span>
             )}
           </div>
@@ -99,13 +91,13 @@ const ReviewCard = ({ review, onEdit, onDelete }) => {
           <div className="col gap-8" style={{ borderTop: "1px solid var(--border-soft, rgba(0,0,0,0.06))", paddingTop: 10 }}>
             {review.manager_feedback && (
               <div>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 3 }}>Manager</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 3 }}>{t('employees.col.manager')}</span>
                 <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.65 }}>{review.manager_feedback}</p>
               </div>
             )}
             {review.self_evaluation && (
               <div>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 3 }}>Self</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 3 }}>{t('employees.reviews.self')}</span>
                 <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.65 }}>{review.self_evaluation}</p>
               </div>
             )}
@@ -170,7 +162,7 @@ const ReviewFormModal = ({ t, employeeId, review, onClose, onSaved }) => {
         <div className="row gap-12">
           <div style={{ flex: 1 }}>
             <label className="label">{t('employees.reviews.period')}</label>
-            <input className="input" value={period} onChange={e => setPeriod(e.target.value)} placeholder="e.g. Q1-2026" />
+            <input className="input" value={period} onChange={e => setPeriod(e.target.value)} placeholder={t('employees.reviews.periodPh')} />
           </div>
           <div style={{ flex: 1 }}>
             <label className="label">{t('employees.reviews.rating')}</label>
@@ -257,7 +249,7 @@ const EmployeeReviewsSection = ({ employeeId }) => {
           {RATING_OPTIONS.map(option => {
             const count = reviews.filter(r => r.rating === option).length;
             return count > 0 ? (
-              <div key={option} style={{ flex: count, background: RATING_VISUAL[option]?.border || "var(--border)", borderRadius: 2, transition: "flex 0.3s" }} title={`${count} × ${option}`} />
+              <div key={option} style={{ flex: count, background: RATING_VISUAL[option]?.border || "var(--border)", borderRadius: 2, transition: "flex 0.3s" }} title={`${count} × ${t(RATING_TRANSLATION_KEYS[option])}`} />
             ) : null;
           })}
           {reviews.filter(r => !r.rating).length > 0 && (
@@ -409,8 +401,8 @@ const RecruitingHistorySection = ({ candidateId }) => {
         onClick={() => setExpanded(e => !e)}>
         <div className="row gap-8" style={{ alignItems: "center" }}>
           <Icons.FileText size={14} style={{ color: "var(--ink-muted)" }} />
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Recruiting History</span>
-          <span style={{ fontSize: 11, color: "var(--ink-muted)", background: "var(--bg-sunken)", padding: "2px 7px", borderRadius: 4 }}>read-only</span>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{t('employees.history.title')}</span>
+          <span style={{ fontSize: 11, color: "var(--ink-muted)", background: "var(--bg-sunken)", padding: "2px 7px", borderRadius: 4 }}>{t('employees.history.readOnly')}</span>
         </div>
         <Icons.ChevronDown size={14} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
@@ -421,12 +413,12 @@ const RecruitingHistorySection = ({ candidateId }) => {
           {preAnalysis && (
             <div>
               <div className="row gap-12" style={{ marginBottom: 8 }}>
-                {candidate.score != null && <span style={{ fontWeight: 600 }}>Score: {candidate.score?.toFixed(1)} / 5</span>}
+                {candidate.score != null && <span style={{ fontWeight: 600 }}>{t('employees.history.score').replace('{score}', candidate.score?.toFixed(1))}</span>}
               </div>
               {preAnalysis.overview && <p style={{ margin: 0, fontSize: 13, color: "var(--ink-secondary)", lineHeight: 1.6 }}>{preAnalysis.overview}</p>}
               {preAnalysis.strengths?.length > 0 && (
                 <div style={{ marginTop: 10 }}>
-                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Strengths</span>
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>{t('candidate.cv.strengths')}</span>
                   <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, color: "var(--ink-secondary)" }}>
                     {preAnalysis.strengths.map((strength, index) => <li key={index}>{strength}</li>)}
                   </ul>
@@ -434,7 +426,7 @@ const RecruitingHistorySection = ({ candidateId }) => {
               )}
               {preAnalysis.weaknesses?.length > 0 && (
                 <div style={{ marginTop: 8 }}>
-                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Areas for development</span>
+                  <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>{t('employees.history.development')}</span>
                   <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, color: "var(--ink-secondary)" }}>
                     {preAnalysis.weaknesses.map((weakness, index) => <li key={index}>{weakness}</li>)}
                   </ul>
@@ -446,7 +438,7 @@ const RecruitingHistorySection = ({ candidateId }) => {
           {/* Status timeline */}
           {statusHistory.length > 0 && (
             <div>
-              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>Pipeline timeline</span>
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>{t('employees.history.timeline')}</span>
               <div className="col gap-6">
                 {statusHistory.map((entry, index) => (
                   <div key={index} className="row gap-10" style={{ alignItems: "center", fontSize: 12.5 }}>
@@ -464,12 +456,12 @@ const RecruitingHistorySection = ({ candidateId }) => {
           {/* Interviews */}
           {interviews.length > 0 && (
             <div>
-              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>Interviews ({interviews.length})</span>
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>{t('employees.history.interviews').replace('{n}', interviews.length)}</span>
               <div className="col gap-8">
                 {interviews.map(interview => (
                   <div key={interview.id} className="card" style={{ padding: "10px 14px", fontSize: 12.5 }}>
                     <div className="row" style={{ justifyContent: "space-between" }}>
-                      <span style={{ fontWeight: 500 }}>{interview.title || interview.type || "Interview"}</span>
+                      <span style={{ fontWeight: 500 }}>{interview.title || interview.type || t('interviews.interview')}</span>
                       <span className="text-muted">{(interview.date || "").slice(0, 10)}</span>
                     </div>
                     {interview.interviewer && <span className="text-muted" style={{ display: "block", marginTop: 2 }}>{interview.interviewer}</span>}
@@ -483,11 +475,11 @@ const RecruitingHistorySection = ({ candidateId }) => {
           {/* Final evaluation */}
           {evaluation && (
             <div>
-              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>Final evaluation</span>
+              <span className="text-11 text-muted" style={{ textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>{t('employees.history.finalEvaluation')}</span>
               <div className="card" style={{ padding: "12px 16px", fontSize: 12.5 }}>
                 {evaluation.final_recommendation && (
                   <div className="row gap-8" style={{ marginBottom: 8, alignItems: "center" }}>
-                    <span className="text-muted">Recommendation:</span>
+                    <span className="text-muted">{t('employees.history.recommendation')}</span>
                     <span style={{ fontWeight: 600 }}>{evaluation.final_recommendation}</span>
                   </div>
                 )}
@@ -646,7 +638,7 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
   const [salary, setSalary] = useState("");
   const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
-  const locations = useMemo(() => getEmpLocations(), []);
+  const locations = useMemo(() => window.getLocations(), []);
   const currencyCode = window.getCurrency ? window.getCurrency() : "EUR";
 
   const save = async () => {
@@ -665,18 +657,18 @@ const EmployeeModal = ({ t, onClose, onSaved }) => {
         <div><label className="label">{t('employees.form.first')}</label><input className="input" value={first} onChange={e => setFirst(e.target.value)} /></div>
         <div><label className="label">{t('employees.form.last')}</label><input className="input" value={last} onChange={e => setLast(e.target.value)} /></div>
         <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.email')}</label><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
-        <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.role')}</label><RoleSelect value={roleId} onChange={setRoleId} placeholder="Select role…" /></div>
-        <div><label className="label">{t('employees.form.dept')}</label><input className="input" value={dept} onChange={e => setDept(e.target.value)} placeholder="Auto-filled from role" /></div>
+        <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.role')}</label><RoleSelect value={roleId} onChange={setRoleId} /></div>
+        <div><label className="label">{t('employees.form.dept')}</label><input className="input" value={dept} onChange={e => setDept(e.target.value)} placeholder={t('employees.form.deptPh')} /></div>
         <div>
           <label className="label">{t('employees.form.location')}</label>
           <select className="select" value={location} onChange={e => setLocation(e.target.value)}>
-            <option value="">— Select —</option>
+            <option value="">{t('employees.form.selectPh')}</option>
             {locations.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
         <div>
           <label className="label">{t('employees.form.salary')} <span className="text-11 text-muted">({currencyCode})</span></label>
-          <input className="input" type="number" value={salary} onChange={e => setSalary(e.target.value)} placeholder="es. 35000" />
+          <input className="input" type="number" value={salary} onChange={e => setSalary(e.target.value)} placeholder={t('employees.form.salaryPh')} />
         </div>
       </div>
     </Modal>
@@ -694,7 +686,7 @@ const EmployeeEditModal = ({ t, employee, employees = [], onClose, onSaved }) =>
   const [manager, setManager] = useState(employee.manager || "");
   const [hireDate, setHireDate] = useState(employee.hire_date || "");
   const [saving, setSaving] = useState(false);
-  const locations = useMemo(() => getEmpLocations(), []);
+  const locations = useMemo(() => window.getLocations(), []);
   const currencyCode = window.getCurrency ? window.getCurrency() : "EUR";
 
   const save = async () => {
@@ -722,12 +714,12 @@ const EmployeeEditModal = ({ t, employee, employees = [], onClose, onSaved }) =>
         <div><label className="label">{t('employees.form.first')}</label><input className="input" value={first} onChange={e => setFirst(e.target.value)} /></div>
         <div><label className="label">{t('employees.form.last')}</label><input className="input" value={last} onChange={e => setLast(e.target.value)} /></div>
         <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.email')}</label><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
-        <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.role')}</label><RoleSelect value={roleId} onChange={setRoleId} placeholder="Select role…" /></div>
+        <div style={{ gridColumn: "1 / -1" }}><label className="label">{t('employees.form.role')}</label><RoleSelect value={roleId} onChange={setRoleId} /></div>
         <div><label className="label">{t('employees.form.dept')}</label><input className="input" value={dept} onChange={e => setDept(e.target.value)} /></div>
         <div>
           <label className="label">{t('employees.form.location')}</label>
           <select className="select" value={location} onChange={e => setLocation(e.target.value)}>
-            <option value="">— Select —</option>
+            <option value="">{t('employees.form.selectPh')}</option>
             {locations.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
@@ -842,7 +834,7 @@ const EmployeesScreen = ({ initialRoleFilter }) => {
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
         <div>
           <h1 className="page-h1">{t('employees.title')}</h1>
-          <div className="page-sub">{filteredRows.length} of {employees.length} employees</div>
+          <div className="page-sub">{t('employees.subtitle').replace('{n}', filteredRows.length).replace('{total}', employees.length)}</div>
         </div>
         <div className="row gap-8">
           <Btn icon={showSalary ? <Icons.EyeOff size={14} /> : <Icons.Eye size={14} />} onClick={() => setShowSalary(s => !s)}>

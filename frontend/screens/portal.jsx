@@ -30,6 +30,7 @@ const onAccent = (hex) => luminance(hex || "#111") > 0.45 ? "#111827" : "#ffffff
 // ── Apply Modal ───────────────────────────────────────────────────────────────
 
 const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
+  const t = window.useT();
   const [cvFile,     setCvFile]    = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]    = useState("");
@@ -48,10 +49,10 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Submission failed");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || t('portal.submission_failed'));
       setSuccess(true);
       onApplied(job.id);
-    } catch (err) { setError(err.message || "Something went wrong. Please try again."); }
+    } catch (err) { setError(err.message || t('portal.generic_error')); }
     setSubmitting(false);
   };
 
@@ -69,7 +70,7 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
         <div style={{ background: accent, padding: "24px 28px", borderRadius: "16px 16px 0 0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", opacity: .7, color: fg, marginBottom: 4 }}>Apply for position</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", opacity: .7, color: fg, marginBottom: 4 }}>{t('portal.apply_for_position')}</div>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: fg, letterSpacing: "-.01em" }}>{job.title}</h2>
               {job.location && <div style={{ marginTop: 4, fontSize: 13, color: fg, opacity: .75 }}>📍 {job.location.split(",").map(l => l.trim()).filter(Boolean).join(" · ")}</div>}
             </div>
@@ -81,14 +82,14 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
           {success ? (
             <div style={{ textAlign: "center", padding: "32px 0 16px" }}>
               <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f0fdf4", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 16 }}>✓</div>
-              <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700 }}>Application submitted!</h3>
-              <p style={{ color: "#6b7280", margin: "0 0 24px", lineHeight: 1.6 }}>We'll be in touch. Thank you for your interest.</p>
-              <button onClick={onClose} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
+              <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700 }}>{t('portal.application_submitted')}</h3>
+              <p style={{ color: "#6b7280", margin: "0 0 24px", lineHeight: 1.6 }}>{t('portal.application_thanks')}</p>
+              <button onClick={onClose} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{t('portal.done')}</button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#374151" }}>Upload your CV</label>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#374151" }}>{t('portal.upload_cv')}</label>
                 <label
                   onDragOver={e => e.preventDefault()}
                   onDrop={handleFileDrop}
@@ -104,13 +105,13 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
                     <>
                       <span style={{ fontSize: 28 }}>📄</span>
                       <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{cvFile.name}</span>
-                      <span style={{ fontSize: 12, color: "#6b7280" }}>{(cvFile.size / 1024).toFixed(0)} KB — click to replace</span>
+                      <span style={{ fontSize: 12, color: "#6b7280" }}>{t('portal.file_size_replace').replace('{size}', (cvFile.size / 1024).toFixed(0))}</span>
                     </>
                   ) : (
                     <>
                       <span style={{ fontSize: 32 }}>📤</span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>Drop your CV here or click to browse</span>
-                      <span style={{ fontSize: 12, color: "#9ca3af" }}>PDF, Word (.docx), or plain text — max 5 MB</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>{t('portal.drop_cv')}</span>
+                      <span style={{ fontSize: 12, color: "#9ca3af" }}>{t('portal.file_types_hint')}</span>
                     </>
                   )}
                 </label>
@@ -119,11 +120,11 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
               {error && <div style={{ color: "#dc2626", fontSize: 13, padding: "10px 14px", background: "#fef2f2", borderRadius: 8 }}>{error}</div>}
 
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
-                {submitting && <span style={{ fontSize: 13, color: "#6b7280" }}>Analysing CV…</span>}
-                <button onClick={onClose} style={{ padding: "11px 20px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                {submitting && <span style={{ fontSize: 13, color: "#6b7280" }}>{t('portal.analysing_cv')}</span>}
+                <button onClick={onClose} style={{ padding: "11px 20px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{t('common.cancel')}</button>
                 <button onClick={submit} disabled={!cvFile || submitting}
                   style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: accent, color: fg, fontSize: 14, fontWeight: 600, cursor: cvFile && !submitting ? "pointer" : "not-allowed", opacity: cvFile && !submitting ? 1 : .55, fontFamily: "inherit", transition: "opacity .15s" }}>
-                  {submitting ? "Submitting…" : "Apply →"}
+                  {submitting ? t('portal.submitting') : t('portal.apply')}
                 </button>
               </div>
             </div>
@@ -136,16 +137,17 @@ const ApplyModal = ({ job, orgSlug, accentColor, onClose, onApplied }) => {
 
 // ── Job Card ──────────────────────────────────────────────────────────────────
 
-const fmtPortalSalary = (min, max, currency) => {
+const fmtPortalSalary = (min, max, currency, t) => {
   const sym = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF", SEK: "kr", NOK: "kr", DKK: "kr", CAD: "CA$", AUD: "A$", JPY: "¥" }[currency] || currency || "";
   const fmt = (n) => n >= 1000 ? `${sym}${(n / 1000).toFixed(0)}k` : `${sym}${n}`;
   if (min && max) return `${fmt(min)} – ${fmt(max)}`;
-  if (min) return `from ${fmt(min)}`;
-  if (max) return `up to ${fmt(max)}`;
+  if (min) return t('portal.salary_from').replace('{amount}', fmt(min));
+  if (max) return t('portal.salary_up_to').replace('{amount}', fmt(max));
   return null;
 };
 
 const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) => {
+  const t = window.useT();
   const [hovered, setHovered] = useState(false);
   const accent = accentColor || "#111827";
   const fg     = onAccent(accent);
@@ -155,7 +157,7 @@ const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) 
     : null;
 
   const locations = job.location ? job.location.split(",").map(l => l.trim()).filter(Boolean) : [];
-  const salaryLabel = fmtPortalSalary(job.salary_min, job.salary_max, job.salary_currency);
+  const salaryLabel = fmtPortalSalary(job.salary_min, job.salary_max, job.salary_currency, t);
 
   return (
     <div
@@ -179,14 +181,14 @@ const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) 
       {/* Applied badge */}
       {applied && (
         <div style={{ position: "absolute", top: 16, right: 52, background: "#f0fdf4", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, letterSpacing: ".04em", textTransform: "uppercase" }}>
-          Applied ✓
+          {t('portal.applied_badge')}
         </div>
       )}
 
       {/* Star button */}
       <button
         onClick={() => onToggleStar(job.id)}
-        title={starred ? "Remove from favourites" : "Save as favourite"}
+        title={starred ? t('portal.remove_favourite') : t('portal.save_favourite')}
         style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 4, color: starred ? "#f59e0b" : "#d1d5db", transition: "color .15s, transform .1s", transform: hovered || starred ? "scale(1.1)" : "scale(1)" }}
       >
         {starred ? "★" : "☆"}
@@ -215,13 +217,13 @@ const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) 
       {/* Footer */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: "#16a34a", background: "#f0fdf4", padding: "3px 10px", borderRadius: 20 }}>
-          {job.openings} {job.openings === 1 ? "opening" : "openings"}
+          {t(job.openings === 1 ? 'portal.opening_one' : 'portal.opening_many').replace('{n}', job.openings)}
         </span>
         <button
           onClick={() => onApply(job)}
           style={{ padding: "9px 22px", borderRadius: 10, border: "none", background: applied ? "#f3f4f6" : accent, color: applied ? "#6b7280" : fg, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "background .15s, transform .1s", transform: hovered && !applied ? "scale(1.02)" : "scale(1)" }}
         >
-          {applied ? "Apply again" : "Apply →"}
+          {applied ? t('portal.apply_again') : t('portal.apply')}
         </button>
       </div>
     </div>
@@ -231,6 +233,7 @@ const JobCard = ({ job, accentColor, applied, starred, onApply, onToggleStar }) 
 // ── Portal Screen ─────────────────────────────────────────────────────────────
 
 window.PortalScreen = ({ slug }) => {
+  const t = window.useT();
   const [portalData,   setPortalData]  = useState(null);
   const [loading,      setLoading]     = useState(true);
   const [loadError,    setLoadError]   = useState("");
@@ -244,7 +247,7 @@ window.PortalScreen = ({ slug }) => {
   useEffect(() => {
     if (!slug) return;
     fetch(`${window.API_BASE}/public/organizations/${slug}/jobs`)
-      .then(r => { if (!r.ok) throw new Error("Portal not found"); return r.json(); })
+      .then(r => { if (!r.ok) throw new Error(t('portal.not_found')); return r.json(); })
       .then(d => { setPortalData(d); setLoading(false); })
       .catch(err => { setLoadError(err.message); setLoading(false); });
   }, [slug]);
@@ -290,13 +293,18 @@ window.PortalScreen = ({ slug }) => {
     });
   }, [portalData, q, locFilter, showStarred, starred]);
 
-  const containerStyle = { minHeight: "100vh", background: bgColor, fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif" };
+  // Only fonts offered in Settings → Branding are applied; anything else falls back to the system stack.
+  const brandFont = (window.PORTAL_FONTS || []).find(f => f.value === portalData?.branding?.font_family);
+  const containerStyle = { minHeight: "100vh", background: bgColor, fontFamily: `${brandFont ? brandFont.value + ", " : ""}ui-sans-serif, system-ui, -apple-system, sans-serif` };
+  const fontLink = brandFont && brandFont.label !== "Georgia" && (
+    <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?family=${brandFont.label.replace(/ /g, "+")}:wght@400;700&display=swap`} />
+  );
 
   if (loading) return (
     <div style={containerStyle}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 12 }}>
         <div style={{ width: 36, height: 36, border: `3px solid ${accent}`, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <span style={{ color: "#6b7280", fontSize: 14 }}>Loading…</span>
+        <span style={{ color: "#6b7280", fontSize: 14 }}>{t('common.loading')}</span>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
@@ -306,8 +314,8 @@ window.PortalScreen = ({ slug }) => {
     <div style={containerStyle}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 8, padding: 24 }}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>🔍</div>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Portal not found</h2>
-        <p style={{ color: "#6b7280", margin: 0 }}>{loadError || "This organization's job portal is unavailable."}</p>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{t('portal.not_found')}</h2>
+        <p style={{ color: "#6b7280", margin: 0 }}>{loadError || t('portal.unavailable')}</p>
       </div>
     </div>
   );
@@ -316,6 +324,7 @@ window.PortalScreen = ({ slug }) => {
 
   return (
     <div style={containerStyle}>
+      {fontLink}
 
       {/* ── Hero header ───────────────────────────────────────── */}
       <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${mix(accent, -40)} 100%)`, padding: "60px 24px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
@@ -323,15 +332,15 @@ window.PortalScreen = ({ slug }) => {
         <div style={{ position: "absolute", top: -60, right: -60, width: 220, height: 220, borderRadius: "50%", background: "rgba(255,255,255,.08)", pointerEvents: "none" }} />
         <div style={{ position: "absolute", bottom: -40, left: -40, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,.06)", pointerEvents: "none" }} />
 
-        {logo && <img src={logo} alt="Logo" style={{ maxHeight: 52, maxWidth: 180, marginBottom: 20, display: "block", margin: "0 auto 20px", objectFit: "contain" }} />}
+        {logo && <img src={logo} alt={t('portal.logo_alt')} style={{ maxHeight: 52, maxWidth: 180, marginBottom: 20, display: "block", margin: "0 auto 20px", objectFit: "contain" }} />}
 
         <h1 style={{ margin: "0 0 10px", fontSize: 36, fontWeight: 800, color: fg, letterSpacing: "-.03em", lineHeight: 1.1 }}>
           {portalData.org_name}
         </h1>
         <p style={{ margin: "0 0 28px", color: fg, opacity: .8, fontSize: 16, fontWeight: 400 }}>
           {filteredJobs.length === portalData.jobs.length
-            ? `${portalData.jobs.length} open position${portalData.jobs.length !== 1 ? "s" : ""}`
-            : `${filteredJobs.length} of ${portalData.jobs.length} positions`}
+            ? t(portalData.jobs.length === 1 ? 'portal.open_positions_one' : 'portal.open_positions_many').replace('{n}', portalData.jobs.length)
+            : t('portal.positions_filtered').replace('{n}', filteredJobs.length).replace('{total}', portalData.jobs.length)}
         </p>
 
         {/* Search bar */}
@@ -340,7 +349,7 @@ window.PortalScreen = ({ slug }) => {
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
-            placeholder="Search positions…"
+            placeholder={t('portal.search_placeholder')}
             style={{ width: "100%", padding: "14px 16px 14px 44px", borderRadius: 12, border: "none", fontSize: 15, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "rgba(255,255,255,.92)", boxShadow: "0 4px 20px rgba(0,0,0,.12)" }}
           />
         </div>
@@ -354,7 +363,7 @@ window.PortalScreen = ({ slug }) => {
             onChange={e => setLocFilter(e.target.value)}
             style={{ padding: "8px 14px", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 13.5, outline: "none", fontFamily: "inherit", background: "#fff", cursor: "pointer" }}
           >
-            <option value="all">All locations</option>
+            <option value="all">{t('portal.all_locations')}</option>
             {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         )}
@@ -363,18 +372,18 @@ window.PortalScreen = ({ slug }) => {
           onClick={() => setShowStarred(v => !v)}
           style={{ padding: "8px 16px", borderRadius: 8, border: `1.5px solid ${showStarred ? "#f59e0b" : "#e5e7eb"}`, background: showStarred ? "#fffbeb" : "#fff", fontSize: 13.5, cursor: "pointer", fontFamily: "inherit", color: showStarred ? "#92400e" : "#374151", fontWeight: showStarred ? 600 : 400, transition: "all .15s", display: "flex", alignItems: "center", gap: 6 }}
         >
-          ★ Favourites{starredCount > 0 ? ` (${starredCount})` : ""}
+          ★ {t('portal.favourites')}{starredCount > 0 ? ` (${starredCount})` : ""}
         </button>
 
         {applied.size > 0 && (
           <span style={{ fontSize: 13, color: "#16a34a", background: "#f0fdf4", padding: "6px 14px", borderRadius: 8, fontWeight: 500 }}>
-            ✓ Applied to {applied.size} position{applied.size !== 1 ? "s" : ""}
+            ✓ {t(applied.size === 1 ? 'portal.applied_count_one' : 'portal.applied_count_many').replace('{n}', applied.size)}
           </span>
         )}
 
         {(q || locFilter !== "all" || showStarred) && (
           <button onClick={() => { setQ(""); setLocFilter("all"); setShowStarred(false); }} style={{ padding: "8px 14px", borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#6b7280" }}>
-            Clear filters
+            {t('portal.clear_filters')}
           </button>
         )}
       </div>
@@ -384,7 +393,7 @@ window.PortalScreen = ({ slug }) => {
         {filteredJobs.length === 0 ? (
           <div style={{ textAlign: "center", padding: "80px 0", color: "#6b7280" }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>📭</div>
-            <p style={{ fontSize: 16, margin: 0 }}>No positions match your filters.</p>
+            <p style={{ fontSize: 16, margin: 0 }}>{t('portal.no_matches')}</p>
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>

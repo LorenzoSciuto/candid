@@ -34,3 +34,21 @@ const SOURCES = [
 window.CANDID_DATA = {
   STATUS, HUMAN_SKILLS, TECH_SKILLS, SKILL_KEYS, SOURCES, initials,
 };
+
+// Organisation preferences — overwritten from GET /config/preferences after login.
+window.CANDID_PREFS = { date_format: "dd/MM/yyyy", currency: "EUR", locations: ["Remote"] };
+window.getCurrency = () => window.CANDID_PREFS.currency;
+window.getLocations = () => window.CANDID_PREFS.locations;
+
+// Save a partial preferences update for the whole organisation and keep the local copy in sync.
+window.savePreferences = async (patch) => {
+  const res = await fetch(`${window.API_BASE}/config/preferences`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`Saving preferences failed (${res.status})`);
+  window.CANDID_PREFS = await res.json();
+  window.CANDID_DATE_FORMAT = window.CANDID_PREFS.date_format;
+  return window.CANDID_PREFS;
+};

@@ -1,9 +1,7 @@
-import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from tests.conftest import TEST_ORG_ID, _TEST_USER
-
+from tests.conftest import _TEST_USER, TEST_ORG_ID
 
 _NOTIFICATION_DEFAULTS = dict(
     org_id=TEST_ORG_ID,
@@ -17,7 +15,7 @@ _NOTIFICATION_DEFAULTS = dict(
 
 
 def _seed_notification(db, **kwargs) -> dict:
-    from candid.models import Notification
+    from candid.commons.models import Notification
 
     payload = {**_NOTIFICATION_DEFAULTS, **kwargs}
     notification = Notification(**payload)

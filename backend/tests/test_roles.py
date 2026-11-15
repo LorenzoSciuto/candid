@@ -1,6 +1,5 @@
 from fastapi.testclient import TestClient
 
-
 ROLE_PAYLOAD = {
     "name": "Senior Engineer",
     "department": "Engineering",

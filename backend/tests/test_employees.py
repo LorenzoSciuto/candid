@@ -1,6 +1,5 @@
 from fastapi.testclient import TestClient
 
-
 EMP_PAYLOAD = {
     "first_name": "Aisha",
     "last_name": "Okonkwo",

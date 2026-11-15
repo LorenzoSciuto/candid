@@ -6,7 +6,7 @@ from sqlmodel import Field, SQLModel
 
 
 def _uid(prefix: str) -> str:
-    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+    return f"{prefix}-{uuid.uuid4().hex}"   # full 128-bit id: never guessable
 
 
 # ── Users & Organizations ─────────────────────────────────────────────────────
@@ -64,6 +64,8 @@ class OrgConfig(SQLModel, table=True):
     smtp_password_encrypted: Optional[str] = None
     smtp_from: Optional[str] = None
     date_format: str = Field(default="dd/MM/yyyy")
+    currency: str = Field(default="EUR")
+    locations_json: Optional[str] = None       # JSON list of office locations offered in forms
 
 
 class OrgApiKey(SQLModel, table=True):
@@ -104,8 +106,6 @@ class Candidate(SQLModel, table=True):
     # JSON: [{type, at, note}] — append-only audit log
     activity_log: Optional[str] = None
     cv_file: Optional[bytes] = None
-    otp_hash: Optional[str] = None          # SHA-256 hex digest of the 6-digit OTP
-    otp_expires_at: Optional[str] = None    # ISO datetime string (UTC)
     job_description_id: Optional[str] = Field(default=None, foreign_key="job_description.id", index=True)
 
 
@@ -213,7 +213,7 @@ class EmailLog(SQLModel, table=True):
     from_email: Optional[str] = None
     subject: str
     body: str = ""
-    email_type: str = "general"              # "rejection" | "invitation" | "otp" | "general" | "manual"
+    email_type: str = "general"              # "rejection" | "invitation" | "general" | "manual"
     candidate_id: Optional[str] = Field(None, index=True)
     sent_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

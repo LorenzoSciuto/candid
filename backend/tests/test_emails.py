@@ -1,11 +1,11 @@
 import unittest.mock as mock
-from sqlmodel import Session
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
-from candid.models import Candidate, EmailLog
-from candid.services.email_service import EmailService, EmailServiceFactory
+from candid.commons.models import Candidate, EmailLog
+from candid.services.email_service import EmailService
 from tests.conftest import TEST_ORG_ID
 
 
@@ -76,40 +76,6 @@ class TestEmailsListEndpoint:
         assert data["received_count"] == 1
 
 
-class TestLogReceivedEmailEndpoint:
-    def test_log_received_should_create_email_log_when_valid_payload(
-        self, client: TestClient
-    ) -> None:
-        response = client.post(
-            "/emails/received",
-            json={"from_email": "cand@example.com", "subject": "RE: Application", "body": "Thanks!"},
-        )
-        assert response.status_code == 201
-        data = response.json()
-        assert data["direction"] == "received"
-        assert data["from_email"] == "cand@example.com"
-        assert data["email_type"] == "manual"
-
-    def test_log_received_should_associate_candidate_when_candidate_id_valid(
-        self, client: TestClient, candidate: Candidate
-    ) -> None:
-        response = client.post(
-            "/emails/received",
-            json={"from_email": candidate.email, "subject": "Query", "candidate_id": candidate.id},
-        )
-        assert response.status_code == 201
-        assert response.json()["candidate_id"] == candidate.id
-
-    def test_log_received_should_return_404_when_candidate_id_not_found(
-        self, client: TestClient
-    ) -> None:
-        response = client.post(
-            "/emails/received",
-            json={"from_email": "x@y.com", "subject": "Hi", "candidate_id": "c-nonexistent"},
-        )
-        assert response.status_code == 404
-
-
 class TestLoggingEmailService:
     def _make_logging_svc(self, session, candidate_id=None):
         email_svc = EmailService("smtp.example.com", 587, "user", "pass", "from@org.com", "http://localhost")
@@ -150,13 +116,3 @@ class TestLoggingEmailService:
         assert len(logs) == 1
         assert logs[0].email_type == "invitation"
 
-    def test_send_otp_email_should_log_otp_type(self, db) -> None:
-        with Session(db._engine) as session:
-            logging_svc = self._make_logging_svc(session)
-            with mock.patch.object(EmailService, "send_otp_email", return_value=None):
-                logging_svc.send_otp_email("cand@example.com", "123456", "Engineer")
-
-        with Session(db._engine) as session:
-            logs = session.exec(__import__("sqlmodel").select(EmailLog).where(EmailLog.org_id == TEST_ORG_ID)).all()
-        assert len(logs) == 1
-        assert logs[0].email_type == "otp"

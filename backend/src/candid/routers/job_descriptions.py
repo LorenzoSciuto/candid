@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import JobDescription
-from candid.schemas import ImproveJDRequest, JobDescriptionCreate, JobDescriptionUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.errors import ai_provider_error
+from candid.commons.models import JobDescription, Role
+from candid.commons.schemas import ImproveJDRequest, JobDescriptionCreate, JobDescriptionUpdate
+from candid.commons.tenancy import get_in_org
 from candid.services.ai_engine import AIEngineFactory
 
 
@@ -39,6 +41,7 @@ class JobDescriptionsRouter:
             session: Session = Depends(db.get_session),
             user: UserCtx = Depends(require_org),
         ):
+            get_in_org(session, Role, body.role_id, user.org_id)
             jd = JobDescription(org_id=user.org_id, **body.model_dump())
             session.add(jd)
             session.commit()
@@ -80,7 +83,7 @@ class JobDescriptionsRouter:
                 engine = self._ai_factory.from_session(session, user.org_id)
                 return {"improved_text": engine.improve_jd(body.text, body.role_name)}
             except Exception as exc:
-                raise HTTPException(500, str(exc)) from exc
+                raise ai_provider_error(exc) from exc
 
     @staticmethod
     def _fetch(session, org_id, jd_id) -> JobDescription:

@@ -1,23 +1,15 @@
 import logging
-from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Candidate, EmailLog
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.models import EmailLog
 
 logger = logging.getLogger(__name__)
 
-
-class LogReceivedEmailRequest(BaseModel):
-    from_email: str
-    subject: str
-    body: str = ""
-    candidate_id: Optional[str] = None
 
 
 class EmailsRouter:
@@ -37,14 +29,6 @@ class EmailsRouter:
             user: UserCtx = Depends(require_org),
         ):
             return self._list(session, user.org_id, direction, candidate_id)
-
-        @self.router.post("/received", status_code=201)
-        def log_received(
-            body: LogReceivedEmailRequest,
-            session: Session = Depends(database.get_session),
-            user: UserCtx = Depends(require_org),
-        ):
-            return self._log_received(session, user.org_id, body)
 
     # ── Implementations ────────────────────────────────────────────────────────
 
@@ -67,27 +51,3 @@ class EmailsRouter:
             "sent_count": sum(1 for email in emails if email.direction == "sent"),
             "received_count": sum(1 for email in emails if email.direction == "received"),
         }
-
-    def _log_received(
-        self,
-        session: Session,
-        org_id: str,
-        body: LogReceivedEmailRequest,
-    ) -> dict:
-        if body.candidate_id:
-            candidate = session.get(Candidate, body.candidate_id)
-            if not candidate or candidate.org_id != org_id:
-                raise HTTPException(404, "Candidate not found")
-        log_entry = EmailLog(
-            org_id=org_id,
-            direction="received",
-            from_email=body.from_email,
-            subject=body.subject,
-            body=body.body,
-            email_type="manual",
-            candidate_id=body.candidate_id,
-        )
-        session.add(log_entry)
-        session.commit()
-        session.refresh(log_entry)
-        return log_entry.model_dump()

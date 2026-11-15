@@ -1,141 +1,73 @@
 # Candid — Backend
 
-FastAPI application. Python ≥ 3.11, managed with [uv](https://github.com/astral-sh/uv).
+FastAPI + SQLModel + PostgreSQL, managed with [uv](https://docs.astral.sh/uv/). Python ≥ 3.11.
+The design is described in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
----
-
-## Running
+## Run
 
 ```bash
-cd backend
-uv run uvicorn candid.app:app --host 0.0.0.0 --port 8000 --reload
-# or use the root script:
-../scripts/server.sh
+cp .env.example .env            # fill FERNET_KEY, SESSION_SECRET, GOOGLE_CLIENT_ID
+../scripts/server.sh            # starts PostgreSQL (Docker) if needed, migrates, serves :8000 with reload
+# or, with your own database:
+uv run uvicorn candid.app:app --reload
 ```
 
-Interactive API docs: `http://localhost:8000/docs`
+Interactive API documentation: `http://localhost:8000/docs`.
+Migrations run automatically at startup (`alembic upgrade head`).
 
----
-
-## Configuration
-
-Copy `.env.example` → `.env` and set:
-
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `DATABASE_URL` | yes | PostgreSQL DSN |
-| `FERNET_KEY` | yes | Generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
-| `SESSION_SECRET` | yes | Any string ≥ 32 bytes |
-| `GOOGLE_CLIENT_ID` | yes | OAuth 2.0 client ID from Google Cloud Console |
-| `CORS_ORIGINS` | no | Comma-separated or `*` (default) |
-| `APP_URL` | no | Used in invitation email links |
-| `SMTP_*` | no | If absent, invite links are printed to the console |
-
-API keys for AI providers (OpenAI, Anthropic, etc.) are stored in the database (Fernet-encrypted) and can be configured via the Settings UI after login.
-
----
-
-## Architecture
+## Layout
 
 ```
 src/candid/
-├── app.py              Application — single DI root, mounts all routers
-├── config.py           Settings (pydantic-settings, reads .env)
-├── database.py         Database — SQLModel engine, session factory, startup migrations
-├── dependencies.py     require_user / require_org FastAPI dependencies
-├── models.py           SQLModel table definitions (all multi-tenant with org_id)
-├── schemas.py          Pydantic request/response models
-├── prompts.py          All LLM prompt templates
-├── services/
-│   ├── ai_engine.py    AIEngine abstraction + AIEngineFactory
-│   ├── auth_service.py JWT create/verify (HS256, 48 h TTL)
-│   ├── crypto.py       CryptoService — Fernet encrypt/decrypt/mask
-│   ├── cv_extractor.py PDF (PyMuPDF) + DOCX text extraction
-│   └── email_service.py SMTP for team invitations
-└── routers/            One class per resource (see below)
+├── app.py        composition root — the only module that wires services into routers
+├── commons/      config, database, models, schemas, prompts, auth dependencies, JWT,
+│                 tenancy (RLS), upload limits, rate limiter, pipeline helpers, error helpers
+├── services/     ai_engine · crypto · cv_extractor · email_service · notification_service ·
+│                 transcription_service · video_interview_service
+└── routers/      one class per resource (auth, organizations, candidates, analysis, interviews,
+                  evaluations, video_interviews, job_descriptions, roles, employees,
+                  performance_reviews, config, branding, notifications, emails, ai,
+                  quick_add, public_jobs)
 ```
 
-### DI pattern
+Rules (checked by `tests/test_architecture.py`): `commons` → `commons` only; `services` → `commons` only;
+routers → `commons` + `services`, never another router.
 
-`Application` in `app.py` is the composition root. Every router is a class:
+## Writing an endpoint
 
 ```python
-class CandidatesRouter:
-    def __init__(self, db: Database, crypto: CryptoService) -> None:
-        self._db = db
-        self.router = APIRouter(prefix="/candidates", tags=["candidates"])
-        self._register()
-
-    def _register(self) -> None:
-        @self.router.get("")
-        def list_candidates(...):
-            return self._list(...)
+@self.router.patch("/{candidate_id}")
+def update_candidate(candidate_id: str, body: CandidateUpdate,
+                     session: Session = Depends(db.get_session),
+                     user: UserCtx = Depends(require_org)):        # require_admin for settings
+    return self._update(session, user, candidate_id, body)
 ```
 
-`_register()` defines route closures; all logic lives in `_method()` implementations. No global state, no circular imports.
+- Filter every query by `user.org_id`, and resolve every client-supplied id (including body foreign keys)
+  with `get_in_org(session, Model, id, user.org_id)`.
+- Endpoints that must work across organisations (public pages, sign-in) are mounted with
+  `Depends(rls_bypass)` — and must then authorise access themselves.
+- New tenant tables need an `org_id` column and a `tenant_isolation` policy in their migration.
 
-### Auth dependencies
-
-| Dependency | Accepts | Used by |
-|------------|---------|---------|
-| `require_user` | Any valid JWT, incl. wizard tokens (no `org_id`) | `/auth/*` |
-| `require_org` | JWT with `org_id` only | All data endpoints |
-
-New users receive a "wizard token" (no `org_id`) and see the org setup wizard. After creating or joining an org, a full token is issued.
-
----
-
-## Database migrations
-
-Managed with [Alembic](https://alembic.sqlalchemy.org/). Migration files live in `alembic/versions/`. The app calls `alembic upgrade head` automatically at startup (`Database.migrate()`).
-
-**To add a new migration after changing `models.py`:**
+## Tests & checks
 
 ```bash
-cd backend
-uv run alembic revision --autogenerate -m "describe_the_change"
-# review the generated file in alembic/versions/
+uv run pytest                                  # SQLite + dependency overrides, no services needed
+uv run pytest tests/test_video_interviews.py -k Isolation
+uv run pytest --cov=candid
+uv run --with ruff ruff check src tests alembic
+
+# Row-Level Security against a real PostgreSQL (CI does this on every push)
+CANDID_TEST_DATABASE_URL=postgresql://candid:test@127.0.0.1:55432/candid uv run pytest tests/test_rls_postgres.py
+```
+
+## Migrations
+
+```bash
+uv run alembic revision --autogenerate -m "describe_change"   # review the generated file
 uv run alembic upgrade head
+uv run alembic check                                          # fails if models and migrations differ
+uv run alembic downgrade -1
 ```
 
-**Other useful commands:**
-
-```bash
-uv run alembic current          # current DB revision
-uv run alembic history          # migration history
-uv run alembic downgrade -1     # roll back one step
-```
-
-`DATABASE_URL` is read from the `DATABASE_URL` env var (falls back to `alembic.ini`). Tests use in-memory SQLite with `SQLModel.metadata.create_all()` — Alembic is not involved in tests.
-
----
-
-## Tests
-
-```bash
-cd backend
-uv run pytest                              # all tests
-uv run pytest tests/test_candidates.py    # single file
-uv run pytest -k "TestCreate"             # filter by class/name
-```
-
-Tests use in-memory SQLite and `app.dependency_overrides[require_org]` — no Postgres or real auth needed. Each test gets a fresh database via the `client` fixture in `conftest.py`.
-
----
-
-## Routers
-
-| Router | Prefix | Key operations |
-|--------|--------|---------------|
-| `auth.py` | `/auth` | Google sign-in, org create, invite accept, org switch |
-| `organizations.py` | `/organizations` | CRUD, member management, invitations, delete |
-| `candidates.py` | `/candidates` | CRUD, CV download, stats |
-| `analysis.py` | — | `POST /upload-cv`, `POST /analyze` |
-| `interviews.py` | `/interviews` | CRUD, `/process` (LLM clean + summary), `/summarize` |
-| `evaluations.py` | `/evaluations` | Upsert + get (one per candidate) |
-| `roles.py` | `/roles` | CRUD, AI description improve |
-| `job_descriptions.py` | `/job-descriptions` | CRUD, AI improve |
-| `employees.py` | `/employees` | CRUD |
-| `config.py` | `/config` | AI provider config, encrypted API keys, pipeline stages |
-| `quick_add.py` | `/quick-add` | AI-extract candidate fields from free text |
-| `ai.py` | `/ai` | Email rewrite, send email |
+`DATABASE_URL` overrides the URL in `alembic.ini`.

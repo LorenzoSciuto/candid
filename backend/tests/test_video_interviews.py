@@ -2,7 +2,7 @@ import io
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import VideoInterview, VideoResponse
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.models import Candidate, VideoInterview, VideoResponse
 from candid.routers.video_interviews import PublicVideoRouter, VideoInterviewsRouter
 from candid.services.video_interview_service import VideoInterviewService
 
@@ -23,6 +23,7 @@ _TEST_USER = UserCtx(
     email="test@candid.test",
     name="Test User",
     org_id=TEST_ORG_ID,
+    role="owner",
 )
 
 _QUESTIONS = ["Tell me about yourself.", "Describe a challenge you overcame."]
@@ -47,7 +48,12 @@ def video_service() -> VideoInterviewService:
 
 
 @pytest.fixture(scope="module")
-def authenticated_client(video_db: Database, video_service: VideoInterviewService) -> TestClient:
+def upload_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("uploads")
+
+
+@pytest.fixture(scope="module")
+def authenticated_client(video_db: Database, video_service: VideoInterviewService, upload_dir: Path) -> TestClient:
     from contextlib import asynccontextmanager
 
     @asynccontextmanager
@@ -57,12 +63,12 @@ def authenticated_client(video_db: Database, video_service: VideoInterviewServic
     application = FastAPI(lifespan=lifespan)
     application.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     application.dependency_overrides[require_org] = lambda: _TEST_USER
-    application.include_router(VideoInterviewsRouter(video_db, video_service).router)
+    application.include_router(VideoInterviewsRouter(video_db, video_service, upload_dir).router)
     return TestClient(application)
 
 
 @pytest.fixture(scope="module")
-def public_client(video_db: Database, video_service: VideoInterviewService) -> TestClient:
+def public_client(video_db: Database, video_service: VideoInterviewService, upload_dir: Path) -> TestClient:
     from contextlib import asynccontextmanager
 
     @asynccontextmanager
@@ -71,7 +77,7 @@ def public_client(video_db: Database, video_service: VideoInterviewService) -> T
 
     application = FastAPI(lifespan=lifespan)
     application.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-    application.include_router(PublicVideoRouter(video_db, video_service).router)
+    application.include_router(PublicVideoRouter(video_db, video_service, upload_dir).router)
     return TestClient(application)
 
 
@@ -82,6 +88,10 @@ def clean_video_tables(video_db: Database) -> None:
             session.delete(row)
         for row in session.exec(select(VideoInterview)).all():
             session.delete(row)
+        for row in session.exec(select(Candidate)).all():
+            session.delete(row)
+        session.add(Candidate(id="cand-001", org_id=TEST_ORG_ID, first_name="Ada", last_name="Lovelace"))
+        session.add(Candidate(id="cand-other-org", org_id="org-other", first_name="Eve", last_name="Other"))
         session.commit()
 
 
@@ -102,7 +112,6 @@ def _create_interview_via_db(
             session.add(interview)
             session.commit()
             session.refresh(interview)
-        token = interview.invite_token
         interview_id = interview.id
     with Session(video_db._engine) as session:
         result = session.exec(
@@ -158,7 +167,8 @@ class TestVideoInterviewService:
         stored = _create_interview_via_db(video_db, video_service)
         with Session(video_db._engine) as session:
             response = video_service.get_or_create_response(session, stored.id, 0)
-            completed = video_service.complete_response(session, response.id, total_chunks=3)
+            interview = video_service.get_by_token(session, stored.invite_token)
+            completed = video_service.complete_response(session, interview, response.id, total_chunks=3)
         assert completed.status == "complete"
         assert completed.total_chunks == 3
         assert completed.completed_at is not None
@@ -186,7 +196,8 @@ class TestPublicGetInterview:
         stored = _create_interview_via_db(video_db, video_service)
         response = public_client.get(f"/public/video/{stored.invite_token}")
         assert response.status_code == 200
-        assert response.json()["id"] == stored.id
+        assert response.json()["questions"] == stored.questions
+        assert "org_id" not in response.json()
 
     def test_publicGetInterview_shouldReturn404_whenExpired(
         self,
@@ -289,7 +300,7 @@ class TestCreateVideoInterviewAuthenticated:
             yield
 
         application = FastAPI(lifespan=lifespan)
-        application.include_router(VideoInterviewsRouter(video_db, video_service).router)
+        application.include_router(VideoInterviewsRouter(video_db, video_service, Path("unused")).router)
         unauth_client = TestClient(application, raise_server_exceptions=False)
 
         response = unauth_client.post(
@@ -315,5 +326,93 @@ class TestCreateVideoInterviewAuthenticated:
         assert response.status_code == 201
         data = response.json()
         assert "invite_link" in data
-        assert data["invite_link"].startswith("/public/video/")
+        assert data["invite_link"] == f"index.html#video/{data['invite_token']}"
         assert data["status"] == "pending"
+
+
+class TestVideoInterviewIsolation:
+    def test_upload_chunk_should_return_404_when_response_belongs_to_another_interview(
+        self, public_client: TestClient, video_db: Database, video_service: VideoInterviewService
+    ) -> None:
+        mine = _create_interview_via_db(video_db, video_service)
+        victim = _create_interview_via_db(video_db, video_service, org_id="org-other")
+        with Session(video_db._engine) as session:
+            victim_response = video_service.get_or_create_response(session, victim.id, 0)
+        response = public_client.post(
+            f"/public/video/{mine.invite_token}/responses/{victim_response.id}/chunks",
+            data={"chunk_index": "0"},
+            files={"chunk": ("c.webm", io.BytesIO(b"x"), "video/webm")},
+        )
+        assert response.status_code == 404
+        complete = public_client.post(
+            f"/public/video/{mine.invite_token}/responses/{victim_response.id}/complete",
+            json={"total_chunks": 1},
+        )
+        assert complete.status_code == 404
+
+    def test_upload_chunk_should_return_400_when_chunk_index_out_of_range(
+        self, public_client: TestClient, video_db: Database, video_service: VideoInterviewService
+    ) -> None:
+        stored = _create_interview_via_db(video_db, video_service)
+        with Session(video_db._engine) as session:
+            video_response = video_service.get_or_create_response(session, stored.id, 0)
+        response = public_client.post(
+            f"/public/video/{stored.invite_token}/responses/{video_response.id}/chunks",
+            data={"chunk_index": str(VideoInterviewService.MAX_CHUNKS)},
+            files={"chunk": ("c.webm", io.BytesIO(b"x"), "video/webm")},
+        )
+        assert response.status_code == 400
+
+    def test_get_or_create_response_should_return_400_when_question_index_out_of_range(
+        self, public_client: TestClient, video_db: Database, video_service: VideoInterviewService
+    ) -> None:
+        stored = _create_interview_via_db(video_db, video_service)
+        response = public_client.post(f"/public/video/{stored.invite_token}/responses/{len(_QUESTIONS)}")
+        assert response.status_code == 400
+
+    def test_public_endpoints_should_return_409_when_interview_already_submitted(
+        self, public_client: TestClient, video_db: Database, video_service: VideoInterviewService
+    ) -> None:
+        stored = _create_interview_via_db(video_db, video_service)
+        assert public_client.post(f"/public/video/{stored.invite_token}/complete").status_code == 200
+        response = public_client.post(f"/public/video/{stored.invite_token}/responses/0")
+        assert response.status_code == 409
+
+    def test_create_invite_should_return_404_when_candidate_belongs_to_another_org(
+        self, authenticated_client: TestClient
+    ) -> None:
+        response = authenticated_client.post(
+            "/video-interviews", json={"candidate_id": "cand-other-org", "questions": _QUESTIONS}
+        )
+        assert response.status_code == 404
+
+
+class TestVideoPlayback:
+    def test_recorded_answer_should_be_listed_and_streamed_to_recruiter(
+        self, public_client: TestClient, authenticated_client: TestClient
+    ) -> None:
+        created = authenticated_client.post(
+            "/video-interviews", json={"candidate_id": "cand-001", "questions": _QUESTIONS}
+        ).json()
+        token = created["invite_token"]
+        answer = public_client.post(f"/public/video/{token}/responses/0").json()
+        for index, payload in enumerate([b"first-", b"second"]):
+            public_client.post(
+                f"/public/video/{token}/responses/{answer['id']}/chunks",
+                data={"chunk_index": str(index)},
+                files={"chunk": ("c.webm", io.BytesIO(payload), "video/webm")},
+            )
+        public_client.post(f"/public/video/{token}/responses/{answer['id']}/complete", json={"total_chunks": 2})
+
+        listed = authenticated_client.get("/video-interviews", params={"candidate_id": "cand-001"}).json()
+        assert [item["id"] for item in listed] == [created["id"]]
+        assert listed[0]["invite_link"] == f"index.html#video/{token}"
+        progress = public_client.get(f"/public/video/{token}").json()
+        assert progress["answered_questions"] == [0]  # lets the portal resume at question 2 after a reload
+        detail = authenticated_client.get(f"/video-interviews/{created['id']}").json()
+        assert detail["responses"][0]["received_chunks"] == 2
+
+        video = authenticated_client.get(f"/video-interviews/{created['id']}/responses/{answer['id']}/video")
+        assert video.status_code == 200
+        assert video.headers["content-type"] == "video/webm"
+        assert video.content == b"first-second"

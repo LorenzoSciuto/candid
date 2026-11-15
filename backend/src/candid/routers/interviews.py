@@ -1,23 +1,21 @@
-import json
-from datetime import datetime, timezone
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Candidate, Interview
-from candid.schemas import InterviewCreate, InterviewProcess, InterviewSummarize, InterviewUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.errors import ai_provider_error
+from candid.commons.models import Candidate, Interview
+from candid.commons.pipeline import append_activity
+from candid.commons.schemas import InterviewCreate, InterviewProcess, InterviewSummarize, InterviewUpdate
+from candid.commons.tenancy import get_in_org
+from candid.commons.uploads import MAX_AUDIO_BYTES, read_limited
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.transcription_service import TranscriptionService
 
-
-def _append_activity(candidate: Candidate, event_type: str, note: str) -> None:
-    now = datetime.now(timezone.utc).isoformat()
-    log = json.loads(candidate.activity_log or "[]")
-    log.append({"type": event_type, "at": now, "note": note})
-    candidate.activity_log = json.dumps(log)
+logger = logging.getLogger(__name__)
 
 
 class InterviewsRouter:
@@ -104,6 +102,8 @@ class InterviewsRouter:
         return session.exec(stmt).all()
 
     def _create(self, session, org_id, body: InterviewCreate) -> Interview:
+        if body.candidate_id:
+            get_in_org(session, Candidate, body.candidate_id, org_id)
         interview = Interview(org_id=org_id, **body.model_dump())
         session.add(interview)
         session.commit()
@@ -112,7 +112,7 @@ class InterviewsRouter:
             candidate = session.get(Candidate, interview.candidate_id)
             if candidate and candidate.org_id == org_id:
                 label = interview.title or interview.type or "Interview"
-                _append_activity(candidate, "interview_created", f"Interview scheduled: {label}")
+                append_activity(candidate, "interview_created", f"Interview scheduled: {label}")
                 session.add(candidate)
                 session.commit()
                 session.refresh(interview)
@@ -120,6 +120,8 @@ class InterviewsRouter:
 
     def _update(self, session, org_id, interview_id, body: InterviewUpdate) -> Interview:
         interview = self._fetch(session, org_id, interview_id)
+        if getattr(body, "candidate_id", None):
+            get_in_org(session, Candidate, body.candidate_id, org_id)
         for field, value in body.model_dump(exclude_none=True).items():
             setattr(interview, field, value)
         session.add(interview)
@@ -129,13 +131,13 @@ class InterviewsRouter:
 
     def _process(self, session, org_id, interview_id, body: InterviewProcess) -> Interview:
         interview = self._fetch(session, org_id, interview_id)
-        candidate = session.get(Candidate, interview.candidate_id)
-        cv_context = candidate.cv_text if candidate else None
+        candidate = session.get(Candidate, interview.candidate_id) if interview.candidate_id else None
+        cv_context = candidate.cv_text if candidate and candidate.org_id == org_id else None
         try:
             engine = self._ai_factory.from_session(session, org_id)
             result = engine.process_transcript(body.raw_content, cv_context=cv_context)
         except Exception as exc:
-            raise HTTPException(502, f"AI error: {exc}") from exc
+            raise ai_provider_error(exc) from exc
         interview.raw_content = body.raw_content
         interview.cleaned_transcript = result.get("cleaned_transcript")
         interview.ai_summary = result.get("summary")
@@ -148,8 +150,8 @@ class InterviewsRouter:
                 "\n".join(summary_result.get("bullets", []))
                 or interview.extra_info
             )
-        except Exception:
-            pass
+        except Exception as exc:  # the summary is optional: keep the processed transcript anyway
+            logger.warning("Interview summary failed for %s: %s", interview.id, exc)
         session.add(interview)
         session.commit()
         session.refresh(interview)
@@ -157,7 +159,7 @@ class InterviewsRouter:
             candidate = session.get(Candidate, interview.candidate_id)
             if candidate and candidate.org_id == org_id:
                 label = interview.title or interview.type or "Interview"
-                _append_activity(candidate, "interview_processed", f"Interview transcript processed with AI: {label}")
+                append_activity(candidate, "interview_processed", f"Interview transcript processed with AI: {label}")
                 session.add(candidate)
                 session.commit()
                 session.refresh(interview)
@@ -169,15 +171,18 @@ class InterviewsRouter:
             engine = self._ai_factory.from_session(session, org_id)
             result = engine.summarize_interview(body.text)
         except Exception as exc:
-            raise HTTPException(502, f"AI error: {exc}") from exc
+            raise ai_provider_error(exc) from exc
         return {"bullets": result.get("bullets", []), "summary": result.get("summary", "")}
 
     def _upload_audio(self, session, org_id, interview_id, file: UploadFile, background_tasks: BackgroundTasks) -> dict:
         interview = self._fetch(session, org_id, interview_id)
         if self._transcription_service is None:
             raise HTTPException(503, "Transcription service not configured")
-        file_data = file.file.read()
-        saved_path = self._transcription_service.save_audio_file(interview_id, file_data, file.filename or "audio")
+        file_data = read_limited(file, MAX_AUDIO_BYTES)
+        try:
+            saved_path = self._transcription_service.save_audio_file(interview_id, file_data, file.filename or "")
+        except ValueError as exc:
+            raise HTTPException(415, str(exc)) from exc
         interview.audio_file_path = str(saved_path)
         interview.transcript_status = "pending"
         session.add(interview)

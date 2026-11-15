@@ -1,36 +1,30 @@
 import logging
 import time
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger(__name__)
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from candid.config import Settings
-from candid.database import Database
-from candid.dependencies import require_user
+from candid.commons.config import Settings
+from candid.commons.database import Database
+from candid.commons.dependencies import require_org
+from candid.commons.tenancy import rls_bypass
 from candid.routers.ai import AIRouter
-from candid.routers.emails import EmailsRouter
 from candid.routers.analysis import AnalysisRouter
 from candid.routers.auth import AuthRouter
 from candid.routers.branding import BrandingRouter
 from candid.routers.candidates import CandidatesRouter
 from candid.routers.config import ConfigRouter
+from candid.routers.emails import EmailsRouter
 from candid.routers.employees import EmployeesRouter
-from candid.routers.performance_reviews import PerformanceReviewsRouter
 from candid.routers.evaluations import EvaluationsRouter
 from candid.routers.interviews import InterviewsRouter
 from candid.routers.job_descriptions import JobDescriptionsRouter
-from candid.routers.organizations import OrganizationsRouter
 from candid.routers.notifications import NotificationsRouter
-from candid.routers.public_applications import PublicApplicationsRouter
+from candid.routers.organizations import OrganizationsRouter
+from candid.routers.performance_reviews import PerformanceReviewsRouter
 from candid.routers.public_jobs import PublicJobsRouter
 from candid.routers.quick_add import QuickAddRouter
 from candid.routers.roles import RolesRouter
@@ -40,9 +34,20 @@ from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
 from candid.services.email_service import EmailServiceFactory
 from candid.services.notification_service import NotificationService
-from candid.services.otp_service import OtpService
 from candid.services.transcription_service import TranscriptionService
 from candid.services.video_interview_service import VideoInterviewService
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+try:
+    _VERSION = version("wennovate-candid")
+except PackageNotFoundError:  # running from a source tree without installing
+    _VERSION = "dev"
 
 
 class Application:
@@ -52,11 +57,10 @@ class Application:
         self._crypto = CryptoService(self._settings.fernet_key)
         self._extractor = CVExtractor()
         self._ai_factory = AIEngineFactory(self._crypto)
-        self._otp = OtpService()
         self._notification_service = NotificationService()
         self._video_interview_service = VideoInterviewService()
         self._transcription_service = TranscriptionService(
-            upload_dir=Path("uploads/audio"),
+            upload_dir=Path(self._settings.upload_dir) / "audio",
             ai_engine_factory=self._ai_factory,
         )
         self._email_factory = EmailServiceFactory(self._crypto, self._settings.app_url)
@@ -70,8 +74,10 @@ class Application:
 
         fastapi_app = FastAPI(
             title="Candid API",
-            version="1.0.0",
-            description="AI-powered recruiting assistant",
+            version=_VERSION,
+            description="AI-powered recruiting assistant by Wennovate",
+            contact={"name": "Wennovate"},
+            license_info={"name": "MIT"},
             lifespan=lifespan,
         )
 
@@ -83,17 +89,20 @@ class Application:
         fastapi_app.add_middleware(
             CORSMiddleware,
             allow_origins=cors_origins,
-            allow_credentials=cors_origins != ["*"],
+            allow_credentials=False,   # auth is a bearer token, never a cookie
             allow_methods=["*"],
             allow_headers=["*"],
         )
 
+        fastapi_app.state.settings = self._settings
+        fastapi_app.state.db = self._db
         self._mount_routers(fastapi_app)
         self._mount_root(fastapi_app)
         return fastapi_app
 
     def _wait_for_db(self, retries: int = 10, delay: float = 2.0) -> None:
         import sys
+
         from sqlalchemy import text
         from sqlalchemy.exc import OperationalError
 
@@ -103,7 +112,7 @@ class Application:
                 with engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
                 return
-            except OperationalError as exc:
+            except OperationalError:
                 if attempt == retries - 1:
                     url = self._settings.database_url
                     host = url.split("@")[-1].split("/")[0] if "@" in url else url
@@ -136,33 +145,26 @@ class Application:
   <div class="card">
     <p><span class="dot"></span>Server running</p>
     <h1>Candid API</h1>
-    <p>AI-powered recruiting assistant · v1.0.0</p>
+    <p>AI-powered recruiting assistant by Wennovate · v{_VERSION}</p>
     <a href="/docs">API docs →</a>
   </div>
 </body>
-</html>"""
+</html>""".replace("{_VERSION}", _VERSION)
 
     def _mount_routers(self, fastapi_app: FastAPI) -> None:
-        # Public routers — no bearer required
-        fastapi_app.include_router(AuthRouter(self._settings, self._db).router)
-        fastapi_app.include_router(PublicJobsRouter(self._db, self._ai_factory).router)
-        # Organizations: individual endpoints declare their own require_user;
-        # accept_invitation is intentionally public (invitation token is the proof)
+        # Cross-organisation endpoints (login, public portal, candidate video links):
+        # they opt out of RLS explicitly and enforce access by token/slug in code.
+        bypass = [Depends(rls_bypass)]
+        fastapi_app.include_router(AuthRouter(self._settings, self._db, self._notification_service).router, dependencies=bypass)
+        fastapi_app.include_router(PublicJobsRouter(self._db, self._ai_factory).router, dependencies=bypass)
+        fastapi_app.include_router(PublicVideoRouter(self._db, self._video_interview_service, Path(self._settings.upload_dir)).router, dependencies=bypass)
+        # Mixed routers: each endpoint declares its own auth (the public ones use the slug or invite token).
         fastapi_app.include_router(
-            OrganizationsRouter(self._db, self._email_factory, self._settings, self._notification_service).router
+            OrganizationsRouter(self._db, self._email_factory, self._settings).router
         )
-        # Public candidate application OTP flow — unauthenticated
-        fastapi_app.include_router(
-            PublicApplicationsRouter(self._db, self._otp, self._email_factory, self._settings).router
-        )
-        fastapi_app.include_router(
-            PublicVideoRouter(self._db, self._video_interview_service).router
-        )
-        # Branding: contains both public (/public/...) and auth-protected endpoints;
-        # mounted without a global dependency so the public GET remains unauthenticated
         fastapi_app.include_router(BrandingRouter(self._db).router)
 
-        auth_dep = [Depends(require_user)]
+        auth_dep = [Depends(require_org)]
         for router in [
             AIRouter(self._db, self._ai_factory, self._email_factory).router,
             CandidatesRouter(self._db, self._notification_service, self._ai_factory, self._email_factory).router,
@@ -177,7 +179,7 @@ class Application:
             JobDescriptionsRouter(self._db, self._ai_factory).router,
             EmployeesRouter(self._db).router,
             PerformanceReviewsRouter(self._db, self._ai_factory).router,
-            VideoInterviewsRouter(self._db, self._video_interview_service).router,
+            VideoInterviewsRouter(self._db, self._video_interview_service, Path(self._settings.upload_dir)).router,
         ]:
             fastapi_app.include_router(router, dependencies=auth_dep)
 

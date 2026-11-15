@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Employee, PerformanceReview
-from candid.prompts import Prompts
-from candid.schemas import ImproveReviewTextRequest, PerformanceReviewCreate, PerformanceReviewUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.errors import ai_provider_error
+from candid.commons.models import Employee, PerformanceReview
+from candid.commons.prompts import Prompts
+from candid.commons.schemas import ImproveReviewTextRequest, PerformanceReviewCreate, PerformanceReviewUpdate
 from candid.services.ai_engine import AIEngineFactory
 
 
@@ -118,7 +119,7 @@ class PerformanceReviewsRouter:
         except HTTPException:
             raise
         except Exception as exc:
-            raise HTTPException(502, f"AI engine error: {exc}") from exc
+            raise ai_provider_error(exc) from exc
 
     @staticmethod
     def _fetch_employee(session: Session, org_id: str, employee_id: str) -> Employee:

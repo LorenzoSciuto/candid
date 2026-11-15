@@ -1,14 +1,15 @@
 import json
+from contextlib import asynccontextmanager
 
 import pytest
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from candid.database import Database
-from candid.models import JobDescription, Organization, Role
+from candid.commons.database import Database
+from candid.commons.models import JobDescription, Organization, Role
+from candid.commons.rate_limit import RateLimiter
 from candid.routers.public_jobs import PublicJobsRouter
 
 TEST_ORG_SLUG = "acme-corp"
@@ -36,7 +37,7 @@ def portal_client(portal_db: Database) -> TestClient:
         yield
 
     application = FastAPI(lifespan=lifespan)
-    application.include_router(PublicJobsRouter(portal_db).router)
+    application.include_router(PublicJobsRouter(portal_db, apply_limiter=RateLimiter(1000, 3600)).router)
     return TestClient(application)
 
 
@@ -171,7 +172,16 @@ _CV_CONTENT = b"Alice Smith - alice@example.com - 8 years of Python backend expe
 
 
 def _cv_file_upload() -> dict:
-    return {"cv_file": ("alice_cv.txt", _CV_CONTENT, "text/plain")}
+    import io
+
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph(_CV_CONTENT.decode() if isinstance(_CV_CONTENT, bytes) else _CV_CONTENT)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    docx_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return {"cv_file": ("alice_cv.docx", buffer.getvalue(), docx_type)}
 
 
 class TestApplyForJob:
@@ -224,10 +234,28 @@ class TestApplyForJob:
         assert response.status_code == 201
         candidate_id = response.json()["candidate_id"]
 
-        from candid.models import Candidate
+        from candid.commons.models import Candidate
         with Session(portal_db._engine) as session:
             candidate = session.get(Candidate, candidate_id)
         assert candidate is not None
         assert candidate.source == "Portal"
         assert candidate.status == "new"
         assert candidate.job_title == "Senior Backend Engineer"
+
+
+class TestApplyAbuseProtection:
+    def test_apply_should_return_429_when_rate_limit_exceeded(self, portal_db) -> None:
+        from fastapi import FastAPI
+        application = FastAPI()
+        application.include_router(PublicJobsRouter(portal_db, apply_limiter=RateLimiter(1, 3600)).router)
+        limited_client = TestClient(application)
+        url = "/public/organizations/no-such-org/jobs/x/apply"
+        assert limited_client.post(url, files=_cv_file_upload()).status_code == 404
+        assert limited_client.post(url, files=_cv_file_upload()).status_code == 429
+
+    def test_apply_should_return_400_when_cv_is_unreadable(self, portal_client: TestClient) -> None:
+        response = portal_client.post(
+            f"/public/organizations/{TEST_ORG_SLUG}/jobs/jd-active-1/apply",
+            files={"cv_file": ("cv.txt", b"plain text is not a supported format", "text/plain")},
+        )
+        assert response.status_code == 400

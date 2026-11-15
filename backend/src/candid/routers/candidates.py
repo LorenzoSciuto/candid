@@ -8,11 +8,12 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Candidate, Evaluation, Interview, JobDescription
-from candid.routers.config import ConfigRouter
-from candid.schemas import CandidateCreate, CandidateUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.models import Candidate, Evaluation, Interview, JobDescription, OrgConfig
+from candid.commons.pipeline import append_activity, first_pipeline_stage
+from candid.commons.schemas import CandidateCreate, CandidateUpdate
+from candid.commons.tenancy import get_in_org
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.email_service import EmailServiceFactory
 from candid.services.notification_service import NotificationService
@@ -194,8 +195,8 @@ class CandidatesRouter:
                                 v for v in json.loads(sk_json).values()
                                 if isinstance(v, (int, float)) and v > 0
                             )
-                        except Exception:
-                            pass
+                        except (ValueError, AttributeError):
+                            pass  # malformed legacy JSON: the score is simply not shown
                 if scores:
                     d["eval_avg"] = round(sum(scores) / len(scores), 1)
             d["jd_title"] = jd_map.get(c.job_description_id) if c.job_description_id else None
@@ -203,6 +204,8 @@ class CandidatesRouter:
         return result
 
     def _create(self, session, user: UserCtx, body: CandidateCreate) -> dict:
+        if body.job_description_id:
+            get_in_org(session, JobDescription, body.job_description_id, user.org_id, "Job description")
         candidate = Candidate(org_id=user.org_id, **body.model_dump())
         session.add(candidate)
         session.commit()
@@ -284,12 +287,12 @@ class CandidatesRouter:
                     result["score"] = round(max(float(rf["score"]) for rf in role_fits), 2)
                 elif overall is not None:
                     result["score"] = round(float(overall) / 2, 2)
-            except Exception:
-                pass
+            except (ValueError, TypeError, KeyError):
+                pass  # malformed analysis JSON: the score is simply not shown
 
         if candidate.job_description_id:
             jd = session.get(JobDescription, candidate.job_description_id)
-            result["jd_title"] = jd.title if jd else None
+            result["jd_title"] = jd.title if jd and jd.org_id == org_id else None
         else:
             result["jd_title"] = None
 
@@ -298,15 +301,15 @@ class CandidatesRouter:
     def _update(self, session, user: UserCtx, candidate_id, body: CandidateUpdate) -> dict:
         candidate = self._fetch(session, user.org_id, candidate_id)
         data = body.model_dump(exclude_unset=True)
+        if data.get("job_description_id"):
+            get_in_org(session, JobDescription, data["job_description_id"], user.org_id, "Job description")
         data = self._apply_pipeline_entry_transition(session, user, candidate, data)
         if "status" in data and data["status"] != candidate.status:
             now = datetime.now(timezone.utc).isoformat()
             history = json.loads(candidate.status_history or "[]")
             history.append({"status": data["status"], "at": now, "by": user.name})
             candidate.status_history = json.dumps(history)
-            log = json.loads(candidate.activity_log or "[]")
-            log.append({"type": "stage", "at": now, "note": f"Stage moved to {data['status']}", "by": user.name})
-            candidate.activity_log = json.dumps(log)
+            append_activity(candidate, "stage", f"Stage moved to {data['status']}", by=user.name)
         for field, value in data.items():
             setattr(candidate, field, value)
         session.add(candidate)
@@ -331,20 +334,20 @@ class CandidatesRouter:
         if cfg and cfg.stages_json:
             try:
                 stages = json.loads(cfg.stages_json)
-            except Exception:
-                pass
-        first_stage = ConfigRouter.first_pipeline_stage(stages)
+            except ValueError:
+                pass  # fall back to the default first stage
+        first_stage = first_pipeline_stage(stages)
         data = {**data, "status": first_stage}
         return data
 
     def _delete(self, session, org_id, candidate_id) -> None:
         candidate = self._fetch(session, org_id, candidate_id)
         for iv in session.exec(
-            select(Interview).where(Interview.candidate_id == candidate_id)
+            select(Interview).where(Interview.candidate_id == candidate_id, Interview.org_id == org_id)
         ).all():
             session.delete(iv)
         for ev in session.exec(
-            select(Evaluation).where(Evaluation.candidate_id == candidate_id)
+            select(Evaluation).where(Evaluation.candidate_id == candidate_id, Evaluation.org_id == org_id)
         ).all():
             session.delete(ev)
         session.flush()

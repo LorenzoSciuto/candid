@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from candid.services.ai_engine import AIEngine
 
+
 class TestRewriteEndpoint:
     def test_rewrite_email_action(self, client: TestClient) -> None:
         ai_response = '{"result": "Hi there, we would love to chat!"}'
@@ -43,10 +44,11 @@ class TestRewriteEndpoint:
         })
         assert resp.status_code == 400
 
-    def test_ai_error_returns_500(self, client: TestClient) -> None:
+    def test_ai_error_returns_502_without_internals(self, client: TestClient) -> None:
         with mock.patch.object(AIEngine, "_call", side_effect=RuntimeError("quota exceeded")):
             resp = client.post("/ai/rewrite", json={
                 "action": "rewrite_email",
                 "text": "hello",
             })
-        assert resp.status_code == 500
+        assert resp.status_code == 502
+        assert "quota" not in resp.text  # provider internals stay server-side

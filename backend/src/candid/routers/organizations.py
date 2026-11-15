@@ -1,34 +1,43 @@
 import logging
+import shutil
 import uuid
 from datetime import date, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from candid.config import Settings
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org, require_user
-from candid.models import (
+from candid.commons.config import Settings
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, assert_admin, require_org, require_user
+from candid.commons.models import (
     Candidate,
+    EmailLog,
     Employee,
     Evaluation,
     Interview,
     Invitation,
     JobDescription,
     Membership,
+    Notification,
+    Organization,
     OrgApiKey,
     OrgConfig,
-    Organization,
+    PerformanceReview,
     Role,
     User,
+    VideoInterview,
+    VideoResponse,
 )
-from candid.schemas import InviteRequest
+from candid.commons.schemas import InviteRequest
 from candid.services.email_service import EmailServiceFactory
-from candid.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
+
+
+# Ownership is tied to Organization.owner_id and cannot be granted via roles.
+_ASSIGNABLE_ROLES = ("admin", "member")
 
 
 class MemberRoleUpdate(BaseModel):
@@ -41,12 +50,10 @@ class OrganizationsRouter:
         db: Database,
         email_factory: EmailServiceFactory | None = None,
         settings: Settings | None = None,
-        notification_service: NotificationService | None = None,
     ) -> None:
         self._db = db
         self._email_factory = email_factory
         self._settings = settings or Settings()
-        self._notification_service = notification_service or NotificationService()
         self.router = APIRouter(prefix="/organizations", tags=["organizations"])
         self._register()
 
@@ -99,13 +106,6 @@ class OrganizationsRouter:
         ):
             self._delete_org(session, ctx)
 
-        # Public endpoint — no auth required
-        @self.router.get("/invitations/accept", include_in_schema=True)
-        def accept_invitation(
-            token: str,
-            session: Session = Depends(db.get_session),
-        ):
-            return self._accept_invitation(session, token)
 
     # ── Implementations ────────────────────────────────────────────────────────
 
@@ -161,7 +161,9 @@ class OrganizationsRouter:
         }
 
     def _invite(self, session: Session, ctx: UserCtx, body: InviteRequest) -> dict:
-        self._require_admin(session, ctx)
+        assert_admin(ctx)
+        if body.role not in _ASSIGNABLE_ROLES:
+            raise HTTPException(400, "role must be admin or member")
         org = session.get(Organization, ctx.org_id)
         if not org:
             raise HTTPException(404, "Organization not found")
@@ -195,6 +197,7 @@ class OrganizationsRouter:
         session.add(inv)
         session.commit()
 
+        email_sent = False
         try:
             email_svc = self._email_factory.from_session(session, ctx.org_id) if self._email_factory else None
             if email_svc:
@@ -204,22 +207,20 @@ class OrganizationsRouter:
                     inviter_name=inviter_name,
                     token=token,
                 )
-            else:
-                logger.info(
-                    "SMTP not configured — invitation link for %s: %s/index.html#accept-invite?token=%s",
-                    body.email,
-                    self._settings.app_url,
-                    token,
-                )
+                email_sent = True
         except Exception:
             logger.exception("Failed to send invitation email")
 
-        return {"ok": True, "invitation_id": inv.id}
+        result = {"ok": True, "invitation_id": inv.id, "email_sent": email_sent}
+        if not email_sent:
+            # Without SMTP the admin shares the link manually (never written to server logs).
+            result["invite_url"] = f"{self._settings.app_url}/index.html#accept-invite?token={token}"
+        return result
 
     def _update_member_role(self, session: Session, ctx: UserCtx, user_id: str, role: str) -> dict:
-        self._require_admin(session, ctx)
-        if role not in ("owner", "admin", "member"):
-            raise HTTPException(400, "role must be owner, admin, or member")
+        assert_admin(ctx)
+        if role not in _ASSIGNABLE_ROLES:
+            raise HTTPException(400, "role must be admin or member")
         mbr = session.exec(
             select(Membership).where(
                 Membership.org_id == ctx.org_id,
@@ -229,15 +230,15 @@ class OrganizationsRouter:
         if not mbr:
             raise HTTPException(404, "Member not found")
         org = session.get(Organization, ctx.org_id)
-        if org and org.owner_id == user_id and role != "owner":
-            raise HTTPException(400, "Cannot demote the organization owner")
+        if org and org.owner_id == user_id:
+            raise HTTPException(400, "Cannot change the organization owner's role")
         mbr.role = role
         session.add(mbr)
         session.commit()
         return {"ok": True, "role": role}
 
     def _remove_member(self, session: Session, ctx: UserCtx, user_id: str) -> None:
-        self._require_admin(session, ctx)
+        assert_admin(ctx)
         if user_id == ctx.user_id:
             raise HTTPException(400, "Cannot remove yourself")
         mbr = session.exec(
@@ -254,53 +255,6 @@ class OrganizationsRouter:
         session.delete(mbr)
         session.commit()
 
-    def _accept_invitation(self, session: Session, token: str):
-        inv = session.exec(
-            select(Invitation).where(Invitation.token == token)
-        ).first()
-        if not inv:
-            raise HTTPException(404, "Invalid or expired invitation")
-        if inv.accepted_at:
-            raise HTTPException(410, "Invitation already accepted")
-        if inv.expires_at < date.today().isoformat():
-            raise HTTPException(410, "Invitation has expired")
-
-        self._apply_membership(session, inv)
-
-        inv.accepted_at = date.today().isoformat()
-        session.add(inv)
-        session.commit()
-
-        self._notify_invitation_accepted(session, inv)
-
-        redirect_url = f"{self._settings.app_url}/index.html#?invite_accepted=1&org_id={inv.org_id}"
-        return RedirectResponse(url=redirect_url, status_code=302)
-
-    def _apply_membership(self, session: Session, inv: Invitation) -> None:
-        invitee = session.exec(select(User).where(User.email == inv.email)).first()
-        if not invitee:
-            return
-        existing_membership = session.exec(
-            select(Membership).where(
-                Membership.org_id == inv.org_id,
-                Membership.user_id == invitee.id,
-            )
-        ).first()
-        if not existing_membership:
-            session.add(Membership(org_id=inv.org_id, user_id=invitee.id, role=inv.role))
-
-    def _notify_invitation_accepted(self, session: Session, inv: Invitation) -> None:
-        org = session.get(Organization, inv.org_id)
-        if not org:
-            return
-        self._notification_service.create_invitation_accepted_notification(
-            session=session,
-            org_id=inv.org_id,
-            user_id=inv.invited_by,
-            invitee_email=inv.email,
-            org_name=org.name,
-        )
-
     def _delete_org(self, session: Session, ctx: UserCtx) -> None:
         org = session.get(Organization, ctx.org_id)
         if not org:
@@ -308,8 +262,19 @@ class OrganizationsRouter:
         if org.owner_id != ctx.user_id:
             raise HTTPException(403, "Only the organization owner can delete the organization")
 
+        video_interviews = session.exec(select(VideoInterview).where(VideoInterview.org_id == ctx.org_id)).all()
+        video_ids = [vi.id for vi in video_interviews]
+        responses = session.exec(select(VideoResponse).where(VideoResponse.video_interview_id.in_(video_ids))).all() if video_ids else []
+        interview_ids = [i.id for i in session.exec(select(Interview).where(Interview.org_id == ctx.org_id)).all()]
+
         # Delete in FK-safe order: dependents before parents
+        for item in responses:
+            session.delete(item)
         for stmt in [
+            select(VideoInterview).where(VideoInterview.org_id == ctx.org_id),
+            select(Notification).where(Notification.org_id == ctx.org_id),
+            select(EmailLog).where(EmailLog.org_id == ctx.org_id),
+            select(PerformanceReview).where(PerformanceReview.org_id == ctx.org_id),
             select(Evaluation).where(Evaluation.org_id == ctx.org_id),
             select(Interview).where(Interview.org_id == ctx.org_id),
             select(Employee).where(Employee.org_id == ctx.org_id),
@@ -326,13 +291,7 @@ class OrganizationsRouter:
 
         session.delete(org)
         session.commit()
-
-    def _require_admin(self, session: Session, ctx: UserCtx) -> None:
-        mbr = session.exec(
-            select(Membership).where(
-                Membership.org_id == ctx.org_id,
-                Membership.user_id == ctx.user_id,
-            )
-        ).first()
-        if not mbr or mbr.role not in ("owner", "admin"):
-            raise HTTPException(403, "Admin access required")
+        # Recordings are personal data: remove them from disk too.
+        upload_dir = Path(self._settings.upload_dir)
+        for path in [upload_dir / "video" / r.id for r in responses] + [upload_dir / "audio" / i for i in interview_ids]:
+            shutil.rmtree(path, ignore_errors=True)

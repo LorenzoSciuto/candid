@@ -139,10 +139,10 @@ class TestImproveJD:
         assert resp.status_code == 200
         assert resp.json()["improved_text"] == "A much better job description."
 
-    def test_ai_error_raises_500(self, client: TestClient) -> None:
+    def test_ai_error_returns_502(self, client: TestClient) -> None:
         with mock.patch.object(AIEngine, "_call", side_effect=RuntimeError("API down")):
             resp = client.post("/job-descriptions/improve-jd", json={
                 "text": "Some JD text",
                 "role_name": "Engineer",
             })
-        assert resp.status_code == 500
+        assert resp.status_code == 502

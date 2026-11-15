@@ -3,10 +3,10 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Organization
-from candid.schemas import BrandingConfig, BrandingUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_admin, require_org
+from candid.commons.models import Organization
+from candid.commons.schemas import BrandingUpdate
 
 
 class BrandingRouter:
@@ -36,7 +36,7 @@ class BrandingRouter:
         def update_branding(
             body: BrandingUpdate,
             session: Session = Depends(database.get_session),
-            ctx: UserCtx = Depends(require_org),
+            ctx: UserCtx = Depends(require_admin),
         ):
             return self._update_branding(session, ctx, body)
 

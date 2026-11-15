@@ -1,13 +1,15 @@
 import json
 import os
 import time
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlmodel import Session, select
 
-from candid.models import OrgApiKey, OrgConfig
-from candid.prompts import Prompts
-from candid.services.crypto import CryptoService
+from candid.commons.models import OrgApiKey, OrgConfig
+from candid.commons.prompts import Prompts
+
+if TYPE_CHECKING:  # injected by the composition root, never imported at runtime
+    from candid.services.crypto import CryptoService
 
 
 class AIEngine:
@@ -264,7 +266,7 @@ class AIEngineFactory:
         "groq": "llama-3.1-8b-instant",
     }
 
-    def __init__(self, crypto_service: CryptoService) -> None:
+    def __init__(self, crypto_service: "CryptoService") -> None:
         self._crypto_service = crypto_service
 
     def from_session(self, session: Session, org_id: str = "") -> AIEngine:
@@ -340,23 +342,29 @@ class AIEngineFactory:
         ).first()
         if org_api_key_row and org_api_key_row.encrypted_key:
             return self._crypto_service.decrypt(org_api_key_row.encrypted_key)
-        env_key_map = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-            "groq": "GROQ_API_KEY",
-        }
-        return os.environ.get(env_key_map.get(provider, ""), "")
+        return self._server_key(provider)
 
     def _create_engine_from_environment(
         self, provider: Optional[str] = None, model: Optional[str] = None
     ) -> AIEngine:
         resolved_provider = provider or os.environ.get("DEFAULT_PROVIDER", "openai")
         resolved_model = model or os.environ.get("DEFAULT_MODEL", "gpt-4o")
-        provider_to_api_key_map = {
-            "openai": os.environ.get("OPENAI_API_KEY", ""),
-            "anthropic": os.environ.get("ANTHROPIC_API_KEY", ""),
-            "gemini": os.environ.get("GEMINI_API_KEY", ""),
-            "groq": os.environ.get("GROQ_API_KEY", ""),
-        }
-        return AIEngine(resolved_provider, resolved_model, provider_to_api_key_map.get(resolved_provider, ""))
+        return AIEngine(resolved_provider, resolved_model, self._server_key(resolved_provider))
+
+    _SERVER_KEY_ENV = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "groq": "GROQ_API_KEY",
+    }
+
+    @classmethod
+    def _server_key(cls, provider: str) -> str:
+        """Operator-level API key from the environment.
+
+        Opt-in only (ALLOW_SERVER_AI_KEYS=true): with open sign-up, a server key
+        would otherwise pay for every organisation and every anonymous portal application.
+        """
+        if os.environ.get("ALLOW_SERVER_AI_KEYS", "").lower() not in ("1", "true", "yes"):
+            return ""
+        return os.environ.get(cls._SERVER_KEY_ENV.get(provider, ""), "")

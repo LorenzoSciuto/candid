@@ -2,22 +2,18 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Candidate, JobDescription
-from candid.schemas import AnalyzeRequest
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.errors import ai_provider_error
+from candid.commons.models import Candidate, JobDescription
+from candid.commons.pipeline import append_activity
+from candid.commons.schemas import AnalyzeRequest
+from candid.commons.uploads import MAX_CV_BYTES, read_limited
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.cv_extractor import CVExtractor
-
-
-def _append_activity(candidate: Candidate, event_type: str, note: str) -> None:
-    now = datetime.now(timezone.utc).isoformat()
-    log = json.loads(candidate.activity_log or "[]")
-    log.append({"type": event_type, "at": now, "note": note})
-    candidate.activity_log = json.dumps(log)
 
 
 class AnalysisRouter:
@@ -49,7 +45,7 @@ class AnalysisRouter:
             return self._analyze(session, user.org_id, body)
 
     async def _upload_cv(self, file, candidate_id, org_id, session) -> dict:
-        content = await file.read()
+        content = read_limited(file, MAX_CV_BYTES)
         try:
             text = self._extractor.extract(file.filename or "file.pdf", content)
         except ValueError as exc:
@@ -59,7 +55,7 @@ class AnalysisRouter:
             if c and c.org_id == org_id:
                 c.cv_file = content
                 c.cv_filename = file.filename
-                _append_activity(c, "cv_upload", f"CV uploaded: {file.filename}")
+                append_activity(c, "cv_upload", f"CV uploaded: {file.filename}")
                 session.add(c)
                 session.commit()
         return {"filename": file.filename, "text": text, "word_count": len(text.split())}
@@ -85,7 +81,7 @@ class AnalysisRouter:
                 open_roles=open_roles or None,
             )
         except Exception as exc:
-            raise HTTPException(502, f"AI error: {exc}") from exc
+            raise ai_provider_error(exc) from exc
         if body.candidate_id:
             c = session.get(Candidate, body.candidate_id)
             if c and c.org_id == org_id:
@@ -106,7 +102,7 @@ class AnalysisRouter:
                 if extracted.get("role") and not c.current_role:
                     c.current_role = extracted["role"]
                 note = "CV analysis regenerated" if is_regen else "CV analysis generated"
-                _append_activity(c, "analysis", note)
+                append_activity(c, "analysis", note)
                 session.add(c)
                 session.commit()
         return result

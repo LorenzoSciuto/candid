@@ -1,8 +1,5 @@
-import unittest.mock as mock
 
 from fastapi.testclient import TestClient
-
-from candid.services.ai_engine import AIEngine
 
 CANDIDATE_PAYLOAD = {
     "first_name": "Maya",
@@ -233,3 +230,25 @@ class TestCandidateStats:
     def test_avg_score_none_when_no_scores(self, client: TestClient) -> None:
         client.post("/candidates", json=CANDIDATE_PAYLOAD)
         assert client.get("/candidates/stats").json()["avg_score"] is None
+
+
+class TestPipelineEntryAndOwnership:
+    def _create_job(self, client: TestClient) -> str:
+        role_id = client.post("/roles", json={"name": "Engineer", "department": "Tech"}).json()["id"]
+        return client.post("/job-descriptions", json={"role_id": role_id, "title": "Backend Engineer"}).json()["id"]
+
+    def test_assigning_job_should_move_new_candidate_to_first_pipeline_stage(self, client: TestClient) -> None:
+        cid = client.post("/candidates", json={"first_name": "Ada", "last_name": "Lovelace"}).json()["id"]
+        resp = client.patch(f"/candidates/{cid}", json={"job_description_id": self._create_job(client)})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "screening"
+
+    def test_assigning_job_from_another_org_should_return_404(self, client: TestClient, db) -> None:
+        from sqlmodel import Session
+
+        from candid.commons.models import JobDescription
+        with Session(db._engine) as session:
+            session.add(JobDescription(id="jd-foreign", org_id="org-other", role_id="r-x", title="Foreign"))
+            session.commit()
+        cid = client.post("/candidates", json={"first_name": "Ada", "last_name": "Lovelace"}).json()["id"]
+        assert client.patch(f"/candidates/{cid}", json={"job_description_id": "jd-foreign"}).status_code == 404

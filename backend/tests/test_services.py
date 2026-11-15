@@ -1,17 +1,16 @@
 import io
-import json
 from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
+
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
-from unittest.mock import MagicMock, patch
 
-from candid.services.auth_service import create_token, verify_token
+from candid.commons.tokens import create_token, verify_token
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
-from candid.services.notification_service import NotificationService
-from candid.services.otp_service import OtpService
 from candid.services.email_service import EmailService
+from candid.services.notification_service import NotificationService
 
 
 class TestCryptoService:
@@ -33,7 +32,8 @@ class TestCryptoService:
         from cryptography.fernet import Fernet
         other = CryptoService(Fernet.generate_key().decode())
         ciphertext = self.svc.encrypt("secret")
-        with pytest.raises(Exception):
+        from cryptography.fernet import InvalidToken
+        with pytest.raises(InvalidToken):
             other.decrypt(ciphertext)
 
     def test_mask_short_string(self) -> None:
@@ -86,43 +86,6 @@ class TestCVExtractor:
         with mock.patch("fitz.open", return_value=mock_doc):
             with pytest.raises(ValueError, match="image-only"):
                 self.extractor.extract("scan.pdf", b"fake-pdf-bytes")
-
-
-class TestOtpService:
-    def setup_method(self) -> None:
-        self.service = OtpService()
-
-    def test_generateOtp_shouldReturnSixDigitString(self) -> None:
-        otp_code = self.service.generate_otp()
-        assert len(otp_code) == 6
-        assert otp_code.isdigit()
-
-    def test_hashOtp_shouldReturnDifferentHashForDifferentCodes(self) -> None:
-        assert self.service.hash_otp("123456") != self.service.hash_otp("654321")
-
-    def test_hashOtp_shouldReturnSameHashForSameCode_whenCalledTwice(self) -> None:
-        assert self.service.hash_otp("999999") == self.service.hash_otp("999999")
-
-    def test_isExpired_shouldReturnTrue_whenExpiryIsInThePast(self) -> None:
-        assert self.service.is_expired((datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()) is True
-
-    def test_isExpired_shouldReturnFalse_whenExpiryIsInTheFuture(self) -> None:
-        assert self.service.is_expired((datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()) is False
-
-    def test_verify_shouldReturnTrue_whenCodeCorrectAndNotExpired(self) -> None:
-        stored_hash = self.service.hash_otp("123456")
-        future_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
-        assert self.service.verify("123456", stored_hash, future_expiry) is True
-
-    def test_verify_shouldReturnFalse_whenCodeWrong(self) -> None:
-        stored_hash = self.service.hash_otp("123456")
-        future_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
-        assert self.service.verify("000000", stored_hash, future_expiry) is False
-
-    def test_verify_shouldReturnFalse_whenExpired(self) -> None:
-        stored_hash = self.service.hash_otp("123456")
-        past_expiry = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
-        assert self.service.verify("123456", stored_hash, past_expiry) is False
 
 
 def _make_in_memory_session():
@@ -238,8 +201,16 @@ class TestEmailService:
         with pytest.raises(RuntimeError, match="SMTP not configured"):
             self._make_svc().send_email("a@b.com", "Subject", "Body")
 
-    def test_send_invitation_no_host_does_not_raise(self) -> None:
-        self._make_svc().send_invitation("a@b.com", "Acme", "Alice", "tok-abc")
+    def test_send_invitation_should_raise_when_smtp_not_configured(self) -> None:
+        with pytest.raises(RuntimeError):
+            self._make_svc().send_invitation("a@b.com", "Acme", "Alice", "tok-abc")
+
+    def test_send_invitation_should_escape_html_when_names_contain_markup(self) -> None:
+        svc = self._make_svc("smtp.example.com")
+        with patch.object(EmailService, "_send") as mock_send:
+            svc.send_invitation("a@b.com", "<b>Acme</b>", "<script>x</script>", "tok-abc")
+        body_html = mock_send.call_args.args[3]
+        assert "<script>" not in body_html and "&lt;script&gt;" in body_html
 
     def test_send_invitation_sends_via_smtp(self) -> None:
         svc = self._make_svc("smtp.example.com")

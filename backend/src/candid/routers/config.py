@@ -5,24 +5,27 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import OrgApiKey, OrgConfig
-from candid.schemas import ApiKeyUpsert, ConfigUpdate, EmailConfigResponse, EmailConfigUpdate, PreferencesResponse, PreferencesUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_admin, require_org
+from candid.commons.models import OrgApiKey, OrgConfig
+from candid.commons.pipeline import DEFAULT_STAGES
+from candid.commons.schemas import (
+    CURRENCIES,
+    DATE_FORMATS,
+    DEFAULT_LOCATIONS,
+    ApiKeyUpsert,
+    ConfigUpdate,
+    EmailConfigResponse,
+    EmailConfigUpdate,
+    PreferencesResponse,
+    PreferencesUpdate,
+)
 from candid.services.crypto import CryptoService
 
 logger = logging.getLogger(__name__)
 
 _PROVIDERS = ("openai", "anthropic", "gemini", "groq")
 
-DEFAULT_STAGES = [
-    {"id": "screening", "label": "Screening",     "dot": "#3b82f6"},
-    {"id": "eval",      "label": "In Evaluation", "dot": "#f59e0b"},
-    {"id": "final",     "label": "Final Round",   "dot": "#8b5cf6"},
-    {"id": "offer",     "label": "Offer",         "dot": "#10b981"},
-]
-
-_EXTERNAL_STATUSES = frozenset({"new", "hired", "Rejected"})
 
 
 class StagesUpdate(BaseModel):
@@ -50,7 +53,7 @@ class ConfigRouter:
         def save_config(
             body: ConfigUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_org),
+            user: UserCtx = Depends(require_admin),
         ):
             return self._save(session, user.org_id, body)
 
@@ -65,7 +68,7 @@ class ConfigRouter:
         def upsert_key(
             body: ApiKeyUpsert,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_org),
+            user: UserCtx = Depends(require_admin),
         ):
             return self._upsert_key(session, user.org_id, body)
 
@@ -73,7 +76,7 @@ class ConfigRouter:
         def delete_key(
             provider: str,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_org),
+            user: UserCtx = Depends(require_admin),
         ):
             self._delete_key(session, user.org_id, provider)
 
@@ -88,14 +91,14 @@ class ConfigRouter:
         def save_email_config(
             body: EmailConfigUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_org),
+            user: UserCtx = Depends(require_admin),
         ):
             return self._save_email(session, user.org_id, body)
 
         @self.router.post("/test")
         def test_config(
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_org),
+            user: UserCtx = Depends(require_admin),
         ):
             return self._test(session, user.org_id)
 
@@ -125,7 +128,7 @@ class ConfigRouter:
         def save_stages(
             body: StagesUpdate,
             session: Session = Depends(db.get_session),
-            user: UserCtx = Depends(require_org),
+            user: UserCtx = Depends(require_admin),
         ):
             return self._save_stages(session, user.org_id, body.stages)
 
@@ -182,10 +185,10 @@ class ConfigRouter:
             session.add(row)
             session.commit()
         except RuntimeError as e:
-            raise HTTPException(500, str(e))
+            raise HTTPException(500, str(e)) from e
         except Exception:
             logger.exception("Failed to save API key")
-            raise HTTPException(500, "Failed to save key")
+            raise HTTPException(500, "Failed to save key") from None
         return {"ok": True}
 
     def _delete_key(self, session: Session, org_id: str, provider: str) -> None:
@@ -203,16 +206,9 @@ class ConfigRouter:
         if cfg and cfg.stages_json:
             try:
                 return json.loads(cfg.stages_json)
-            except Exception:
-                pass
+            except ValueError:
+                logger.warning("Invalid stages_json for org %s; using defaults", org_id)
         return DEFAULT_STAGES
-
-    @staticmethod
-    def first_pipeline_stage(stages: list) -> str:
-        for stage in stages:
-            if stage.get("id") not in _EXTERNAL_STATUSES:
-                return stage["id"]
-        return "screening"
 
     def _save_stages(self, session: Session, org_id: str, stages: list) -> dict:
         for stage in stages:
@@ -228,19 +224,31 @@ class ConfigRouter:
 
     def _get_preferences(self, session: Session, org_id: str) -> PreferencesResponse:
         cfg = session.get(OrgConfig, org_id)
-        return PreferencesResponse(date_format=cfg.date_format if cfg else "dd/MM/yyyy")
+        if not cfg:
+            return PreferencesResponse()
+        return PreferencesResponse(
+            date_format=cfg.date_format,
+            currency=cfg.currency,
+            locations=json.loads(cfg.locations_json) if cfg.locations_json else list(DEFAULT_LOCATIONS),
+        )
 
     def _save_preferences(self, session: Session, org_id: str, body: PreferencesUpdate) -> PreferencesResponse:
-        _VALID_FORMATS = frozenset({"dd/MM/yyyy", "MM/dd/yyyy", "yyyy-MM-dd"})
-        if body.date_format not in _VALID_FORMATS:
+        if body.date_format is not None and body.date_format not in DATE_FORMATS:
             raise HTTPException(400, f"Unsupported date_format: {body.date_format}")
-        cfg = session.get(OrgConfig, org_id)
-        if not cfg:
-            cfg = OrgConfig(org_id=org_id)
-        cfg.date_format = body.date_format
+        if body.currency is not None and body.currency not in CURRENCIES:
+            raise HTTPException(400, f"Unsupported currency: {body.currency}")
+        cfg = session.get(OrgConfig, org_id) or OrgConfig(org_id=org_id)
+        if body.date_format is not None:
+            cfg.date_format = body.date_format
+        if body.currency is not None:
+            cfg.currency = body.currency
+        if body.locations is not None:
+            # Trim, drop blanks and duplicates while keeping the user's order.
+            cleaned = list(dict.fromkeys(loc.strip()[:100] for loc in body.locations if loc.strip()))
+            cfg.locations_json = json.dumps(cleaned)
         session.add(cfg)
         session.commit()
-        return PreferencesResponse(date_format=cfg.date_format)
+        return self._get_preferences(session, org_id)
 
     def _get_email(self, session: Session, org_id: str) -> EmailConfigResponse:
         cfg = session.get(OrgConfig, org_id)

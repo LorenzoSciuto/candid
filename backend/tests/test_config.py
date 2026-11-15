@@ -181,8 +181,9 @@ class TestOrgIsolation:
     """Verify that org_id scoping actually prevents cross-org data access."""
 
     def test_candidates_isolated_by_org(self, client: TestClient, db) -> None:
-        from candid.models import Candidate
         from sqlmodel import Session
+
+        from candid.commons.models import Candidate
 
         with Session(db._engine) as session:
             other_c = Candidate(org_id="org-other", first_name="Eve", last_name="Outsider")
@@ -199,9 +200,11 @@ class TestOrgIsolation:
         assert resp.status_code == 404
 
     def test_stages_isolated_by_org(self, client: TestClient, db) -> None:
-        from candid.models import OrgConfig
-        from sqlmodel import Session
         import json
+
+        from sqlmodel import Session
+
+        from candid.commons.models import OrgConfig
 
         # Save stages for a different org directly
         with Session(db._engine) as session:
@@ -214,3 +217,18 @@ class TestOrgIsolation:
         # test client org should still get its own (default) stages
         stages = client.get("/config/stages").json()
         assert not any(s["id"] == "secret" for s in stages)
+
+
+class TestPreferences:
+    def test_get_preferences_should_return_defaults_when_never_saved(self, client) -> None:
+        assert client.get("/config/preferences").json() == {
+            "date_format": "dd/MM/yyyy", "currency": "EUR", "locations": ["Remote"],
+        }
+
+    def test_save_preferences_should_update_only_given_fields(self, client) -> None:
+        client.put("/config/preferences", json={"currency": "USD"})
+        resp = client.put("/config/preferences", json={"locations": [" Berlin ", "Remote", "Berlin", ""]})
+        assert resp.json() == {"date_format": "dd/MM/yyyy", "currency": "USD", "locations": ["Berlin", "Remote"]}
+
+    def test_save_preferences_should_return_400_when_currency_unsupported(self, client) -> None:
+        assert client.put("/config/preferences", json={"currency": "XXX"}).status_code == 400

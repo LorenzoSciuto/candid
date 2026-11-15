@@ -1,18 +1,19 @@
 import logging
 import re
+from datetime import date
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from candid.config import Settings
-from candid.database import Database
-from candid.dependencies import UserCtx, require_user
-from candid.models import Invitation, Membership, Organization, User
-from candid.schemas import GoogleAuthRequest, OrgCreate, SwitchOrgRequest
-from datetime import date
-from candid.services.auth_service import create_token
+from candid.commons.config import Settings
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_user
+from candid.commons.models import Invitation, Membership, Organization, User
+from candid.commons.schemas import GoogleAuthRequest, OrgCreate, SwitchOrgRequest
+from candid.commons.tokens import create_token
+from candid.services.notification_service import NotificationService
 
 
 class UserUpdate(BaseModel):
@@ -30,9 +31,10 @@ logger = logging.getLogger(__name__)
 
 
 class AuthRouter:
-    def __init__(self, settings: Settings, db: Database) -> None:
+    def __init__(self, settings: Settings, db: Database, notification_service: NotificationService | None = None) -> None:
         self._settings = settings
         self._db = db
+        self._notification_service = notification_service or NotificationService()
         self.router = APIRouter(prefix="/auth", tags=["auth"])
         self._register()
 
@@ -129,6 +131,8 @@ class AuthRouter:
         data = resp.json()
         if data.get("aud") != self._settings.google_client_id:
             raise HTTPException(401, "Token audience mismatch — not issued for this application")
+        if str(data.get("email_verified")).lower() != "true":
+            raise HTTPException(401, "Google account email is not verified")
         user_id = data.get("sub")
         if not user_id:
             raise HTTPException(401, "Token missing subject claim")
@@ -244,6 +248,12 @@ class AuthRouter:
         inv.accepted_at = date.today().isoformat()
         session.add(inv)
         session.commit()
+        org = session.get(Organization, inv.org_id)
+        if org:
+            self._notification_service.create_invitation_accepted_notification(
+                session=session, org_id=inv.org_id, user_id=inv.invited_by,
+                invitee_email=inv.email, org_name=org.name,
+            )
         new_token = create_token(
             {
                 "sub": ctx.user_id,
@@ -253,7 +263,6 @@ class AuthRouter:
             },
             self._settings.session_secret,
         )
-        org = session.get(Organization, inv.org_id)
         return {
             "ok": True,
             "org": {"id": inv.org_id, "name": org.name if org else ""},

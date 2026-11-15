@@ -4,10 +4,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Evaluation
-from candid.schemas import EvaluationUpsert
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.models import Candidate, Evaluation
+from candid.commons.schemas import EvaluationUpsert
+from candid.commons.tenancy import get_in_org
 
 
 class EvaluationsRouter:
@@ -47,8 +48,12 @@ class EvaluationsRouter:
         return self._serialize(ev)
 
     def _upsert(self, session, org_id, body: EvaluationUpsert) -> dict:
+        get_in_org(session, Candidate, body.candidate_id, org_id)
         ev = session.exec(
-            select(Evaluation).where(Evaluation.candidate_id == body.candidate_id)
+            select(Evaluation).where(
+                Evaluation.candidate_id == body.candidate_id,
+                Evaluation.org_id == org_id,
+            )
         ).first()
         if not ev:
             ev = Evaluation(candidate_id=body.candidate_id, org_id=org_id)

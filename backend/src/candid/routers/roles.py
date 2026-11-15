@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Role
-from candid.schemas import ImproveJDRequest, RoleCreate, RoleUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.errors import ai_provider_error
+from candid.commons.models import Role
+from candid.commons.schemas import ImproveJDRequest, RoleCreate, RoleUpdate
 from candid.services.ai_engine import AIEngineFactory
 
 
@@ -35,7 +36,7 @@ class RolesRouter:
                 engine = self._ai_factory.from_session(session, user.org_id)
                 return {"improved_text": engine.improve_role_description(body.text, body.role_name)}
             except Exception as exc:
-                raise HTTPException(500, str(exc)) from exc
+                raise ai_provider_error(exc) from exc
 
         @self.router.post("", status_code=201)
         def create_role(

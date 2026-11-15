@@ -1,5 +1,4 @@
 import json
-import unittest.mock as mock
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -7,8 +6,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from candid.models import Interview
-from candid.services.ai_engine import AIEngine
+from candid.commons.models import Interview
 from candid.services.transcription_service import TranscriptionResult, TranscriptionService
 
 
@@ -51,7 +49,18 @@ class TestSaveAudioFile:
         assert saved_path.exists()
         assert saved_path.read_bytes() == file_data
         assert saved_path.parent.name == "interview-abc"
-        assert saved_path.name == "recording.mp3"
+        assert saved_path.suffix == ".mp3"
+
+    def test_save_audio_file_should_stay_in_upload_dir_when_filename_is_a_path(self, tmp_path: Path) -> None:
+        service = _make_service(tmp_path)
+        for hostile in ("../../../evil.mp3", "/etc/evil.mp3"):
+            saved_path = service.save_audio_file("interview-abc", b"x", hostile)
+            assert saved_path.resolve().is_relative_to(tmp_path.resolve())
+
+    def test_save_audio_file_should_raise_when_extension_not_allowed(self, tmp_path: Path) -> None:
+        service = _make_service(tmp_path)
+        with pytest.raises(ValueError):
+            service.save_audio_file("interview-abc", b"x", "payload.py")
 
 
 class TestExtractAudio:

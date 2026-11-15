@@ -75,6 +75,7 @@ class TestUpsertEvaluation:
     def test_updated_at_changes_on_update(self, client: TestClient) -> None:
         cid = _make_candidate(client)
         r1 = client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Pending"})
+        assert r1.json()["updated_at"] is not None
         r2 = client.post("/evaluations", json={"candidate_id": cid, "final_recommendation": "Lean Hire"})
         # both should have timestamps; second may be same second but must be non-null
         assert r2.json()["updated_at"] is not None

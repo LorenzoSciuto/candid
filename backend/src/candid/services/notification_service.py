@@ -1,6 +1,6 @@
 from sqlmodel import Session
 
-from candid.models import Notification
+from candid.commons.models import Notification
 
 
 class NotificationService:

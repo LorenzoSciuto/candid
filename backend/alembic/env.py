@@ -4,15 +4,15 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
-from alembic import context
-
 # Import all models so SQLModel.metadata is fully populated
-import candid.models  # noqa: F401
+import candid.commons.models  # noqa: F401
+from alembic import context
 
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep the app's loggers (uvicorn, candid) alive when migrations run at startup.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = SQLModel.metadata
 

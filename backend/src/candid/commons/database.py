@@ -7,7 +7,7 @@ from sqlmodel import Session, create_engine
 
 logger = logging.getLogger(__name__)
 
-_ALEMBIC_DIR = Path(__file__).parent.parent.parent / "alembic.ini"
+_ALEMBIC_INI = Path(__file__).resolve().parents[3] / "alembic.ini"   # backend/alembic.ini
 
 
 class Database:
@@ -19,7 +19,7 @@ class Database:
         from alembic import command
         from alembic.config import Config
 
-        cfg = Config(str(_ALEMBIC_DIR))
+        cfg = Config(str(_ALEMBIC_INI))
         cfg.set_main_option("sqlalchemy.url", self._url)
         command.upgrade(cfg, "head")
 

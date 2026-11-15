@@ -1,14 +1,16 @@
 import logging
-
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.prompts import Prompts
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.errors import ai_provider_error
+from candid.commons.models import Candidate
+from candid.commons.prompts import Prompts
+from candid.commons.tenancy import get_in_org
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.email_service import EmailServiceFactory
 
@@ -71,18 +73,19 @@ class AIRouter:
                 role=body.role or "open",
             )
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
         try:
             engine = self._ai_factory.from_session(session, org_id)
             result = engine.run_prompt(prompt)
             return {"result": result}
         except Exception as e:
-            logger.exception("AI rewrite failed")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise ai_provider_error(e) from e
 
     def _send_email(self, body: SendEmailRequest, session: Session, org_id: str) -> dict:
         if not body.to or not body.subject or not body.body:
             raise HTTPException(400, "to, subject, and body are required")
+        if body.candidate_id:
+            get_in_org(session, Candidate, body.candidate_id, org_id)
         email_svc = self._email_factory.from_session(session, org_id, candidate_id=body.candidate_id) if self._email_factory else None
         if not email_svc:
             raise HTTPException(503, "SMTP not configured — configure it in Settings → Email")
@@ -91,4 +94,4 @@ class AIRouter:
             return {"ok": True}
         except Exception as exc:
             logger.exception("Failed to send email to %s", body.to)
-            raise HTTPException(500, f"Send failed: {exc}") from exc
+            raise HTTPException(502, "The email could not be sent — check the SMTP settings") from exc

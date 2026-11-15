@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.schemas import QuickAddRequest
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.errors import ai_provider_error
+from candid.commons.schemas import QuickAddRequest
 from candid.services.ai_engine import AIEngineFactory
 
 
@@ -27,4 +28,4 @@ class QuickAddRouter:
                 engine = self._ai_factory.from_session(session, user.org_id)
                 return engine.parse_quick_add(body.text)
             except Exception as exc:
-                raise HTTPException(502, f"AI error: {exc}") from exc
+                raise ai_provider_error(exc) from exc

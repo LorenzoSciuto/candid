@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from candid.models import Invitation, Membership, Organization, User
+from candid.commons.models import Invitation, Membership, Organization, User
 
 TEST_ORG_ID = "org-test"
 TEST_USER_ID = "test-user"

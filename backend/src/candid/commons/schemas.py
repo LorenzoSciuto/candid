@@ -1,7 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel
-
+from pydantic import BaseModel, Field, field_validator
 
 # ── Candidates ─────────────────────────────────────────────────────────────────
 
@@ -120,12 +119,22 @@ class EmailConfigResponse(BaseModel):
     smtp_from: Optional[str] = None
 
 
+DATE_FORMATS = ("dd/MM/yyyy", "MM/dd/yyyy", "yyyy-MM-dd")
+CURRENCIES = ("EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "DKK", "NOK")
+DEFAULT_LOCATIONS = ["Remote"]
+
+
 class PreferencesUpdate(BaseModel):
-    date_format: str = "dd/MM/yyyy"
+    """Organisation-wide display preferences. Omitted fields are left unchanged."""
+    date_format: Optional[str] = None
+    currency: Optional[str] = None
+    locations: Optional[list[str]] = Field(None, max_length=100)
 
 
 class PreferencesResponse(BaseModel):
     date_format: str = "dd/MM/yyyy"
+    currency: str = "EUR"
+    locations: list[str] = Field(default_factory=lambda: list(DEFAULT_LOCATIONS))
 
 
 class GoogleAuthRequest(BaseModel):
@@ -145,11 +154,25 @@ class BrandingConfig(BaseModel):
     logo_url: Optional[str] = None
 
 
+_HEX_COLOR = r"^#[0-9a-fA-F]{3,8}$"
+_FONT_NAME = r"^[\w\s,'\"-]{1,100}$"
+_MAX_LOGO_CHARS = 700_000          # ~500 KB image as a data URL
+
+
 class BrandingUpdate(BaseModel):
-    primary_color: Optional[str] = None
-    background_color: Optional[str] = None
-    font_family: Optional[str] = None
-    logo_url: Optional[str] = None
+    """Rendered on the public job portal, so every field is validated strictly."""
+    primary_color: Optional[str] = Field(None, pattern=_HEX_COLOR)
+    background_color: Optional[str] = Field(None, pattern=_HEX_COLOR)
+    font_family: Optional[str] = Field(None, pattern=_FONT_NAME)
+    logo_url: Optional[str] = Field(None, max_length=_MAX_LOGO_CHARS)
+
+    @field_validator("logo_url")
+    @classmethod
+    def _logo_must_be_https_or_inline_image(cls, value: Optional[str]) -> Optional[str]:
+        if value and not value.startswith(("https://", "data:image/png", "data:image/jpeg",
+                                           "data:image/gif", "data:image/webp", "data:image/svg+xml")):
+            raise ValueError("logo_url must be an https:// URL or an inline PNG/JPEG/GIF/WebP/SVG image")
+        return value
 
 
 # ── Organizations ────────────────────────────────────────────────────────────────

@@ -1,12 +1,13 @@
 import dataclasses
 import json
 import subprocess
+import uuid
 from pathlib import Path
 
 from sqlmodel import Session
 
-from candid.models import Interview
-from candid.prompts import Prompts
+from candid.commons.models import Interview
+from candid.commons.prompts import Prompts
 
 
 @dataclasses.dataclass
@@ -18,6 +19,7 @@ class TranscriptionResult:
 
 class TranscriptionService:
     _AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
+    _VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".mkv"}
     _FFMPEG_TIMEOUT_SECONDS = 120
 
     def __init__(self, upload_dir: Path, ai_engine_factory) -> None:
@@ -25,9 +27,13 @@ class TranscriptionService:
         self._ai_engine_factory = ai_engine_factory
 
     def save_audio_file(self, interview_id: str, file_data: bytes, filename: str) -> Path:
-        destination_dir = self._upload_dir / interview_id
+        # The client filename is only used for its extension: never trust it as a path.
+        suffix = Path(filename).suffix.lower()
+        if suffix not in self._AUDIO_EXTENSIONS | self._VIDEO_EXTENSIONS:
+            raise ValueError(f"Unsupported audio/video format: {suffix or 'none'}")
+        destination_dir = self._upload_dir / Path(interview_id).name
         destination_dir.mkdir(parents=True, exist_ok=True)
-        destination_path = destination_dir / filename
+        destination_path = destination_dir / f"{uuid.uuid4().hex}{suffix}"
         destination_path.write_bytes(file_data)
         return destination_path
 
@@ -69,8 +75,9 @@ class TranscriptionService:
 
     def _run_ffmpeg_extraction(self, input_path: Path) -> Path:
         output_path = input_path.with_suffix(".wav")
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", str(input_path), "-vn", "-acodec", "pcm_s16le", str(output_path)],
+        # Fixed argv without a shell; ffmpeg comes from PATH (documented requirement) and paths are server-generated.
+        subprocess.run(  # noqa: S603
+            ["ffmpeg", "-y", "-i", str(input_path), "-vn", "-acodec", "pcm_s16le", str(output_path)],  # noqa: S607
             check=True,
             capture_output=True,
             timeout=self._FFMPEG_TIMEOUT_SECONDS,

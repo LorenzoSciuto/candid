@@ -1,15 +1,15 @@
-import pytest
 from contextlib import asynccontextmanager
-from pathlib import Path
+
+import pytest
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from candid.config import Settings
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org, require_user
+from candid.commons.config import Settings
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org, require_user
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.crypto import CryptoService
 from candid.services.cv_extractor import CVExtractor
@@ -23,6 +23,7 @@ _TEST_USER = UserCtx(
     email="test@candid.test",
     name="Test User",
     org_id=TEST_ORG_ID,
+    role="owner",
 )
 TEST_DB_URL = "sqlite://"
 
@@ -102,8 +103,8 @@ def client(
     from candid.routers.job_descriptions import JobDescriptionsRouter
     from candid.routers.notifications import NotificationsRouter
     from candid.routers.organizations import OrganizationsRouter
-    from candid.routers.quick_add import QuickAddRouter
     from candid.routers.performance_reviews import PerformanceReviewsRouter
+    from candid.routers.quick_add import QuickAddRouter
     from candid.routers.roles import RolesRouter
 
     @asynccontextmanager
@@ -129,7 +130,7 @@ def client(
         PerformanceReviewsRouter(db, ai_factory).router,
         JobDescriptionsRouter(db, ai_factory).router,
         AIRouter(db, ai_factory).router,
-        OrganizationsRouter(db, email_factory, settings, notification_service).router,
+        OrganizationsRouter(db, email_factory, settings).router,
         NotificationsRouter(db).router,
         EmailsRouter(db).router,
     ]:
@@ -140,12 +141,25 @@ def client(
 
 @pytest.fixture(autouse=True)
 def clean_tables(db: Database) -> None:
-    from candid.models import (
-        Candidate, EmailLog, Employee, Evaluation, Interview, JobDescription,
-        Membership, Notification, OrgApiKey, OrgConfig, Organization, PerformanceReview,
-        Role, User, Invitation,
-    )
     from sqlmodel import select
+
+    from candid.commons.models import (
+        Candidate,
+        EmailLog,
+        Employee,
+        Evaluation,
+        Interview,
+        Invitation,
+        JobDescription,
+        Membership,
+        Notification,
+        Organization,
+        OrgApiKey,
+        OrgConfig,
+        PerformanceReview,
+        Role,
+        User,
+    )
 
     with Session(db._engine) as session:
         for model in (

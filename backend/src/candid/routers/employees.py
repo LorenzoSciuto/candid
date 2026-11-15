@@ -3,10 +3,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.dependencies import UserCtx, require_org
-from candid.models import Employee, Notification
-from candid.schemas import EmployeeCreate, EmployeeNotesUpdate, EmployeeReminderSet, EmployeeUpdate
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.models import Candidate, Employee, Notification, Role
+from candid.commons.schemas import EmployeeCreate, EmployeeNotesUpdate, EmployeeReminderSet, EmployeeUpdate
+from candid.commons.tenancy import get_in_org
 
 
 class EmployeesRouter:
@@ -36,6 +37,7 @@ class EmployeesRouter:
             session: Session = Depends(database.get_session),
             user: UserCtx = Depends(require_org),
         ):
+            self._check_references(session, user.org_id, body.model_dump(exclude_none=True))
             employee = Employee(org_id=user.org_id, **body.model_dump())
             session.add(employee)
             session.commit()
@@ -50,6 +52,7 @@ class EmployeesRouter:
             user: UserCtx = Depends(require_org),
         ):
             employee = self._fetch(session, user.org_id, employee_id)
+            self._check_references(session, user.org_id, body.model_dump(exclude_none=True))
             for field_name, field_value in body.model_dump(exclude_none=True).items():
                 setattr(employee, field_name, field_value)
             session.add(employee)
@@ -122,6 +125,13 @@ class EmployeesRouter:
         employee.reminder_created_at = None
         session.add(employee)
         session.commit()
+
+    @staticmethod
+    def _check_references(session: Session, org_id: str, data: dict) -> None:
+        if data.get("role_id"):
+            get_in_org(session, Role, data["role_id"], org_id)
+        if data.get("candidate_id"):
+            get_in_org(session, Candidate, data["candidate_id"], org_id)
 
     def _create_reminder_notification(
         self, session: Session, org_id: str, user_id: str, employee: Employee

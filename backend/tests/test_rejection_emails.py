@@ -4,7 +4,7 @@ import unittest.mock as mock
 import pytest
 from fastapi.testclient import TestClient
 
-from candid.models import Candidate
+from candid.commons.models import Candidate
 from candid.services.ai_engine import AIEngine
 from candid.services.email_service import EmailService, EmailServiceFactory
 from tests.conftest import TEST_ORG_ID

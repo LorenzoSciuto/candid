@@ -4,22 +4,31 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session, select
 
-from candid.database import Database
-from candid.models import Candidate, JobDescription, Organization
-from candid.schemas import (
+from candid.commons.database import Database
+from candid.commons.models import Candidate, JobDescription, Organization
+from candid.commons.rate_limit import RateLimiter
+from candid.commons.schemas import (
     PortalApplicationResponse,
     PublicJobItem,
     PublicJobListResponse,
 )
+from candid.commons.uploads import MAX_CV_BYTES, read_limited
 from candid.services.ai_engine import AIEngineFactory
 from candid.services.cv_extractor import CVExtractor
 
 
 class PublicJobsRouter:
-    def __init__(self, database: Database, ai_engine_factory: Optional[AIEngineFactory] = None) -> None:
+    def __init__(
+        self,
+        database: Database,
+        ai_engine_factory: Optional[AIEngineFactory] = None,
+        apply_limiter: Optional[RateLimiter] = None,
+    ) -> None:
         self._db = database
         self._ai_factory = ai_engine_factory
         self._extractor = CVExtractor()
+        # Anonymous uploads trigger CV parsing and an AI call billed to the org.
+        self._apply_limiter = apply_limiter or RateLimiter(max_requests=5, window_seconds=3600)
         self.router = APIRouter(prefix="/public", tags=["public"])
         self._register()
 
@@ -40,6 +49,7 @@ class PublicJobsRouter:
             "/organizations/{org_slug}/jobs/{job_id}/apply",
             response_model=PortalApplicationResponse,
             status_code=201,
+            dependencies=[Depends(self._apply_limiter)],
         )
         async def apply_for_job(
             org_slug: str,
@@ -73,7 +83,9 @@ class PublicJobsRouter:
     ) -> PortalApplicationResponse:
         organization_record = self._fetch_org_by_slug(session, org_slug)
         job_description_record = self._fetch_active_job(session, organization_record.id, job_id)
-        cv_text = self._extract_cv_text(cv_file.filename or "", await cv_file.read())
+        cv_text = self._extract_cv_text(cv_file.filename or "", read_limited(cv_file, MAX_CV_BYTES))
+        if not cv_text.strip():
+            raise HTTPException(status_code=400, detail="Could not read the CV — upload a PDF or DOCX file")
         parsed = self._parse_cv(session, organization_record.id, cv_text)
         candidate = self._create_portal_candidate(
             session, organization_record.id, job_description_record, cv_text, parsed

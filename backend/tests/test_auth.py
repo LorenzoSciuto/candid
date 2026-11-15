@@ -1,18 +1,17 @@
-import pytest
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from candid.config import Settings
-from candid.database import Database
-from candid.dependencies import UserCtx, require_user
-from candid.models import Invitation, Membership, Organization, User
+from candid.commons.config import Settings
+from candid.commons.database import Database
+from candid.commons.dependencies import UserCtx, require_user
+from candid.commons.models import Invitation, Membership, Organization, User
 from candid.routers.auth import AuthRouter
-from candid.services.auth_service import verify_token
 
 _USER = UserCtx(
     user_id="test-user",
@@ -131,7 +130,7 @@ class TestGoogleAuth:
         google_payload = {
             "sub": "google-sub-99", "email": "newuser@example.com",
             "name": "New User", "picture": "https://example.com/pic.jpg",
-            "aud": "fake-client-id",
+            "aud": "fake-client-id", "email_verified": "true",
         }
         mock_resp = MagicMock(status_code=200)
         mock_resp.json.return_value = google_payload
@@ -159,7 +158,7 @@ class TestGoogleAuth:
         google_payload = {
             "sub": "google-sub-42", "email": "existing@example.com",
             "name": "Existing User", "picture": None,
-            "aud": "fake-client-id",
+            "aud": "fake-client-id", "email_verified": "true",
         }
         mock_resp = MagicMock(status_code=200)
         mock_resp.json.return_value = google_payload

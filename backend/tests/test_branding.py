@@ -5,8 +5,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from candid.dependencies import UserCtx, require_org
-from candid.models import Membership, Organization, User
+from candid.commons.dependencies import UserCtx, require_org
+from candid.commons.models import Membership, Organization, User
 from candid.routers.branding import BrandingRouter
 
 TEST_ORG_ID = "org-test"
@@ -18,6 +18,7 @@ _BRANDING_USER = UserCtx(
     email="test@candid.test",
     name="Test User",
     org_id=TEST_ORG_ID,
+    role="owner",
 )
 
 

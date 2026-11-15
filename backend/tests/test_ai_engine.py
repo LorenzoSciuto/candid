@@ -1,6 +1,7 @@
 """Tests for AIEngine retry/fallback logic and AIEngineFactory provider resolution."""
+from unittest.mock import MagicMock, call, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
 
 from candid.services.ai_engine import AIEngine, AIEngineFactory
 
@@ -129,6 +130,7 @@ class TestAIEngineFactoryProviderResolution:
     @staticmethod
     def _create_factory() -> tuple[AIEngineFactory, "CryptoService"]:  # noqa: F821
         from cryptography.fernet import Fernet
+
         from candid.services.crypto import CryptoService
         fernet_key = Fernet.generate_key().decode()
         crypto_service = CryptoService(fernet_key)
@@ -162,11 +164,19 @@ class TestAIEngineFactoryProviderResolution:
 
     def test_from_session_with_fallbacks_should_return_env_engine_when_org_id_is_empty(self) -> None:
         engine_factory, _ = self._create_factory()
-        with patch.dict("os.environ", {"DEFAULT_PROVIDER": "groq", "GROQ_API_KEY": "env-groq-key", "DEFAULT_MODEL": "llama3-8b-8192"}):
+        with patch.dict("os.environ", {"DEFAULT_PROVIDER": "groq", "GROQ_API_KEY": "env-groq-key", "DEFAULT_MODEL": "llama3-8b-8192", "ALLOW_SERVER_AI_KEYS": "true"}):
             engine = engine_factory.from_session_with_fallbacks(MagicMock(), org_id="")
         assert engine._provider == "groq"
         assert engine._api_key == "env-groq-key"
         assert engine._fallbacks == []
+
+    def test_server_keys_should_be_ignored_when_not_explicitly_allowed(self) -> None:
+        engine_factory, _ = self._create_factory()
+        with patch.dict("os.environ", {"DEFAULT_PROVIDER": "groq", "GROQ_API_KEY": "env-groq-key"}, clear=False):
+            import os
+            os.environ.pop("ALLOW_SERVER_AI_KEYS", None)
+            engine = engine_factory.from_session_with_fallbacks(MagicMock(), org_id="")
+        assert engine._api_key == ""
 
     def test_from_session_with_fallbacks_should_have_no_fallbacks_when_only_primary_key_stored(self) -> None:
         engine_factory, crypto_service = self._create_factory()

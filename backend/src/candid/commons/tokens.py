@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -10,8 +10,8 @@ _DEFAULT_TTL_HOURS = 48
 def create_token(payload: dict[str, Any], secret: str, ttl_hours: int = _DEFAULT_TTL_HOURS) -> str:
     data = {
         **payload,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=ttl_hours),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=ttl_hours),
+        "iat": datetime.now(UTC),
     }
     return jwt.encode(data, secret, algorithm=_ALGORITHM)
 

@@ -1,6 +1,5 @@
 import uuid
-from datetime import date, datetime, timezone
-from typing import Optional
+from datetime import UTC, date, datetime
 
 from sqlmodel import Field, SQLModel
 
@@ -15,9 +14,9 @@ class User(SQLModel, table=True):
     id: str = Field(primary_key=True)           # Google sub
     email: str = Field(unique=True, index=True)
     name: str
-    picture: Optional[str] = None
-    title: Optional[str] = None                 # job title / role shown in profile
-    department: Optional[str] = None
+    picture: str | None = None
+    title: str | None = None                 # job title / role shown in profile
+    department: str | None = None
     created_at: str = Field(default_factory=lambda: date.today().isoformat())
 
 
@@ -27,7 +26,7 @@ class Organization(SQLModel, table=True):
     slug: str = Field(unique=True, index=True)
     owner_id: str
     created_at: str = Field(default_factory=lambda: date.today().isoformat())
-    branding_config: Optional[str] = None   # JSON: {primary_color, bg_color, logo_url, ...}
+    branding_config: str | None = None   # JSON: {primary_color, bg_color, logo_url, ...}
 
 
 class Membership(SQLModel, table=True):
@@ -47,7 +46,7 @@ class Invitation(SQLModel, table=True):
     invited_by: str
     created_at: str = Field(default_factory=lambda: date.today().isoformat())
     expires_at: str
-    accepted_at: Optional[str] = None
+    accepted_at: str | None = None
 
 
 # ── Per-org AI config ─────────────────────────────────────────────────────────
@@ -57,15 +56,15 @@ class OrgConfig(SQLModel, table=True):
     org_id: str = Field(primary_key=True)
     provider: str = "openai"
     model_name: str = "gpt-4o"
-    stages_json: Optional[str] = None          # JSON list of {id, label, dot}
-    smtp_host: Optional[str] = None
+    stages_json: str | None = None          # JSON list of {id, label, dot}
+    smtp_host: str | None = None
     smtp_port: int = 587
-    smtp_user: Optional[str] = None
-    smtp_password_encrypted: Optional[str] = None
-    smtp_from: Optional[str] = None
+    smtp_user: str | None = None
+    smtp_password_encrypted: str | None = None
+    smtp_from: str | None = None
     date_format: str = Field(default="dd/MM/yyyy")
     currency: str = Field(default="EUR")
-    locations_json: Optional[str] = None       # JSON list of office locations offered in forms
+    locations_json: str | None = None       # JSON list of office locations offered in forms
 
 
 class OrgApiKey(SQLModel, table=True):
@@ -73,7 +72,7 @@ class OrgApiKey(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("ak"), primary_key=True)
     org_id: str = Field(index=True)
     provider: str = Field(index=True)
-    encrypted_key: Optional[str] = None
+    encrypted_key: str | None = None
 
 
 # ── Recruiting entities (all scoped to org_id) ────────────────────────────────
@@ -83,70 +82,70 @@ class Candidate(SQLModel, table=True):
     org_id: str = Field(default="", index=True)
     first_name: str
     last_name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    current_role: Optional[str] = None
-    years_of_experience: Optional[int] = None
-    location: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
+    current_role: str | None = None
+    years_of_experience: int | None = None
+    location: str | None = None
     status: str = Field(default="new")
-    source: Optional[str] = None
-    applied_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    score: Optional[float] = None
-    cv_text: Optional[str] = None
-    cv_filename: Optional[str] = None
-    job_title: Optional[str] = None
+    source: str | None = None
+    applied_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    score: float | None = None
+    cv_text: str | None = None
+    cv_filename: str | None = None
+    job_title: str | None = None
     # JSON: {overview, strengths[], weaknesses[], questions[], extracted{}, career_history[], role_fits[]}
-    ai_pre_analysis: Optional[str] = None
+    ai_pre_analysis: str | None = None
     # JSON: [{title, company, period, description}]
-    career_history: Optional[str] = None
+    career_history: str | None = None
     # JSON: [{status, at, by}]
-    status_history: Optional[str] = None
+    status_history: str | None = None
     # ISO timestamp of last AI analysis run
-    analysis_at: Optional[str] = None
+    analysis_at: str | None = None
     # JSON: [{type, at, note}] — append-only audit log
-    activity_log: Optional[str] = None
-    cv_file: Optional[bytes] = None
-    job_description_id: Optional[str] = Field(default=None, foreign_key="job_description.id", index=True)
+    activity_log: str | None = None
+    cv_file: bytes | None = None
+    job_description_id: str | None = Field(default=None, foreign_key="job_description.id", index=True)
 
 
 class Interview(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("i"), primary_key=True)
     org_id: str = Field(default="", index=True)
-    candidate_id: Optional[str] = Field(default=None, foreign_key="candidate.id", index=True)
+    candidate_id: str | None = Field(default=None, foreign_key="candidate.id", index=True)
     type: str = "Manual Paste"
-    title: Optional[str] = None
-    interviewer: Optional[str] = None
-    date: Optional[str] = None
-    time: Optional[str] = None
-    duration: Optional[str] = None
-    raw_content: Optional[str] = None
-    cleaned_transcript: Optional[str] = None
-    ai_summary: Optional[str] = None
-    extra_info: Optional[str] = None
-    audio_file_path: Optional[str] = None
-    transcript_raw: Optional[str] = None
-    transcript_status: Optional[str] = None
-    transcript_language: Optional[str] = None
-    ai_evaluation: Optional[str] = None
+    title: str | None = None
+    interviewer: str | None = None
+    date: str | None = None
+    time: str | None = None
+    duration: str | None = None
+    raw_content: str | None = None
+    cleaned_transcript: str | None = None
+    ai_summary: str | None = None
+    extra_info: str | None = None
+    audio_file_path: str | None = None
+    transcript_raw: str | None = None
+    transcript_status: str | None = None
+    transcript_language: str | None = None
+    ai_evaluation: str | None = None
 
 
 class Evaluation(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("e"), primary_key=True)
     org_id: str = Field(default="", index=True)
     candidate_id: str = Field(foreign_key="candidate.id", unique=True, index=True)
-    human_skills: Optional[str] = None         # JSON: {"Communication": 4, ...}
-    technical_skills: Optional[str] = None     # JSON: {"Domain Knowledge": 5, ...}
+    human_skills: str | None = None         # JSON: {"Communication": 4, ...}
+    technical_skills: str | None = None     # JSON: {"Domain Knowledge": 5, ...}
     final_recommendation: str = "Pending"
-    notes: Optional[str] = None
-    updated_at: Optional[str] = None
+    notes: str | None = None
+    updated_at: str | None = None
 
 
 class Role(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("r"), primary_key=True)
     org_id: str = Field(default="", index=True)
     name: str
-    department: Optional[str] = None
-    description: Optional[str] = None
+    department: str | None = None
+    description: str | None = None
     headcount: int = Field(default=1)
 
 
@@ -157,14 +156,14 @@ class JobDescription(SQLModel, table=True):
     org_id: str = Field(default="", index=True)
     role_id: str = Field(foreign_key="role.id", index=True)
     title: str
-    description: Optional[str] = None
-    requirements: Optional[str] = None
-    location: Optional[str] = None
+    description: str | None = None
+    requirements: str | None = None
+    location: str | None = None
     status: str = "Draft"
     openings: int = 1
-    owner: Optional[str] = None
-    salary_min: Optional[int] = None
-    salary_max: Optional[int] = None
+    owner: str | None = None
+    salary_min: int | None = None
+    salary_max: int | None = None
     salary_currency: str = "EUR"
 
 
@@ -173,20 +172,20 @@ class Employee(SQLModel, table=True):
     org_id: str = Field(default="", index=True)
     first_name: str
     last_name: str
-    email: Optional[str] = None
-    role_id: Optional[str] = Field(default=None, foreign_key="role.id", index=True)
-    role_name: Optional[str] = None
-    department: Optional[str] = None
-    salary: Optional[float] = None
+    email: str | None = None
+    role_id: str | None = Field(default=None, foreign_key="role.id", index=True)
+    role_name: str | None = None
+    department: str | None = None
+    salary: float | None = None
     currency: str = "EUR"
-    hire_date: Optional[str] = None
-    location: Optional[str] = None
-    manager: Optional[str] = None
-    candidate_id: Optional[str] = None
-    notes: Optional[str] = None
-    reminder_note: Optional[str] = None
+    hire_date: str | None = None
+    location: str | None = None
+    manager: str | None = None
+    candidate_id: str | None = None
+    notes: str | None = None
+    reminder_note: str | None = None
     reminder_active: bool = Field(default=False)
-    reminder_created_at: Optional[str] = None
+    reminder_created_at: str | None = None
 
 
 # ── Notifications ─────────────────────────────────────────────────────────────
@@ -201,7 +200,7 @@ class Notification(SQLModel, table=True):
     entity_id: str                  # ID of the related entity
     entity_type: str                # "candidate" | "interview" | "invitation" | "employee"
     is_read: bool = Field(default=False)
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class EmailLog(SQLModel, table=True):
@@ -209,13 +208,13 @@ class EmailLog(SQLModel, table=True):
     id: str = Field(default_factory=lambda: _uid("em"), primary_key=True)
     org_id: str = Field(index=True)
     direction: str                           # "sent" | "received"
-    to_email: Optional[str] = None
-    from_email: Optional[str] = None
+    to_email: str | None = None
+    from_email: str | None = None
     subject: str
     body: str = ""
     email_type: str = "general"              # "rejection" | "invitation" | "general" | "manual"
-    candidate_id: Optional[str] = Field(None, index=True)
-    sent_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    candidate_id: str | None = Field(None, index=True)
+    sent_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class PerformanceReview(SQLModel, table=True):
@@ -225,11 +224,11 @@ class PerformanceReview(SQLModel, table=True):
     org_id: str = Field(default="", index=True)
     employee_id: str = Field(foreign_key="employee.id", index=True)
     period: str
-    self_evaluation: Optional[str] = None
-    manager_feedback: Optional[str] = None
-    rating: Optional[str] = None
-    action_goals: Optional[str] = None        # JSON array of goal strings
-    next_review_date: Optional[str] = None    # ISO date
+    self_evaluation: str | None = None
+    manager_feedback: str | None = None
+    rating: str | None = None
+    action_goals: str | None = None        # JSON array of goal strings
+    next_review_date: str | None = None    # ISO date
     created_at: str = Field(default_factory=lambda: date.today().isoformat())
 
 
@@ -244,10 +243,10 @@ class VideoInterview(SQLModel, table=True):
     invite_token: str = Field(unique=True, index=True)
     questions: str  # JSON list of question strings
     status: str = Field(default="pending")  # pending | in_progress | completed | expired
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     expires_at: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
 
 class VideoResponse(SQLModel, table=True):
@@ -257,7 +256,7 @@ class VideoResponse(SQLModel, table=True):
     video_interview_id: str = Field(index=True)
     question_index: int
     status: str = Field(default="recording")  # recording | uploading | complete
-    total_chunks: Optional[int] = None
+    total_chunks: int | None = None
     received_chunks: int = Field(default=0)
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    completed_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    completed_at: str | None = None

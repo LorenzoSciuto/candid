@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 DEFAULT_STAGES = [
     {"id": "screening", "label": "Screening",     "dot": "#3b82f6"},
@@ -22,7 +22,7 @@ def first_pipeline_stage(stages: list) -> str:
 def append_activity(candidate, event_type: str, note: str, by: str | None = None) -> None:
     """Append an entry to the candidate's JSON activity log (shown in the Activity tab)."""
     log = json.loads(candidate.activity_log or "[]")
-    entry = {"type": event_type, "at": datetime.now(timezone.utc).isoformat(), "note": note}
+    entry = {"type": event_type, "at": datetime.now(UTC).isoformat(), "note": note}
     if by:
         entry["by"] = by
     log.append(entry)

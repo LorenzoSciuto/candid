@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from sqlmodel import Session, select
@@ -23,7 +22,7 @@ class InterviewsRouter:
         self,
         db: Database,
         ai_factory: AIEngineFactory,
-        transcription_service: Optional[TranscriptionService] = None,
+        transcription_service: TranscriptionService | None = None,
     ) -> None:
         self._db = db
         self._ai_factory = ai_factory
@@ -36,7 +35,7 @@ class InterviewsRouter:
 
         @self.router.get("")
         def list_interviews(
-            candidate_id: Optional[str] = None,
+            candidate_id: str | None = None,
             session: Session = Depends(db.get_session),
             user: UserCtx = Depends(require_org),
         ):

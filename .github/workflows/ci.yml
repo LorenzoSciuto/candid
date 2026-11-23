@@ -18,7 +18,7 @@ jobs:
         working-directory: backend
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:19-alpine
         env:
           POSTGRES_USER: candid
           POSTGRES_PASSWORD: ci-only
@@ -30,13 +30,13 @@ jobs:
       # Enables the Row-Level Security tests against a real PostgreSQL.
       CANDID_TEST_DATABASE_URL: postgresql://candid:ci-only@localhost:5432/candid
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - run: uv sync --locked
       - name: Lint (ruff)
-        run: uv run --with ruff==0.8.4 ruff check src tests alembic
+        run: uv run ruff check src tests alembic
       - name: Migrations match the models
         run: |
           uv run alembic upgrade head
@@ -53,11 +53,11 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
       - name: JSX parses
-        run: for f in *.jsx screens/*.jsx; do npx --yes esbuild@0.24.0 --loader:.jsx=jsx "$f" --log-level=error > /dev/null; done
+        run: for f in *.jsx screens/*.jsx; do npx --yes esbuild@0.28.2 --loader:.jsx=jsx "$f" --log-level=error > /dev/null; done
       - name: Scripts exist and translations are complete
         run: node tests/check.js

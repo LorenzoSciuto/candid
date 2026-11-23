@@ -21,7 +21,7 @@ def app_module(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_application_should_mount_all_routers(app_module) -> None:
-    paths = {route.path for route in app_module.app.routes}
+    paths = set(app_module.app.openapi()["paths"])
     for expected in ("/auth/google", "/candidates", "/interviews", "/video-interviews",
                      "/public/organizations/{org_slug}/jobs", "/public/video/{token}", "/config/preferences"):
         assert expected in paths

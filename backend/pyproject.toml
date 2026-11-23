@@ -2,27 +2,26 @@
 name = "wennovate-candid"
 version = "1.0.0"
 description = "Candid by Wennovate — AI-powered recruiting assistant (backend API)"
-readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Wennovate" }]
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.136.1",
-    "uvicorn[standard]>=0.46.0",
-    "sqlmodel>=0.0.38",
-    "psycopg2-binary>=2.9.12",
-    "python-multipart>=0.0.27",
-    "cryptography>=48.0.0",
-    "openai>=2.36.0",
-    "anthropic>=0.105.2",
-    "pymupdf>=1.27.2",
+    "fastapi>=0.165.0",
+    "uvicorn[standard]>=0.54.0",
+    "sqlmodel>=0.0.50",
+    "python-multipart>=0.0.34",
+    "cryptography>=50.0.2",
+    "openai>=3.57.0",
+    "anthropic>=2.12.0",
+    "pymupdf>=2.1",
     "python-docx>=1.2.0",
-    "pydantic-settings>=2.14.0",
-    "google-genai>=2.0.0",
-    "groq>=1.2.0",
+    "pydantic-settings>=2.16.3",
+    "google-genai>=3.6.1",
+    "groq>=1.7.0",
     "httpx>=0.28.1",
-    "pyjwt>=2.12.1",
-    "alembic>=1.18.4",
+    "pyjwt>=2.15.1",
+    "alembic>=1.20.1",
+    "psycopg[binary]>=3.3.9",
 ]
 
 [project.urls]
@@ -40,9 +39,10 @@ package = true
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.3",
+    "pytest>=9.2.0",
     "httpx>=0.28.1",
     "pytest-cov>=7.1.0",
+    "ruff>=0.17.6",
 ]
 
 [tool.pytest.ini_options]
@@ -53,8 +53,8 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-# pycodestyle, pyflakes, isort, bugbear and bandit (security) rules.
-select = ["E", "F", "I", "B", "S"]
+# pycodestyle, pyflakes, isort, bugbear, bandit (security) and pyupgrade rules.
+select = ["E", "F", "I", "B", "S", "UP"]
 ignore = [
     "E501",   # long lines: prompt templates and HTML are clearer unwrapped
     "B008",   # FastAPI's Depends()/File() in argument defaults is the framework idiom

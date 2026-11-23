@@ -23,9 +23,9 @@ class CVExtractor:
 
     @staticmethod
     def _from_pdf(content: bytes) -> str:
-        import fitz  # PyMuPDF
+        import pymupdf
 
-        doc = fitz.open(stream=content, filetype="pdf")
+        doc = pymupdf.open(stream=content, filetype="pdf")
         text = "\n".join(page.get_text() for page in doc).strip()
         doc.close()
         if not text:

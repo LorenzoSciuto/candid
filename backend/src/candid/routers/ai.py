@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -30,7 +29,7 @@ class SendEmailRequest(BaseModel):
     to: str
     subject: str
     body: str
-    candidate_id: Optional[str] = None
+    candidate_id: str | None = None
 
 
 class AIRouter:

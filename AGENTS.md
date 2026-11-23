@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents and contributors working in this repository.
 
 **Candid** (by Wennovate) — AI recruiting assistant. `backend/` (FastAPI + SQLModel + PostgreSQL, uv) and `frontend/` (React 18 via CDN, no build) share no code: the HTTP API is the only contract. Design rationale: `docs/ARCHITECTURE.md`.
 
@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd backend
 uv run pytest                           # SQLite, no services
 uv run pytest tests/test_candidates.py -k Ownership
-uv run --with ruff ruff check src tests alembic
+uv run ruff check src tests alembic
 CANDID_TEST_DATABASE_URL=postgresql://... uv run pytest tests/test_rls_postgres.py   # real-Postgres RLS tests
 uv run alembic revision --autogenerate -m "describe_change" && uv run alembic upgrade head
 uv run alembic check                    # CI fails if migrations and models differ

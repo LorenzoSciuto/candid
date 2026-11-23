@@ -1,5 +1,5 @@
 import io
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -77,13 +77,13 @@ class TestCVExtractor:
 
     def test_pdf_image_only_raises(self) -> None:
         # A real image-only PDF is hard to construct in tests;
-        # we verify the error path by patching fitz.
+        # we verify the error path by patching pymupdf.
         import unittest.mock as mock
         mock_page = mock.MagicMock()
         mock_page.get_text.return_value = ""
         mock_doc = mock.MagicMock()
         mock_doc.__iter__ = mock.Mock(return_value=iter([mock_page]))
-        with mock.patch("fitz.open", return_value=mock_doc):
+        with mock.patch("pymupdf.open", return_value=mock_doc):
             with pytest.raises(ValueError, match="image-only"):
                 self.extractor.extract("scan.pdf", b"fake-pdf-bytes")
 
@@ -179,8 +179,8 @@ class TestAuthService:
         import jwt
         payload = {
             "sub": "user-exp",
-            "exp": datetime.now(timezone.utc) - timedelta(seconds=1),
-            "iat": datetime.now(timezone.utc) - timedelta(hours=1),
+            "exp": datetime.now(UTC) - timedelta(seconds=1),
+            "iat": datetime.now(UTC) - timedelta(hours=1),
         }
         token = jwt.encode(payload, self._SECRET, algorithm="HS256")
         with pytest.raises(jwt.ExpiredSignatureError):

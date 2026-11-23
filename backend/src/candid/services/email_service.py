@@ -4,7 +4,7 @@ import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sqlmodel import Session
@@ -61,7 +61,7 @@ class EmailService:
         self._send(to_email, subject, body_text, body_html)
         logger.info("Invitation sent to %s", to_email)
 
-    def _send(self, to_email: str, subject: str, body_text: str, body_html: Optional[str] = None) -> None:
+    def _send(self, to_email: str, subject: str, body_text: str, body_html: str | None = None) -> None:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = self._from
@@ -90,7 +90,7 @@ class LoggingEmailService:
         email_service: EmailService,
         session: "Session",
         org_id: str,
-        candidate_id: Optional[str] = None,
+        candidate_id: str | None = None,
     ) -> None:
         self._email_service = email_service
         self._session = session
@@ -134,8 +134,8 @@ class EmailServiceFactory:
         self,
         session: "Session",
         org_id: str,
-        candidate_id: Optional[str] = None,
-    ) -> Optional[LoggingEmailService]:
+        candidate_id: str | None = None,
+    ) -> LoggingEmailService | None:
         from candid.commons.models import OrgConfig
         cfg = session.get(OrgConfig, org_id)
         if not cfg or not cfg.smtp_host:

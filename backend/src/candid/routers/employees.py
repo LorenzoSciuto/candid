@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -114,7 +114,7 @@ class EmployeesRouter:
     def _apply_reminder(self, session: Session, employee: Employee, note: str) -> None:
         employee.reminder_note = note
         employee.reminder_active = True
-        employee.reminder_created_at = datetime.now(timezone.utc).isoformat()
+        employee.reminder_created_at = datetime.now(UTC).isoformat()
         session.add(employee)
         session.commit()
         session.refresh(employee)

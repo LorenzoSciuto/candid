@@ -1,5 +1,4 @@
 import json
-from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session, select
@@ -21,8 +20,8 @@ class PublicJobsRouter:
     def __init__(
         self,
         database: Database,
-        ai_engine_factory: Optional[AIEngineFactory] = None,
-        apply_limiter: Optional[RateLimiter] = None,
+        ai_engine_factory: AIEngineFactory | None = None,
+        apply_limiter: RateLimiter | None = None,
     ) -> None:
         self._db = database
         self._ai_factory = ai_engine_factory

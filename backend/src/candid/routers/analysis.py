@@ -1,6 +1,5 @@
 import json
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlmodel import Session, select
@@ -30,7 +29,7 @@ class AnalysisRouter:
         @self.router.post("/upload-cv")
         async def upload_cv(
             file: UploadFile = File(...),
-            candidate_id: Optional[str] = Form(None),
+            candidate_id: str | None = Form(None),
             session: Session = Depends(db.get_session),
             user: UserCtx = Depends(require_org),
         ):
@@ -88,7 +87,7 @@ class AnalysisRouter:
                 is_regen = c.ai_pre_analysis is not None
                 c.ai_pre_analysis = json.dumps(result)
                 c.cv_text = body.cv_text
-                c.analysis_at = datetime.now(timezone.utc).isoformat()
+                c.analysis_at = datetime.now(UTC).isoformat()
                 role_fits = result.get("role_fits") or []
                 if role_fits:
                     c.score = round(max(float(rf["score"]) for rf in role_fits if rf.get("score") is not None), 2)

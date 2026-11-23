@@ -1,8 +1,7 @@
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 from sqlmodel import Session, select
 
@@ -32,13 +31,13 @@ class VideoInterviewService:
         session.refresh(interview)
         return interview
 
-    def get_by_token(self, session: Session, token: str) -> Optional[VideoInterview]:
+    def get_by_token(self, session: Session, token: str) -> VideoInterview | None:
         statement = select(VideoInterview).where(VideoInterview.invite_token == token)
         return session.exec(statement).first()
 
     def start_interview(self, session: Session, interview: VideoInterview) -> VideoInterview:
         interview.status = "in_progress"
-        interview.started_at = datetime.now(timezone.utc).isoformat()
+        interview.started_at = datetime.now(UTC).isoformat()
         session.add(interview)
         session.commit()
         session.refresh(interview)
@@ -88,7 +87,7 @@ class VideoInterviewService:
             raise ValueError("total_chunks out of range")
         response.status = "complete"
         response.total_chunks = total_chunks
-        response.completed_at = datetime.now(timezone.utc).isoformat()
+        response.completed_at = datetime.now(UTC).isoformat()
         session.add(response)
         session.commit()
         session.refresh(response)
@@ -109,13 +108,13 @@ class VideoInterviewService:
 
     def complete_interview(self, session: Session, interview: VideoInterview) -> VideoInterview:
         interview.status = "completed"
-        interview.completed_at = datetime.now(timezone.utc).isoformat()
+        interview.completed_at = datetime.now(UTC).isoformat()
         session.add(interview)
         session.commit()
         session.refresh(interview)
         return interview
 
-    def list_by_org(self, session: Session, org_id: str, candidate_id: Optional[str] = None) -> list[VideoInterview]:
+    def list_by_org(self, session: Session, org_id: str, candidate_id: str | None = None) -> list[VideoInterview]:
         statement = select(VideoInterview).where(VideoInterview.org_id == org_id)
         if candidate_id:
             statement = statement.where(VideoInterview.candidate_id == candidate_id)
@@ -126,7 +125,7 @@ class VideoInterviewService:
         session: Session,
         video_interview_id: str,
         org_id: str,
-    ) -> Optional[VideoInterview]:
+    ) -> VideoInterview | None:
         statement = select(VideoInterview).where(
             VideoInterview.id == video_interview_id,
             VideoInterview.org_id == org_id,
@@ -134,14 +133,14 @@ class VideoInterviewService:
         return session.exec(statement).first()
 
     def _expiry_timestamp(self) -> str:
-        return (datetime.now(timezone.utc) + timedelta(days=self._EXPIRY_DAYS)).isoformat()
+        return (datetime.now(UTC) + timedelta(days=self._EXPIRY_DAYS)).isoformat()
 
     def _find_response(
         self,
         session: Session,
         video_interview_id: str,
         question_index: int,
-    ) -> Optional[VideoResponse]:
+    ) -> VideoResponse | None:
         statement = select(VideoResponse).where(
             VideoResponse.video_interview_id == video_interview_id,
             VideoResponse.question_index == question_index,

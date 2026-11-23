@@ -7,7 +7,7 @@ DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-candid}"
 DB_PASS="${DB_PASS:-password}"   # local development only — never reuse in production
 DB_NAME="${DB_NAME:-candid}"
-PG_IMAGE="postgres:16-alpine"
+PG_IMAGE="postgres:19-alpine"
 
 # ── Already running ────────────────────────────────────────────────────────────
 if docker ps --filter "name=^/${CONTAINER}$" --format "{{.Names}}" 2>/dev/null \

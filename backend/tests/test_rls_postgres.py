@@ -1,6 +1,6 @@
 """Row-Level Security against a real PostgreSQL (skipped unless CANDID_TEST_DATABASE_URL is set).
 
-    docker run -d --rm -p 127.0.0.1:55432:5432 -e POSTGRES_USER=candid -e POSTGRES_PASSWORD=test postgres:16-alpine
+    docker run -d --rm -p 127.0.0.1:55432:5432 -e POSTGRES_USER=candid -e POSTGRES_PASSWORD=test postgres:19-alpine
     CANDID_TEST_DATABASE_URL=postgresql://candid:test@127.0.0.1:55432/candid uv run pytest tests/test_rls_postgres.py
 
 The connection user is a superuser on purpose: RLS must hold even then,

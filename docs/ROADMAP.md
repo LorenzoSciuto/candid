@@ -4,6 +4,8 @@ Where the project stands, what is missing, and what is likely to come next. Prio
 
 ## What works today (1.x)
 
+Candid 1.x covers a single recruiting team's pre-hire workflow. It is not yet a turnkey SaaS: there is no container image, sign-in is Google-only, and GDPR tooling is still missing.
+
 | Area | Status |
 |---|---|
 | CV intake: PDF/DOCX parsing, AI analysis, fit against open positions, Quick Add | ✅ Complete |
@@ -19,7 +21,7 @@ Where the project stands, what is missing, and what is likely to come next. Prio
 | UI in English, Italian and German | ✅ Complete |
 | Two-layer tenant isolation (app checks + PostgreSQL RLS), tested in CI | ✅ Complete |
 
-Quality bar: 360+ backend tests (unit, API, architecture rules, real-PostgreSQL RLS), ruff with security rules, migrations checked against models, i18n completeness check, automatic semantic releases.
+Quality bar: 370+ backend tests (unit, API, architecture rules, real-PostgreSQL RLS), ruff with security rules, migrations checked against models, i18n completeness check, automatic semantic releases.
 
 ## What is missing
 

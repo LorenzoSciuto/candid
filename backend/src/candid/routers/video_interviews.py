@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -184,9 +184,9 @@ class PublicVideoRouter:
 
     def _is_expired(self, interview: VideoInterview) -> bool:
         expiry = datetime.fromisoformat(interview.expires_at)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
+            expiry = expiry.replace(tzinfo=UTC)
         return now > expiry
 
     def _get_by_token(self, session: Session, token: str) -> dict:

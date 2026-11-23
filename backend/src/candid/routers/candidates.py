@@ -1,7 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -47,8 +46,8 @@ class CandidatesRouter:
         self,
         db: Database,
         notification_service: NotificationService | None = None,
-        ai_engine_factory: Optional[AIEngineFactory] = None,
-        email_factory: Optional[EmailServiceFactory] = None,
+        ai_engine_factory: AIEngineFactory | None = None,
+        email_factory: EmailServiceFactory | None = None,
     ) -> None:
         self._db = db
         self._notification_service = notification_service or NotificationService()
@@ -69,8 +68,8 @@ class CandidatesRouter:
 
         @self.router.get("")
         def list_candidates(
-            status: Optional[str] = None,
-            q: Optional[str] = None,
+            status: str | None = None,
+            q: str | None = None,
             session: Session = Depends(db.get_session),
             user: UserCtx = Depends(require_org),
         ):
@@ -305,7 +304,7 @@ class CandidatesRouter:
             get_in_org(session, JobDescription, data["job_description_id"], user.org_id, "Job description")
         data = self._apply_pipeline_entry_transition(session, user, candidate, data)
         if "status" in data and data["status"] != candidate.status:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             history = json.loads(candidate.status_history or "[]")
             history.append({"status": data["status"], "at": now, "by": user.name})
             candidate.status_history = json.dumps(history)
@@ -422,7 +421,7 @@ class CandidatesRouter:
         history = json.loads(candidate.status_history or "[]")
         history.append({
             "status": "Rejected",
-            "at": datetime.now(timezone.utc).isoformat(),
+            "at": datetime.now(UTC).isoformat(),
             "by": user.name,
         })
         candidate.status = "Rejected"

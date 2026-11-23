@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -61,7 +61,7 @@ class EvaluationsRouter:
         ev.technical_skills = json.dumps(body.technical_skills or {})
         ev.final_recommendation = body.final_recommendation
         ev.notes = body.notes
-        ev.updated_at = datetime.now(timezone.utc).isoformat()
+        ev.updated_at = datetime.now(UTC).isoformat()
         session.add(ev)
         session.commit()
         session.refresh(ev)

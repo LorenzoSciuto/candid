@@ -1,4 +1,3 @@
-from typing import Optional
 
 from cryptography.fernet import Fernet
 
@@ -6,8 +5,8 @@ from cryptography.fernet import Fernet
 class CryptoService:
     _MASK_VISIBLE = 4  # chars shown at each end
 
-    def __init__(self, key: Optional[str] = None) -> None:
-        self._fernet: Optional[Fernet] = Fernet(key.encode()) if key else None
+    def __init__(self, key: str | None = None) -> None:
+        self._fernet: Fernet | None = Fernet(key.encode()) if key else None
 
     # ── Public interface ───────────────────────────────────────────────────────
 

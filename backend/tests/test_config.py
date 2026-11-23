@@ -20,17 +20,17 @@ class TestSaveConfig:
     def test_saves_provider_and_model(self, client: TestClient) -> None:
         resp = client.put("/config", json={
             "provider": "anthropic",
-            "model_name": "claude-3-5-sonnet-20241022",
+            "model_name": "test-model",
             "api_key": "sk-ant-test-key-1234567890",
         })
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
     def test_saved_provider_reflected_in_get(self, client: TestClient) -> None:
-        client.put("/config", json={"provider": "anthropic", "model_name": "claude-opus-4", "api_key": "sk-ant-x"})
+        client.put("/config", json={"provider": "anthropic", "model_name": "test-model-2", "api_key": "sk-ant-x"})
         data = client.get("/config").json()
         assert data["provider"] == "anthropic"
-        assert data["model_name"] == "claude-opus-4"
+        assert data["model_name"] == "test-model-2"
 
     def test_key_is_masked_in_get(self, client: TestClient) -> None:
         client.put("/config", json={

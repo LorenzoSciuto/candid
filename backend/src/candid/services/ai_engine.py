@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlmodel import Session, select
 
@@ -23,7 +23,7 @@ class AIEngine:
         provider: str,
         model: str,
         api_key: str,
-        fallbacks: Optional[list[tuple[str, str, str]]] = None,
+        fallbacks: list[tuple[str, str, str]] | None = None,
     ) -> None:
         self._provider = provider
         self._model = model
@@ -36,9 +36,9 @@ class AIEngine:
         self,
         cv_text: str,
         position_name: str = "",
-        jd_text: Optional[str] = None,
-        notes: Optional[str] = None,
-        open_roles: Optional[list] = None,
+        jd_text: str | None = None,
+        notes: str | None = None,
+        open_roles: list | None = None,
     ) -> dict:
         prompt = self._build_cv_analysis_prompt(cv_text, position_name, jd_text, notes, open_roles)
         raw_result = self._parse_json(self._call(prompt))
@@ -48,7 +48,7 @@ class AIEngine:
         prompt = Prompts.QUICK_PARSE.format(raw_text=raw_text)
         return self._parse_json(self._call(prompt))
 
-    def process_transcript(self, raw_transcript: str, cv_context: Optional[str] = None) -> dict:
+    def process_transcript(self, raw_transcript: str, cv_context: str | None = None) -> dict:
         cv_context_section = (
             f"\nCandidate CV (use for name/company/role corrections):\n{cv_context[:2000]}\n"
             if cv_context else ""
@@ -118,9 +118,9 @@ class AIEngine:
         self,
         cv_text: str,
         position_name: str,
-        jd_text: Optional[str],
-        notes: Optional[str],
-        open_roles: Optional[list],
+        jd_text: str | None,
+        notes: str | None,
+        open_roles: list | None,
     ) -> str:
         position_section = f" Target position: {position_name}." if position_name else ""
         jd_section = f"\nJob Description:\n{jd_text}\n" if jd_text else ""
@@ -135,7 +135,7 @@ class AIEngine:
         )
 
     @staticmethod
-    def _build_open_roles_section(open_roles: Optional[list]) -> str:
+    def _build_open_roles_section(open_roles: list | None) -> str:
         if not open_roles:
             return ""
         formatted_roles = "\n".join(
@@ -169,7 +169,7 @@ class AIEngine:
             return fallback_result
         raise RuntimeError(f"All AI providers failed. Last error: {last_exception}")
 
-    def _attempt_primary_with_backoff(self, prompt: str) -> tuple[Optional[str], Exception]:
+    def _attempt_primary_with_backoff(self, prompt: str) -> tuple[str | None, Exception]:
         last_exception: Exception = RuntimeError("No providers configured")
         for attempt_index in range(self._MAX_PRIMARY_ATTEMPTS):
             try:
@@ -182,7 +182,7 @@ class AIEngine:
 
     def _attempt_fallback_providers(
         self, prompt: str, last_exception: Exception
-    ) -> tuple[Optional[str], Exception]:
+    ) -> tuple[str | None, Exception]:
         for fallback_provider, fallback_model, fallback_api_key in self._fallbacks:
             try:
                 return self._call_provider(fallback_provider, fallback_model, fallback_api_key, prompt), last_exception
@@ -201,7 +201,7 @@ class AIEngine:
             return self._call_groq(prompt, model=model, api_key=api_key)
         return self._call_openai(prompt, model=model, api_key=api_key)
 
-    def _call_openai(self, prompt: str, *, model: Optional[str] = None, api_key: Optional[str] = None) -> str:
+    def _call_openai(self, prompt: str, *, model: str | None = None, api_key: str | None = None) -> str:
         from openai import OpenAI
         openai_client = OpenAI(api_key=api_key or self._api_key)
         response = openai_client.chat.completions.create(
@@ -215,7 +215,7 @@ class AIEngine:
         )
         return response.choices[0].message.content or ""
 
-    def _call_groq(self, prompt: str, *, model: Optional[str] = None, api_key: Optional[str] = None) -> str:
+    def _call_groq(self, prompt: str, *, model: str | None = None, api_key: str | None = None) -> str:
         from groq import Groq
         groq_client = Groq(api_key=api_key or self._api_key)
         response = groq_client.chat.completions.create(
@@ -229,13 +229,13 @@ class AIEngine:
         )
         return response.choices[0].message.content or ""
 
-    def _call_gemini(self, prompt: str, *, model: Optional[str] = None, api_key: Optional[str] = None) -> str:
+    def _call_gemini(self, prompt: str, *, model: str | None = None, api_key: str | None = None) -> str:
         from google import genai
         gemini_client = genai.Client(api_key=api_key or self._api_key)
         response = gemini_client.models.generate_content(model=model or self._model, contents=prompt)
         return response.text
 
-    def _call_anthropic(self, prompt: str, *, model: Optional[str] = None, api_key: Optional[str] = None) -> str:
+    def _call_anthropic(self, prompt: str, *, model: str | None = None, api_key: str | None = None) -> str:
         import anthropic
         anthropic_client = anthropic.Anthropic(api_key=api_key or self._api_key)
         message = anthropic_client.messages.create(
@@ -302,11 +302,11 @@ class AIEngineFactory:
 
     def _resolve_provider_keys(
         self, session: Session, org_id: str, primary_provider: str
-    ) -> tuple[Optional[str], list[tuple[str, str, str]]]:
+    ) -> tuple[str | None, list[tuple[str, str, str]]]:
         all_org_api_keys = session.exec(
             select(OrgApiKey).where(OrgApiKey.org_id == org_id)
         ).all()
-        primary_api_key: Optional[str] = None
+        primary_api_key: str | None = None
         fallback_providers: list[tuple[str, str, str]] = []
         for api_key_row in all_org_api_keys:
             if not api_key_row.encrypted_key:
@@ -345,7 +345,7 @@ class AIEngineFactory:
         return self._server_key(provider)
 
     def _create_engine_from_environment(
-        self, provider: Optional[str] = None, model: Optional[str] = None
+        self, provider: str | None = None, model: str | None = None
     ) -> AIEngine:
         resolved_provider = provider or os.environ.get("DEFAULT_PROVIDER", "openai")
         resolved_model = model or os.environ.get("DEFAULT_MODEL", "gpt-4o")

@@ -1,6 +1,6 @@
 # Candid — Architecture
 
-This document explains *why* the code is shaped the way it is. For setup and features see the [README](../README.md); the live API reference is served by the backend at `/docs` (OpenAPI).
+This document explains *why* the code is shaped the way it is. For setup see [DEVELOPMENT.md](DEVELOPMENT.md); the live API reference is served by the backend at `/docs` (OpenAPI).
 
 ## 1. Components
 
@@ -129,16 +129,30 @@ Deleting an organisation removes its rows and its media files.
 
 ## 7. Frontend
 
-A static React 18 single-page app with no bundler. Scripts load in a fixed order (see `frontend/README.md`):
-- `data.jsx`: constants, the AI provider/model catalog and organisation preferences;
-- `translations.jsx`: EN/IT/DE and `useT()`;
-- `ui.jsx`: shared primitives;
-- `screens/*.jsx`;
-- `app.jsx`: routing, auth flow and a `fetch` interceptor that adds the bearer token and logs out on 401.
+A static React 18 single-page app with no bundler. Scripts load in a fixed order; later files depend on earlier ones:
 
-Routing is hash-based. `#portal/<slug>` and `#video/<token>` render public pages before the auth flow. Everything user-visible is rendered as React text, and there is no `dangerouslySetInnerHTML`.
+| Order | File | Exports |
+|---|---|---|
+| 1 | `data.jsx` | `window.CANDID_DATA`: pipeline stages, skills, the AI provider/model catalog |
+| 2 | `translations.jsx` | `window.TRANSLATIONS`, `window.useT()` (EN/IT/DE) |
+| 3 | `ui.jsx` | shared primitives (`Btn`, `Modal`, `Sidebar`, `useApiData`, …) |
+| 4 | `screens/*.jsx` | one component per screen, as `window.<Name>Screen` |
+| 5 | `app.jsx` | routing, auth flow, invitation links, `fetch` interceptor |
 
-## 8. Quality gates
+- The `fetch` interceptor is installed before React mounts. It adds the bearer token (`window._authToken`) to API requests and dispatches `candid:unauthorized` on 401, which logs the user out.
+- Organisation-wide state: `window.CANDID_DATA.STATUS` (pipeline stages, loaded from `GET /config/stages`; changes broadcast the `candid:stages` event), `window.CANDID_PREFS` (date format, currency, locations; `getCurrency()`, `getLocations()`, `savePreferences()`), and `window.refreshCounts()` for the sidebar counters.
+- Routing is hash-based. `#portal/<slug>` (careers portal) and `#video/<token>` (candidate video interview) render public pages before the auth flow, using the last saved locale or the browser language. `#accept-invite?token=…` keeps the invitation through sign-in.
+- Everything user-visible is rendered as React text, and there is no `dangerouslySetInnerHTML`. The session token lives in `localStorage`. Moving it to an httpOnly cookie would also require CSRF protection.
+
+## 8. Security summary
+
+- Google ID tokens are verified for audience and verified email. Session JWTs use HS256 with a pinned algorithm and expiry, and the app refuses to start with a missing, short or placeholder secret.
+- Membership is re-checked on every request. Settings changes (AI keys, SMTP, stages, branding) require an admin.
+- Provider API keys and SMTP passwords are Fernet-encrypted at rest and only ever returned masked.
+- Uploads have size caps, extension allowlists and server-generated file names. Public endpoints are rate-limited (in memory, per process).
+- SMTP always verifies TLS certificates, and user-controlled values are HTML-escaped in emails.
+
+## 9. Quality gates
 
 - `uv run pytest`: unit, API and architecture tests on SQLite, plus RLS tests when `CANDID_TEST_DATABASE_URL` is set.
 - `ruff check` with pycodestyle, pyflakes, isort, bugbear and bandit (`S`) rules.

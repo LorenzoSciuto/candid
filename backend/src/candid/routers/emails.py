@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
@@ -23,8 +22,8 @@ class EmailsRouter:
 
         @self.router.get("")
         def list_emails(
-            direction: Optional[str] = None,
-            candidate_id: Optional[str] = None,
+            direction: str | None = None,
+            candidate_id: str | None = None,
             session: Session = Depends(database.get_session),
             user: UserCtx = Depends(require_org),
         ):
@@ -36,8 +35,8 @@ class EmailsRouter:
         self,
         session: Session,
         org_id: str,
-        direction: Optional[str],
-        candidate_id: Optional[str],
+        direction: str | None,
+        candidate_id: str | None,
     ) -> dict:
         query = select(EmailLog).where(EmailLog.org_id == org_id)
         if direction in ("sent", "received"):

@@ -1,4 +1,3 @@
-from typing import Optional
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = "postgresql://candid:password@localhost:5432/candid"
-    fernet_key: Optional[str] = None
+    fernet_key: str | None = None
     session_secret: str                         # required: no default, so it can never be guessed
 
     @field_validator("session_secret")
@@ -20,7 +19,7 @@ class Settings(BaseSettings):
                 "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
             )
         return v
-    google_client_id: Optional[str] = None
+    google_client_id: str | None = None
     cors_origins: str = "http://localhost:8080,https://localhost:8080"   # comma-separated; "*" allows any origin
     app_url: str = "http://localhost:8080"
     upload_dir: str = "uploads"                 # interview audio + candidate video answers (CVs live in the DB)

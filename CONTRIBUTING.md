@@ -7,14 +7,7 @@ Thanks for your interest in Candid! Please read the [Code of Conduct](CODE_OF_CO
 1. Create a branch from `main`.
 2. Make your change with tests. Keep the layering rules in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
    shared code goes to `backend/src/candid/commons/`, and routers never import each other.
-3. Run the checks locally:
-   ```bash
-   cd backend
-   uv run pytest
-   uv run --with ruff ruff check src tests alembic
-   uv run alembic check            # with a database at head: migrations must match the models
-   node ../frontend/tests/check.js
-   ```
+3. Run the checks in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#checks).
 4. Open a pull request. CI runs the same checks, including the Row-Level Security tests on PostgreSQL.
 
 ## Commit messages

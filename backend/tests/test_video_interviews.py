@@ -1,6 +1,6 @@
 import io
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -107,7 +107,7 @@ def _create_interview_via_db(
         interview = video_service.create_invite(session, org_id, "cand-001", questions)
         if expires_days < 0:
             interview.expires_at = (
-                datetime.now(timezone.utc) + timedelta(days=expires_days)
+                datetime.now(UTC) + timedelta(days=expires_days)
             ).isoformat()
             session.add(interview)
             session.commit()

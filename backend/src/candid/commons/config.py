@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         if len(v.encode()) < 32:
             raise ValueError(
                 f"SESSION_SECRET is {len(v.encode())} bytes — must be ≥32. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                "Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
             )
         return v
     google_client_id: str | None = None

@@ -6,6 +6,16 @@
 [![Release](https://img.shields.io/github/v/release/LorenzoSciuto/candid?sort=semver)](https://github.com/LorenzoSciuto/candid/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![Candid walkthrough: pipeline, candidate profile, CV analysis, interview, evaluation and job portal](docs/images/overview.gif)
+
+| Hiring pipeline | AI analysis of a CV |
+|---|---|
+| ![Kanban pipeline with candidates in each stage](docs/images/pipeline.png) | ![CV analysis with strengths, gaps and fit against open positions](docs/images/candidate-analysis.png) |
+| **Evaluation scorecard** | **Public job portal** |
+| ![Scorecard with skill ratings and final recommendation](docs/images/candidate-evaluation.png) | ![Branded portal listing open positions](docs/images/portal.png) |
+
+<sub>Screenshots show fictional demo data.</sub>
+
 ## Features
 
 - **CV analysis:** upload a PDF/DOCX and get a fit score, strengths, gaps and interview questions, matched against every open position.
@@ -25,7 +35,7 @@ Requirements: [uv](https://docs.astral.sh/uv/), Docker, Python 3, and optionally
 
 ```bash
 git clone https://github.com/LorenzoSciuto/candid.git && cd candid
-cp backend/.env.example backend/.env   # fill FERNET_KEY, SESSION_SECRET, GOOGLE_CLIENT_ID
+cp backend/.env.example backend/.env   # fill FERNET_KEY, SESSION_SECRET, GOOGLE_CLIENT_ID (the file says how)
 ./scripts/server.sh                    # PostgreSQL + migrations + API on http://localhost:8000 (/docs)
 ./scripts/client.sh                    # frontend on http://localhost:8080
 ```
@@ -44,3 +54,5 @@ Sign in with Google, create your organisation and add an AI provider key in **Se
 ## License
 
 [MIT](LICENSE) © Wennovate
+
+**Third-party notice: PyMuPDF is AGPL.** Candid's own code is MIT, but PDF text extraction uses [PyMuPDF](https://pymupdf.readthedocs.io/), which is dual-licensed under the [GNU AGPL v3](https://www.gnu.org/licenses/agpl-3.0.html) or a commercial Artifex licence. If you run or distribute Candid with PyMuPDF installed, the AGPL applies to that combined deployment: among other things, users who reach it over a network must be offered its complete source code. To stay under MIT terms only, buy the commercial licence or replace the single call in `backend/src/candid/services/cv_extractor.py` with a permissively licensed PDF library.

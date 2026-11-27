@@ -31,7 +31,7 @@ jobs:
       CANDID_TEST_DATABASE_URL: postgresql://candid:ci-only@localhost:5432/candid
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0   # this action publishes no floating major tag
         with:
           python-version: "3.14"
       - run: uv sync --locked

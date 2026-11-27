@@ -5,7 +5,10 @@
 [![CI](https://github.com/LorenzoSciuto/candid/actions/workflows/release.yml/badge.svg)](https://github.com/LorenzoSciuto/candid/actions/workflows/release.yml)
 [![Release](https://img.shields.io/github/v/release/LorenzoSciuto/candid?sort=semver)](https://github.com/LorenzoSciuto/candid/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![Backend: FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![ORM: SQLModel](https://img.shields.io/badge/ORM-SQLModel-7E56C2)](https://sqlmodel.tiangolo.com)
+[![Packaging: uv](https://img.shields.io/badge/packaging-uv-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![Database: PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![Frontend: React 18](https://img.shields.io/badge/frontend-React%2018-61DAFB?logo=react&logoColor=black)](https://react.dev)
 

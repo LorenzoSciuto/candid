@@ -20,9 +20,13 @@ const ReportsScreen = () => {
   const funnel = useMemo(() => {
     if (!stats) return [];
     const byStatus = stats.by_status || {};
-    return (window.CANDID_DATA.STATUS || [])
+    const rows = (window.CANDID_DATA.STATUS || [])
       .map(st => ({ stage: st.label, n: byStatus[st.id] || 0 }))
       .filter(f => f.n > 0);
+    // "reached" counts everyone at this stage or beyond (hired included), so pass rates never exceed 100%.
+    let reached = byStatus.hired || 0;
+    for (let i = rows.length - 1; i >= 0; i--) { reached += rows[i].n; rows[i].reached = reached; }
+    return rows;
   }, [stats]);
 
   const sources = useMemo(() => {
@@ -32,7 +36,7 @@ const ReportsScreen = () => {
       .sort((a, b) => b.n - a.n);
   }, [stats]);
 
-  const max = funnel.length > 0 ? funnel[0].n : 1;
+  const max = Math.max(1, ...funnel.map(f => f.n));
   const total = stats?.total ?? funnel.reduce((s, f) => s + f.n, 0);
   const last = funnel[funnel.length - 1]?.n ?? 0;
   const activeJDs = jobs.filter(j => j.status === "Active").length;
@@ -79,7 +83,7 @@ const ReportsScreen = () => {
             {loading && <div className="text-13 text-muted" style={{ padding: "24px 0", textAlign: "center" }}>{t('reports.loading')}</div>}
             {funnel.map((f, i) => {
               const next = funnel[i + 1];
-              const conv = next && f.n > 0 ? Math.round((next.n / f.n) * 100) : null;
+              const conv = next ? Math.round((next.reached / f.reached) * 100) : null;
               return (
                 <div key={f.stage} style={{ marginBottom: 12 }}>
                   <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>

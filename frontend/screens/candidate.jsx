@@ -1053,7 +1053,7 @@ const AiEvaluationCard = ({ evaluation }) => {
   const scorePercent = Math.round(((evaluation.score || 0) / 10) * 100);
 
   return (
-    <div className="ai-panel col gap-12" style={{ marginTop: 10 }}>
+    <div className="ai-panel card-pad col gap-12" style={{ marginTop: 10 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <span className="ai-tag"><Icons.Sparkles size={11} /> {t('candidate.iv.aiEvaluation')}</span>
         <div className="row gap-10" style={{ alignItems: "center" }}>
